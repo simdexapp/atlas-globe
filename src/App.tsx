@@ -193,7 +193,7 @@ const defaultImagery: Imagery = {
   layerId: DEFAULT_GIBS_DAY,
   nightLayerId: DEFAULT_GIBS_NIGHT,
   date: todayUTC(),
-  zoom: 3,
+  zoom: 2,
   source: "live"
 };
 

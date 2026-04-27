@@ -104,8 +104,9 @@ const TILE_SIZE = 256;
 
 export function todayUTC(): string {
   const d = new Date();
-  // GIBS publishes today's data ~6h late — go back 1 day to be safe
-  d.setUTCDate(d.getUTCDate() - 1);
+  // GIBS sometimes publishes today's data many hours late and recent days have
+  // partial coverage. 2 days back has the most reliable global coverage.
+  d.setUTCDate(d.getUTCDate() - 2);
   return d.toISOString().slice(0, 10);
 }
 
@@ -133,11 +134,11 @@ export async function loadGibsComposite(
 
   // Background: pre-draw the bundled Blue Marble (or whatever fallback was passed) so
   // tiles that fail to load don't leave black gaps — they show the bundled texture instead.
+  // We then draw tiles with composite="lighten" so MODIS swath gaps (which arrive as
+  // black/empty pixels in successful tiles) ALSO fall through to the bundled background.
+  const useLighten = !!fallbackBackground && layer.format === "jpg";
   if (fallbackBackground) {
     try { ctx.drawImage(fallbackBackground, 0, 0, W, H); } catch { /* draw fail safe */ }
-    // Slight darkening so successful tiles still pop
-    ctx.fillStyle = "rgba(0, 0, 0, 0.18)";
-    ctx.fillRect(0, 0, W, H);
   } else if (layer.format === "jpg") {
     ctx.fillStyle = "#0a1424";
     ctx.fillRect(0, 0, W, H);
@@ -165,7 +166,10 @@ export async function loadGibsComposite(
       try {
         const img = await loadImage(url, signal);
         if (signal?.aborted) return;
+        const prevOp = ctx.globalCompositeOperation;
+        if (useLighten) ctx.globalCompositeOperation = "lighten";
         ctx.drawImage(img, x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+        ctx.globalCompositeOperation = prevOp;
       } catch {
         // missing tile or net error — leave the background fill
       }
