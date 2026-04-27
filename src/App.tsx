@@ -78,6 +78,8 @@ type LayerVisibility = {
   cardinals: boolean;
   nightLights: boolean;
   iss: boolean;
+  tiangong: boolean;
+  hubble: boolean;
   borders: boolean;
   earthquakes: boolean;
   timezones: boolean;
@@ -155,6 +157,8 @@ const defaultLayers: LayerVisibility = {
   cardinals: true,
   nightLights: true,
   iss: false,
+  tiangong: false,
+  hubble: false,
   borders: false,
   earthquakes: false,
   timezones: false,
@@ -234,6 +238,8 @@ function App() {
   const [orbiting, setOrbiting] = useState(true);
   const [cesiumToken, setCesiumToken] = useState<string>("");
   const [issPosition, setIssPosition] = useState<{ lat: number; lon: number } | null>(null);
+  const [tiangongPosition, setTiangongPosition] = useState<{ lat: number; lon: number } | null>(null);
+  const [hubblePosition, setHubblePosition] = useState<{ lat: number; lon: number } | null>(null);
   const [searchResults, setSearchResults] = useState<Bookmark[]>([]);
   const [searching, setSearching] = useState(false);
   const [imagery, setImagery] = useState<Imagery>(defaultImagery);
@@ -252,6 +258,10 @@ function App() {
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [exportProgress] = useState<{ label: string; pct: number } | null>(null);
   const [showCoordInput, setShowCoordInput] = useState(false);
+  const [pinTool, setPinTool] = useState(false);
+  const [coordFormat, setCoordFormat] = useState<"decimal" | "dms">("decimal");
+  const [searchHistory, setSearchHistory] = useState<string[]>([]);
+  const [timelapse, setTimelapse] = useState<{ active: boolean; from: string; to: string; days: number; fps: number; recording: boolean }>({ active: false, from: "", to: "", days: 30, fps: 6, recording: false });
   const recorderRef = useRef<MediaRecorder | null>(null);
   const recorderChunksRef = useRef<Blob[]>([]);
   const recorderTimerRef = useRef<number | null>(null);
@@ -278,26 +288,30 @@ function App() {
     return () => cancelAnimationFrame(raf);
   }, [globe.timeAnim, globe.timeSpeed]);
 
-  // ISS position polling
+  // Satellite position polling (ISS + Tiangong + Hubble)
   useEffect(() => {
-    if (!layers.iss) return;
+    const targets: { id: number; setter: (p: { lat: number; lon: number } | null) => void; enabled: boolean }[] = [
+      { id: 25544, setter: setIssPosition, enabled: layers.iss },
+      { id: 48274, setter: setTiangongPosition, enabled: layers.tiangong },
+      { id: 20580, setter: setHubblePosition, enabled: layers.hubble }
+    ];
+    const active = targets.filter((t) => t.enabled);
+    if (active.length === 0) return;
     let cancelled = false;
-    const fetchPos = async () => {
-      try {
-        const res = await fetch("https://api.wheretheiss.at/v1/satellites/25544");
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!cancelled) {
-          setIssPosition({ lat: data.latitude, lon: data.longitude });
-        }
-      } catch {
-        // ignore
-      }
+    const fetchAll = async () => {
+      await Promise.all(active.map(async (t) => {
+        try {
+          const res = await fetch(`https://api.wheretheiss.at/v1/satellites/${t.id}`);
+          if (!res.ok) return;
+          const data = await res.json();
+          if (!cancelled) t.setter({ lat: data.latitude, lon: data.longitude });
+        } catch { /* ignore */ }
+      }));
     };
-    fetchPos();
-    const handle = window.setInterval(fetchPos, 5000);
+    fetchAll();
+    const handle = window.setInterval(fetchAll, 5000);
     return () => { cancelled = true; window.clearInterval(handle); };
-  }, [layers.iss]);
+  }, [layers.iss, layers.tiangong, layers.hubble]);
 
   // Persist
   useEffect(() => {
@@ -354,10 +368,28 @@ function App() {
     showToast("View reset");
   }, [showToast]);
 
+  // Search history (persisted, last 10)
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem("atlas-search-history");
+      if (raw) setSearchHistory(JSON.parse(raw));
+    } catch {/* ignore */}
+  }, []);
+
+  const recordSearch = useCallback((q: string) => {
+    if (!q.trim()) return;
+    setSearchHistory((prev) => {
+      const next = [q, ...prev.filter((p) => p !== q)].slice(0, 10);
+      try { window.localStorage.setItem("atlas-search-history", JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
+
   const flyToBookmark = useCallback((b: Bookmark) => {
     setFlyTo((current) => ({ id: current.id + 1, lat: b.lat, lon: b.lon, altKm: b.altKm }));
     showToast(`Flying to ${b.name}`);
-  }, [showToast]);
+    recordSearch(b.name);
+  }, [recordSearch, showToast]);
 
   const saveCurrentBookmark = useCallback(() => {
     const name = window.prompt("Bookmark name:", `View at ${cameraState.lat.toFixed(2)}, ${cameraState.lon.toFixed(2)}`);
@@ -561,6 +593,127 @@ function App() {
   const updatePin = useCallback((id: string, patch: Partial<Pin>) => {
     setPins((prev) => prev.map((p) => p.id === id ? { ...p, ...patch } : p));
   }, []);
+
+  // Time-lapse animation: scrub date over a range and export as GIF
+  const runTimelapse = useCallback(async (days: number, fps: number) => {
+    const canvas = document.querySelector(".globeLayer canvas") as HTMLCanvasElement | null;
+    if (!canvas) { showToast("Canvas not ready"); return; }
+    if (imagery.source !== "live") {
+      showToast("Switch imagery to NASA live first");
+      return;
+    }
+    setTimelapse((prev) => ({ ...prev, recording: true, days, fps }));
+    showToast(`Time-lapse: ${days} days at ${fps}fps`);
+    const today = new Date(imagery.date + "T00:00:00Z");
+    const dataUrls: string[] = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(today);
+      d.setUTCDate(d.getUTCDate() - i);
+      const isoDate = d.toISOString().slice(0, 10);
+      // Set imagery date and wait for tiles to load + render
+      setImagery((prev) => ({ ...prev, date: isoDate }));
+      // Wait for the imagery effect to start + finish (debounce 350ms + tile fetch)
+      await new Promise((r) => setTimeout(r, 600));
+      // Wait until imageryLoading is false, with timeout
+      const startWait = performance.now();
+      while (performance.now() - startWait < 30000) {
+        await new Promise((r) => setTimeout(r, 200));
+        if (!imageryAbortRef.current || imageryAbortRef.current.signal.aborted) break;
+        // imageryLoading state isn't directly checkable in closure, so rely on timing — better but heuristic
+        // We'll just wait until tile loading is settled by checking a small DOM signal
+        const stat = document.querySelector(".atlasImageryStatus");
+        if (!stat) break;
+      }
+      // Extra render frame
+      await new Promise((r) => requestAnimationFrame(() => r(null)));
+      dataUrls.push(canvas.toDataURL("image/png"));
+    }
+    showToast("Encoding time-lapse GIF…");
+    try {
+      const { GIFEncoder, quantize, applyPalette } = await import("gifenc");
+      const targetW = Math.min(720, canvas.width);
+      const scale = targetW / canvas.width;
+      const targetH = Math.floor(canvas.height * scale);
+      const off = document.createElement("canvas");
+      off.width = targetW; off.height = targetH;
+      const ctx = off.getContext("2d");
+      if (!ctx) throw new Error();
+      const gif = GIFEncoder();
+      for (const url of dataUrls) {
+        const img = new Image();
+        await new Promise((res, rej) => { img.onload = () => res(null); img.onerror = rej; img.src = url; });
+        ctx.drawImage(img, 0, 0, targetW, targetH);
+        const imgData = ctx.getImageData(0, 0, targetW, targetH);
+        const palette = quantize(imgData.data, 256);
+        const indexed = applyPalette(imgData.data, palette);
+        gif.writeFrame(indexed, targetW, targetH, { palette, delay: Math.round(1000 / fps) });
+      }
+      gif.finish();
+      const blob = new Blob([gif.bytes() as BlobPart], { type: "image/gif" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = url; a.download = `atlas-timelapse-${Date.now()}.gif`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 500);
+      showToast(`Time-lapse saved (${dataUrls.length} frames)`);
+    } catch {
+      showToast("Time-lapse encoding failed");
+    } finally {
+      setTimelapse((prev) => ({ ...prev, recording: false }));
+    }
+  }, [imagery.date, imagery.source, showToast]);
+
+  // Auto-refresh today's imagery every 30 min when source=live + date=today
+  useEffect(() => {
+    if (imagery.source !== "live" || imagery.date !== todayUTC()) return;
+    const handle = window.setInterval(() => {
+      setImagery((prev) => ({ ...prev, date: todayUTC() }));
+    }, 30 * 60 * 1000);
+    return () => window.clearInterval(handle);
+  }, [imagery.source, imagery.date]);
+
+  // Project save/load
+  const exportProject = useCallback(() => {
+    const project = {
+      version: 1,
+      savedAt: new Date().toISOString(),
+      cameraState: cameraStateRef.current,
+      layers,
+      globe,
+      imagery,
+      pins,
+      bookmarks: bookmarks.filter((b) => !cityBookmarks.some((c) => c.id === b.id)),
+      uiTheme
+    };
+    const blob = new Blob([JSON.stringify(project, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = `atlas-project-${Date.now()}.json`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 500);
+    showToast("Project exported");
+  }, [bookmarks, globe, imagery, layers, pins, showToast, uiTheme]);
+
+  const importProject = useCallback((file: File) => {
+    file.text().then((text) => {
+      try {
+        const data = JSON.parse(text);
+        if (data.layers) setLayers({ ...defaultLayers, ...data.layers });
+        if (data.globe) setGlobe({ ...defaultGlobe, ...data.globe });
+        if (data.imagery) setImagery({ ...defaultImagery, ...data.imagery });
+        if (Array.isArray(data.pins)) setPins(data.pins);
+        if (Array.isArray(data.bookmarks)) {
+          const ids = new Set(data.bookmarks.map((b: Bookmark) => b.id));
+          setBookmarks([...data.bookmarks, ...cityBookmarks.filter((c) => !ids.has(c.id))]);
+        }
+        if (data.uiTheme) setUiTheme(data.uiTheme);
+        if (data.cameraState) {
+          setFlyTo((c) => ({ id: c.id + 1, lat: data.cameraState.lat, lon: data.cameraState.lon, altKm: data.cameraState.altKm }));
+        }
+        showToast("Project loaded");
+      } catch {
+        showToast("Invalid project file");
+      }
+    });
+  }, [showToast]);
 
   const exportPinsJson = useCallback(() => {
     const blob = new Blob([JSON.stringify(pins, null, 2)], { type: "application/json" });
@@ -944,12 +1097,15 @@ function App() {
             orbiting={orbiting}
             flyTo={flyTo}
             issPosition={issPosition}
+            tiangongPosition={tiangongPosition}
+            hubblePosition={hubblePosition}
             pins={pins}
             earthquakes={earthquakes}
             borders={borders}
             selectedPinId={selectedPin}
             dayTexture={dayTexture}
             nightTexture={nightTexture}
+            pinTool={pinTool}
             onSelectPin={setSelectedPin}
             onGlobeClick={onGlobeClick}
             onCameraChange={onCameraChange}
@@ -1014,8 +1170,10 @@ function App() {
       </header>
 
       <aside className="atlasRail" aria-label="Tools">
-        <RailButton icon={MousePointer2} label="Select" active />
+        <RailButton icon={MousePointer2} label="Orbit (default)" active={!pinTool} onClick={() => setPinTool(false)} />
+        <RailButton icon={BookmarkPlus} label="Pin tool — click to drop pins" active={pinTool} onClick={() => setPinTool((v) => !v)} />
         <RailButton icon={Search} label="Search (F)" onClick={() => setShowSearch(true)} />
+        <RailButton icon={Sparkles} label="Imagery (I)" active={inspectorTab === "imagery"} onClick={() => setInspectorTab("imagery")} />
         <RailButton icon={Layers} label="Layers (L)" active={inspectorTab === "layers"} onClick={() => setInspectorTab("layers")} />
         <RailButton icon={Bookmark} label="Bookmarks" active={inspectorTab === "bookmarks"} onClick={() => setInspectorTab("bookmarks")} />
         <RailButton icon={Globe2} label="Globe controls" active={inspectorTab === "globe"} onClick={() => setInspectorTab("globe")} />
@@ -1029,10 +1187,11 @@ function App() {
           <span className="dot" />
           <strong>{mode === "atlas" ? "Atlas" : "Surface"}</strong>
           <span>{paused ? "Paused" : "Live"}</span>
+          {pinTool && <span style={{ color: "#ffd66b" }}>Pin tool</span>}
         </div>
         <div>
-          <span>{formatLat(cameraState.lat)}</span>
-          <span>{formatLon(cameraState.lon)}</span>
+          <span>{coordFormat === "dms" ? formatLatDms(cameraState.lat) : formatLat(cameraState.lat)}</span>
+          <span>{coordFormat === "dms" ? formatLonDms(cameraState.lon) : formatLon(cameraState.lon)}</span>
           <span>{formatAlt(cameraState.altKm)}</span>
         </div>
       </div>
@@ -1075,6 +1234,8 @@ function App() {
           <DataPanel
             pins={pins}
             earthquakes={earthquakes}
+            coordFormat={coordFormat}
+            onSetCoordFormat={setCoordFormat}
             onSelectPin={(id) => setSelectedPin(id)}
             onFlyPin={flyToPin}
             onDeletePin={deletePin}
@@ -1089,6 +1250,11 @@ function App() {
             onExportPins={exportPinsJson}
             onImportPins={importPinsJson}
             onExportGif={() => exportGif(60, 20)}
+            onExportProject={exportProject}
+            onImportProject={importProject}
+            onTimelapse={runTimelapse}
+            timelapseRecording={timelapse.recording}
+            cameraState={cameraState}
           />
         )}
       </aside>
@@ -1096,8 +1262,8 @@ function App() {
       <footer className="atlasFooter" aria-label="Status bar">
         <div className="footerCoords">
           <Compass size={12} />
-          <span>{formatLat(cameraState.lat)}</span>
-          <span>{formatLon(cameraState.lon)}</span>
+          <span>{coordFormat === "dms" ? formatLatDms(cameraState.lat) : formatLat(cameraState.lat)}</span>
+          <span>{coordFormat === "dms" ? formatLonDms(cameraState.lon) : formatLon(cameraState.lon)}</span>
           <span>·</span>
           <span>Alt {formatAlt(cameraState.altKm)}</span>
         </div>
@@ -1121,6 +1287,7 @@ function App() {
           results={combinedSearchResults}
           searching={searching}
           suggestions={initialSearchSuggestions}
+          history={searchHistory}
           onSelect={(b) => { flyToBookmark(b); setShowSearch(false); }}
           onClose={() => setShowSearch(false)}
         />
@@ -1265,7 +1432,9 @@ function LayersPanel({ layers, onToggle, bordersLoading }: { layers: LayerVisibi
     { key: "pins", label: "Pin markers", icon: Bookmark },
     { key: "pinPaths", label: "Great-circle pin paths", icon: Compass },
     { key: "earthquakes", label: "Earthquakes (24h, USGS)", icon: Sparkles },
-    { key: "iss", label: "Live ISS position", icon: Telescope },
+    { key: "iss", label: "ISS — live position", icon: Telescope },
+    { key: "tiangong", label: "Tiangong CSS — live position", icon: Telescope },
+    { key: "hubble", label: "Hubble — live position", icon: Telescope },
     { key: "sun", label: "Visible sun (in space)", icon: SunIcon },
     { key: "moon", label: "Visible moon (in space)", icon: Globe2 },
     { key: "miniMap", label: "Mini-map widget", icon: Compass }
@@ -1366,9 +1535,11 @@ function ImageryPanel({ imagery, onUpdate, loading, progress }: { imagery: Image
   );
 }
 
-function DataPanel({ pins, earthquakes, onSelectPin, onFlyPin, onDeletePin, onClearPins, onCapture, onStartRecord, onStopRecord, recordingState, recordingSeconds, onCopyShare, onOpenCoord, onExportPins, onImportPins, onExportGif }: {
+function DataPanel({ pins, earthquakes, coordFormat, onSetCoordFormat, onSelectPin, onFlyPin, onDeletePin, onClearPins, onCapture, onStartRecord, onStopRecord, recordingState, recordingSeconds, onCopyShare, onOpenCoord, onExportPins, onImportPins, onExportGif, onExportProject, onImportProject, onTimelapse, timelapseRecording, cameraState }: {
   pins: Pin[];
   earthquakes: Earthquake[];
+  coordFormat: "decimal" | "dms";
+  onSetCoordFormat: (m: "decimal" | "dms") => void;
   onSelectPin: (id: string) => void;
   onFlyPin: (p: Pin) => void;
   onDeletePin: (id: string) => void;
@@ -1383,11 +1554,40 @@ function DataPanel({ pins, earthquakes, onSelectPin, onFlyPin, onDeletePin, onCl
   onExportPins: () => void;
   onImportPins: (file: File) => void;
   onExportGif: () => void;
+  onExportProject: () => void;
+  onImportProject: (file: File) => void;
+  onTimelapse: (days: number, fps: number) => void;
+  timelapseRecording: boolean;
+  cameraState: CameraState;
 }) {
+  const stats = useMemo(() => {
+    const big = earthquakes.filter((q) => q.mag >= 5).length;
+    const med = earthquakes.filter((q) => q.mag >= 3.5 && q.mag < 5).length;
+    const small = earthquakes.filter((q) => q.mag < 3.5).length;
+    return { big, med, small };
+  }, [earthquakes]);
   return (
     <>
+      <PanelSection title="Display" icon={Compass}>
+        <div className="atlasModeRow" style={{ gridTemplateColumns: "1fr 1fr" }}>
+          <button type="button" className={coordFormat === "decimal" ? "active" : ""} onClick={() => onSetCoordFormat("decimal")}>Decimal</button>
+          <button type="button" className={coordFormat === "dms" ? "active" : ""} onClick={() => onSetCoordFormat("dms")}>DMS</button>
+        </div>
+        <p className="atlasHint">Coordinate format: {coordFormat === "decimal" ? "DD.DD°" : "D° M' S\""}</p>
+      </PanelSection>
+
+      <PanelSection title="Statistics" icon={Sparkles}>
+        <div className="atlasStatsGrid">
+          <div className="atlasStatItem"><strong>{pins.length}</strong><span>Pins</span></div>
+          <div className="atlasStatItem"><strong>{earthquakes.length}</strong><span>Quakes (24h)</span></div>
+          <div className="atlasStatItem" style={{ color: "#ff5a5a" }}><strong>{stats.big}</strong><span>Mag ≥ 5</span></div>
+          <div className="atlasStatItem" style={{ color: "#ffb84d" }}><strong>{stats.med}</strong><span>Mag 3.5–5</span></div>
+          <div className="atlasStatItem"><strong>{cameraState.altKm > 1000 ? `${(cameraState.altKm / 1000).toFixed(1)}k` : cameraState.altKm.toFixed(0)}</strong><span>Altitude (km)</span></div>
+        </div>
+      </PanelSection>
+
       <PanelSection title={`Pins (${pins.length})`} icon={Bookmark}>
-        {pins.length === 0 && <p className="atlasHint">Click anywhere on the globe to drop a pin.</p>}
+        {pins.length === 0 && <p className="atlasHint">Switch to Pin tool in the rail (or hold Shift) and click the globe to drop a pin.</p>}
         {pins.length > 0 && (
           <ul className="atlasBookmarkList">
             {pins.map((p) => (
@@ -1460,6 +1660,28 @@ function DataPanel({ pins, earthquakes, onSelectPin, onFlyPin, onDeletePin, onCl
         <button type="button" className="atlasPrimaryBtn small" style={{ background: "transparent" }} onClick={onExportGif}>
           <Wand2 size={12} /> Export GIF (3s, 20fps)
         </button>
+      </PanelSection>
+
+      <PanelSection title="Time-lapse" icon={Telescope}>
+        <p className="atlasHint">Scrub the imagery date back N days and capture each frame as a GIF.</p>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <button type="button" className="atlasPrimaryBtn small" onClick={() => onTimelapse(7, 6)} disabled={timelapseRecording}>{timelapseRecording ? "Recording…" : "Last 7 days"}</button>
+          <button type="button" className="atlasPrimaryBtn small" onClick={() => onTimelapse(30, 8)} disabled={timelapseRecording}>{timelapseRecording ? "Recording…" : "Last 30 days"}</button>
+          <button type="button" className="atlasPrimaryBtn small" onClick={() => onTimelapse(90, 10)} disabled={timelapseRecording}>{timelapseRecording ? "Recording…" : "Last 90 days"}</button>
+        </div>
+      </PanelSection>
+
+      <PanelSection title="Project" icon={Bookmark}>
+        <p className="atlasHint">Save the entire app state — layers, pins, imagery, camera — as a JSON project file.</p>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <button type="button" className="atlasPrimaryBtn small" onClick={onExportProject}>
+            <BookmarkPlus size={12} /> Export project
+          </button>
+          <label className="atlasPrimaryBtn small" style={{ cursor: "pointer" }}>
+            <Bookmark size={12} /> Import project
+            <input type="file" accept="application/json" style={{ display: "none" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) onImportProject(f); e.currentTarget.value = ""; }} />
+          </label>
+        </div>
       </PanelSection>
 
       <PanelSection title="Tools" icon={Compass}>
@@ -1608,6 +1830,7 @@ function SearchModal({
   onQuery,
   results,
   searching,
+  history,
   onSelect,
   onClose
 }: {
@@ -1616,6 +1839,7 @@ function SearchModal({
   results: Bookmark[];
   searching: boolean;
   suggestions: string[];
+  history: string[];
   onSelect: (b: Bookmark) => void;
   onClose: () => void;
 }) {
@@ -1636,7 +1860,20 @@ function SearchModal({
           <button type="button" className="atlasIconBtn" onClick={onClose} aria-label="Close"><X size={14} /></button>
         </div>
         <ul className="atlasSearchResults">
-          {results.length === 0 && !searching && <li className="atlasSearchEmpty">{query.trim().length < 3 ? "Type at least 3 characters…" : "No matches."}</li>}
+          {!query.trim() && history.length > 0 && (
+            <>
+              <li className="atlasSearchEmpty" style={{ textAlign: "left", padding: "8px 12px", color: "#6f7c91", fontSize: "10.5px", textTransform: "uppercase", letterSpacing: "0.06em" }}>Recent searches</li>
+              {history.map((h) => (
+                <li key={`h-${h}`}>
+                  <button type="button" onClick={() => onQuery(h)}>
+                    <Search size={12} />
+                    <div><strong>{h}</strong><span style={{ opacity: 0.6 }}>tap to search again</span></div>
+                  </button>
+                </li>
+              ))}
+            </>
+          )}
+          {results.length === 0 && !searching && query.trim() && <li className="atlasSearchEmpty">{query.trim().length < 3 ? "Type at least 3 characters…" : "No matches."}</li>}
           {results.map((r) => (
             <li key={r.id}>
               <button type="button" onClick={() => onSelect(r)}>
@@ -1696,6 +1933,7 @@ function PinInfoCard({ pin, onClose, onDelete, onUpdate, onFly }: { pin: Pin; on
   useEffect(() => { setNote(pin.note ?? ""); }, [pin.note]);
   const localTimeMs = Date.now() + (pin.lon / 15) * 3600 * 1000;
   const localTime = new Date(localTimeMs).toUTCString().split(" ").slice(4, 5)[0];
+  const sun = solarTimes(pin.lat, pin.lon, new Date());
   const copy = (text: string) => navigator.clipboard?.writeText(text);
   return (
     <div className="atlasPinCard" role="dialog">
@@ -1718,6 +1956,15 @@ function PinInfoCard({ pin, onClose, onDelete, onUpdate, onFly }: { pin: Pin; on
         <div><span>Lat</span><strong>{formatLat(pin.lat)}</strong></div>
         <div><span>Lon</span><strong>{formatLon(pin.lon)}</strong></div>
         <div><span>Local</span><strong>{localTime} (approx)</strong></div>
+        {sun !== "polar-day" && sun !== "polar-night" && (
+          <>
+            <div><span>Sunrise</span><strong>{formatHour(sun.sunrise)}</strong></div>
+            <div><span>Sunset</span><strong>{formatHour(sun.sunset)}</strong></div>
+            <div><span>Day length</span><strong>{(((sun.sunset - sun.sunrise) + 24) % 24).toFixed(2)}h</strong></div>
+          </>
+        )}
+        {sun === "polar-day" && <div><span>Today</span><strong>Polar day (sun never sets)</strong></div>}
+        {sun === "polar-night" && <div><span>Today</span><strong>Polar night (sun never rises)</strong></div>}
       </div>
       <div className="atlasPinColors">
         {PIN_COLORS.map((c) => (
@@ -1890,12 +2137,15 @@ function GlobeCanvas({
   orbiting,
   flyTo,
   issPosition,
+  tiangongPosition,
+  hubblePosition,
   pins,
   earthquakes,
   borders,
   selectedPinId,
   dayTexture,
   nightTexture,
+  pinTool,
   onSelectPin,
   onGlobeClick,
   onCameraChange
@@ -1906,12 +2156,15 @@ function GlobeCanvas({
   orbiting: boolean;
   flyTo: FlyToTarget;
   issPosition: { lat: number; lon: number } | null;
+  tiangongPosition: { lat: number; lon: number } | null;
+  hubblePosition: { lat: number; lon: number } | null;
   pins: Pin[];
   earthquakes: Earthquake[];
   borders: Float32Array | null;
   selectedPinId: string | null;
   dayTexture: THREE.Texture | null;
   nightTexture: THREE.Texture | null;
+  pinTool: boolean;
   onSelectPin: (id: string | null) => void;
   onGlobeClick: (lat: number, lon: number) => void;
   onCameraChange: (lat: number, lon: number, altKm: number) => void;
@@ -1933,7 +2186,7 @@ function GlobeCanvas({
         <ambientLight intensity={0.05} />
         <SunLight azimuth={globe.sunAzimuth} elevation={globe.sunElevation} />
         <EarthGroup globe={globe} paused={paused}>
-          <Earth globe={globe} layers={layers} sunDirection={sunDirection} dayOverride={dayTexture} nightOverride={nightTexture} onClick={onGlobeClick} />
+          <Earth globe={globe} layers={layers} sunDirection={sunDirection} dayOverride={dayTexture} nightOverride={nightTexture} pinTool={pinTool} onClick={onGlobeClick} />
           {layers.borders && borders && <Borders positions={borders} />}
           {layers.graticule && <Graticule />}
           {layers.cardinals && <Cardinals />}
@@ -1948,6 +2201,8 @@ function GlobeCanvas({
         {layers.clouds && <Clouds opacity={globe.cloudOpacity} paused={paused} />}
         {layers.stars && <Stars radius={120} depth={50} count={4500} factor={4} saturation={0} fade speed={0.5} />}
         {layers.iss && issPosition && <ISSMarker lat={issPosition.lat} lon={issPosition.lon} />}
+        {layers.tiangong && tiangongPosition && <TiangongMarker lat={tiangongPosition.lat} lon={tiangongPosition.lon} />}
+        {layers.hubble && hubblePosition && <HubbleMarker lat={hubblePosition.lat} lon={hubblePosition.lon} />}
         <GlobeControls flyTo={flyTo} onCameraChange={onCameraChange} autoOrbit={orbiting && !paused} />
       </Suspense>
     </Canvas>
@@ -2042,9 +2297,8 @@ function slerp(a: THREE.Vector3, b: THREE.Vector3, t: number): THREE.Vector3 {
   return new THREE.Vector3(an.x * wa + bn.x * wb, an.y * wa + bn.y * wb, an.z * wa + bn.z * wb);
 }
 
-function ISSMarker({ lat, lon }: { lat: number; lon: number }) {
-  // ISS orbital altitude ~408 km → at globe-radius=1, that's 1 + 408/6371
-  const altitude = 1 + 408 / EARTH_RADIUS_KM;
+function SatelliteMarker({ lat, lon, altitudeKm, color }: { lat: number; lon: number; altitudeKm: number; color: string }) {
+  const altitude = 1 + altitudeKm / EARTH_RADIUS_KM;
   const pos = useMemo(() => latLonToVec3(lat, lon, altitude), [lat, lon, altitude]);
   const ring = useRef<THREE.Mesh>(null);
   useFrame(({ clock }) => {
@@ -2057,14 +2311,26 @@ function ISSMarker({ lat, lon }: { lat: number; lon: number }) {
     <group position={pos}>
       <mesh>
         <sphereGeometry args={[0.012, 16, 16]} />
-        <meshBasicMaterial color="#ffd66b" />
+        <meshBasicMaterial color={color} />
       </mesh>
       <mesh ref={ring} rotation={[Math.PI / 2, 0, 0]}>
         <ringGeometry args={[0.022, 0.028, 32]} />
-        <meshBasicMaterial color="#ffd66b" transparent opacity={0.6} side={THREE.DoubleSide} />
+        <meshBasicMaterial color={color} transparent opacity={0.6} side={THREE.DoubleSide} />
       </mesh>
     </group>
   );
+}
+
+function ISSMarker({ lat, lon }: { lat: number; lon: number }) {
+  return <SatelliteMarker lat={lat} lon={lon} altitudeKm={408} color="#ffd66b" />;
+}
+
+function TiangongMarker({ lat, lon }: { lat: number; lon: number }) {
+  return <SatelliteMarker lat={lat} lon={lon} altitudeKm={400} color="#ff5a8a" />;
+}
+
+function HubbleMarker({ lat, lon }: { lat: number; lon: number }) {
+  return <SatelliteMarker lat={lat} lon={lon} altitudeKm={540} color="#5cb5ff" />;
 }
 
 function ExposureBridge({ exposure }: { exposure: number }) {
@@ -2151,6 +2417,7 @@ function Earth({
   sunDirection,
   dayOverride,
   nightOverride,
+  pinTool,
   onClick
 }: {
   globe: GlobeSettings;
@@ -2158,6 +2425,7 @@ function Earth({
   sunDirection: THREE.Vector3;
   dayOverride: THREE.Texture | null;
   nightOverride: THREE.Texture | null;
+  pinTool: boolean;
   onClick: (lat: number, lon: number) => void;
 }) {
   const ref = useRef<THREE.Mesh>(null);
@@ -2203,11 +2471,36 @@ function Earth({
     }
   });
 
+  const downStateRef = useRef<{ x: number; y: number; t: number; shift: boolean; meta: boolean; point: THREE.Vector3 } | null>(null);
+
   const handlePointerDown = (event: any) => {
     if (event.button !== undefined && event.button !== 0) return;
-    if (!ref.current) return;
+    downStateRef.current = {
+      x: event.clientX,
+      y: event.clientY,
+      t: performance.now(),
+      shift: event.shiftKey,
+      meta: event.metaKey || event.ctrlKey,
+      point: event.point.clone()
+    };
+  };
+
+  const handlePointerUp = (event: any) => {
+    if (event.button !== undefined && event.button !== 0) return;
+    const down = downStateRef.current;
+    downStateRef.current = null;
+    if (!down || !ref.current) return;
+    const dx = event.clientX - down.x;
+    const dy = event.clientY - down.y;
+    const dt = performance.now() - down.t;
+    const movedPx = Math.sqrt(dx * dx + dy * dy);
+    const isClickLike = movedPx < 5 && dt < 350;
+    if (!isClickLike) return;
+    // Pin drop conditions: pin-tool mode OR Shift held OR Ctrl/Cmd held
+    const shouldDrop = pinTool || down.shift || down.meta;
+    if (!shouldDrop) return;
     event.stopPropagation();
-    const local = event.point.clone();
+    const local = down.point.clone();
     ref.current.worldToLocal(local);
     const { lat, lon } = pointToLatLon(local);
     onClick(lat, lon);
@@ -2215,7 +2508,7 @@ function Earth({
 
   if (globe.renderMode === "wireframe") {
     return (
-      <mesh ref={ref} onPointerDown={handlePointerDown}>
+      <mesh ref={ref} onPointerDown={handlePointerDown} onPointerUp={handlePointerUp}>
         <sphereGeometry args={[1, 64, 64]} />
         <meshBasicMaterial color="#5cb5ff" wireframe transparent opacity={0.45} />
       </mesh>
@@ -2223,7 +2516,7 @@ function Earth({
   }
   if (globe.renderMode === "blueprint") {
     return (
-      <mesh ref={ref} onPointerDown={handlePointerDown}>
+      <mesh ref={ref} onPointerDown={handlePointerDown} onPointerUp={handlePointerUp}>
         <sphereGeometry args={[1, 96, 96]} />
         <meshBasicMaterial color="#0c1e3a" />
       </mesh>
@@ -2596,6 +2889,51 @@ function formatLon(lon: number) {
   const norm = ((lon + 540) % 360) - 180;
   const dir = norm >= 0 ? "E" : "W";
   return `${Math.abs(norm).toFixed(2)}° ${dir}`;
+}
+
+function formatLatDms(lat: number) {
+  const dir = lat >= 0 ? "N" : "S";
+  const a = Math.abs(lat);
+  const d = Math.floor(a);
+  const mFloat = (a - d) * 60;
+  const m = Math.floor(mFloat);
+  const s = ((mFloat - m) * 60).toFixed(1);
+  return `${d}° ${m}' ${s}" ${dir}`;
+}
+
+function formatLonDms(lon: number) {
+  const norm = ((lon + 540) % 360) - 180;
+  const dir = norm >= 0 ? "E" : "W";
+  const a = Math.abs(norm);
+  const d = Math.floor(a);
+  const mFloat = (a - d) * 60;
+  const m = Math.floor(mFloat);
+  const s = ((mFloat - m) * 60).toFixed(1);
+  return `${d}° ${m}' ${s}" ${dir}`;
+}
+
+// Sun rise/set/solar-noon for given lat/lon on given date
+// Returns { sunrise, sunset, solarNoon } as UTC-hour decimals (0-24), or null if polar day/night
+function solarTimes(lat: number, lon: number, date: Date): { sunrise: number; sunset: number; solarNoon: number } | "polar-day" | "polar-night" {
+  const start = Date.UTC(date.getUTCFullYear(), 0, 0);
+  const dayOfYear = Math.floor((date.getTime() - start) / 86400000);
+  const decl = THREE.MathUtils.degToRad(23.45 * Math.sin(THREE.MathUtils.degToRad((360 / 365) * (dayOfYear - 81))));
+  const latRad = THREE.MathUtils.degToRad(lat);
+  // Hour-angle of sunrise/sunset
+  const cosH = -Math.tan(latRad) * Math.tan(decl);
+  if (cosH > 1) return "polar-night";
+  if (cosH < -1) return "polar-day";
+  const H = THREE.MathUtils.radToDeg(Math.acos(cosH)); // degrees
+  const solarNoon = 12 - lon / 15;
+  const sunrise = solarNoon - H / 15;
+  const sunset = solarNoon + H / 15;
+  return { sunrise: ((sunrise % 24) + 24) % 24, sunset: ((sunset % 24) + 24) % 24, solarNoon: ((solarNoon % 24) + 24) % 24 };
+}
+
+function formatHour(h: number) {
+  const hh = Math.floor(h);
+  const mm = Math.round((h - hh) * 60);
+  return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")} UTC`;
 }
 
 function formatAlt(altKm: number) {
