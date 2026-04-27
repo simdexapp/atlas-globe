@@ -146,7 +146,7 @@ type PersistedState = {
   pins?: Pin[];
 };
 
-const STORAGE_KEY = "atlas-globe-state-v1";
+const STORAGE_KEY = "atlas-globe-state-v2";
 const EARTH_RADIUS_KM = 6371;
 const MIN_DISTANCE = 1.0008;        // ~5 km above surface (texture-pixelated, but real zoom)
 const MAX_DISTANCE = 12;            // far view from space
@@ -254,6 +254,17 @@ function App() {
   const [dayTexture, setDayTexture] = useState<THREE.Texture | null>(null);
   const [nightTexture, setNightTexture] = useState<THREE.Texture | null>(null);
   const imageryAbortRef = useRef<AbortController | null>(null);
+  const fallbackImagesRef = useRef<{ day: HTMLImageElement | null; night: HTMLImageElement | null }>({ day: null, night: null });
+
+  // Pre-load the bundled day + night images so failed GIBS tiles can fall back to them
+  useEffect(() => {
+    const day = new Image();
+    day.src = `${import.meta.env.BASE_URL}textures/earth_day.jpg`;
+    day.onload = () => { fallbackImagesRef.current.day = day; };
+    const night = new Image();
+    night.src = `${import.meta.env.BASE_URL}textures/earth_night.jpg`;
+    night.onload = () => { fallbackImagesRef.current.night = night; };
+  }, []);
   const [pins, setPins] = useState<Pin[]>([]);
   const [selectedPin, setSelectedPin] = useState<string | null>(null);
   const [earthquakes, setEarthquakes] = useState<Earthquake[]>([]);
@@ -503,7 +514,8 @@ function App() {
           imagery.date,
           imagery.zoom,
           controller.signal,
-          (loaded, total) => setImageryProgress(loaded / (total * 2))
+          (loaded, total) => setImageryProgress(loaded / (total * 2)),
+          fallbackImagesRef.current.day ?? undefined
         );
         if (controller.signal.aborted) return;
         const newDay = new THREE.CanvasTexture(dayCanvas);
@@ -520,7 +532,8 @@ function App() {
           imagery.date,
           Math.max(2, imagery.zoom - 1),
           controller.signal,
-          (loaded, total) => setImageryProgress(0.5 + (loaded / total) * 0.5)
+          (loaded, total) => setImageryProgress(0.5 + (loaded / total) * 0.5),
+          fallbackImagesRef.current.night ?? undefined
         );
         if (controller.signal.aborted) return;
         const newNight = new THREE.CanvasTexture(nightCanvas);

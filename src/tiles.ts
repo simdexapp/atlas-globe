@@ -116,7 +116,8 @@ export async function loadGibsComposite(
   date: string,
   zoom: number,
   signal?: AbortSignal,
-  onProgress?: TileLoadProgress
+  onProgress?: TileLoadProgress,
+  fallbackBackground?: HTMLImageElement | HTMLCanvasElement
 ): Promise<HTMLCanvasElement> {
   const tilesY = Math.pow(2, zoom);
   const tilesX = tilesY * 2; // EPSG:4326 is 2:1 (lon range 360, lat range 180)
@@ -130,9 +131,15 @@ export async function loadGibsComposite(
   if (!ctxOrNull) throw new Error("Could not get 2D context");
   const ctx: CanvasRenderingContext2D = ctxOrNull;
 
-  // Background fill (black for day-style layers, transparent for overlay layers)
-  if (layer.format === "jpg") {
-    ctx.fillStyle = "#000";
+  // Background: pre-draw the bundled Blue Marble (or whatever fallback was passed) so
+  // tiles that fail to load don't leave black gaps — they show the bundled texture instead.
+  if (fallbackBackground) {
+    try { ctx.drawImage(fallbackBackground, 0, 0, W, H); } catch { /* draw fail safe */ }
+    // Slight darkening so successful tiles still pop
+    ctx.fillStyle = "rgba(0, 0, 0, 0.18)";
+    ctx.fillRect(0, 0, W, H);
+  } else if (layer.format === "jpg") {
+    ctx.fillStyle = "#0a1424";
     ctx.fillRect(0, 0, W, H);
   }
 
@@ -177,21 +184,25 @@ function loadImage(url: string, signal?: AbortSignal): Promise<HTMLImageElement>
     const img = new Image();
     img.crossOrigin = "anonymous";
     let settled = false;
+    let timer: number | null = null;
     const onAbort = () => {
       if (settled) return;
       settled = true;
+      if (timer !== null) clearTimeout(timer);
       img.src = "";
       reject(new DOMException("aborted", "AbortError"));
     };
     img.onload = () => {
       if (settled) return;
       settled = true;
+      if (timer !== null) clearTimeout(timer);
       signal?.removeEventListener?.("abort", onAbort);
       resolve(img);
     };
     img.onerror = () => {
       if (settled) return;
       settled = true;
+      if (timer !== null) clearTimeout(timer);
       signal?.removeEventListener?.("abort", onAbort);
       reject(new Error(`Failed to load ${url}`));
     };
@@ -199,6 +210,14 @@ function loadImage(url: string, signal?: AbortSignal): Promise<HTMLImageElement>
       if (signal.aborted) { onAbort(); return; }
       signal.addEventListener("abort", onAbort, { once: true });
     }
+    // Hard timeout — NASA tiles sometimes hang; never let one tile stall the whole composite.
+    timer = window.setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      img.src = "";
+      signal?.removeEventListener?.("abort", onAbort);
+      reject(new Error(`Timeout: ${url}`));
+    }, 8000);
     img.src = url;
   });
 }
