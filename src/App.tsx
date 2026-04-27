@@ -91,6 +91,8 @@ type LayerVisibility = {
   terminator: boolean;
   subsolar: boolean;
   constellations: boolean;
+  volcanoes: boolean;
+  compass: boolean;
 };
 
 type GlobeSettings = {
@@ -112,7 +114,8 @@ type Imagery = {
   nightLayerId: string;   // GIBS night layer key
   date: string;           // YYYY-MM-DD
   zoom: number;           // 2 (SD) | 3 (HD) | 4 (UHD, slow)
-  source: "live" | "bundled";
+  source: "live" | "bundled" | "custom";
+  customUrl?: string;     // tile URL pattern with {z}/{y}/{x}
 };
 
 type Bookmark = {
@@ -172,8 +175,37 @@ const defaultLayers: LayerVisibility = {
   miniMap: true,
   terminator: false,
   subsolar: false,
-  constellations: false
+  constellations: false,
+  volcanoes: false,
+  compass: true
 };
+
+const FAMOUS_VOLCANOES: { id: string; name: string; lat: number; lon: number }[] = [
+  { id: "etna", name: "Mt. Etna", lat: 37.751, lon: 14.993 },
+  { id: "vesuvius", name: "Vesuvius", lat: 40.821, lon: 14.426 },
+  { id: "fuji", name: "Mt. Fuji", lat: 35.361, lon: 138.728 },
+  { id: "kilauea", name: "Kilauea", lat: 19.421, lon: -155.288 },
+  { id: "mauna_loa", name: "Mauna Loa", lat: 19.475, lon: -155.608 },
+  { id: "stromboli", name: "Stromboli", lat: 38.789, lon: 15.213 },
+  { id: "krakatoa", name: "Krakatoa", lat: -6.102, lon: 105.423 },
+  { id: "merapi", name: "Mt. Merapi", lat: -7.541, lon: 110.446 },
+  { id: "yellowstone", name: "Yellowstone", lat: 44.43, lon: -110.588 },
+  { id: "popocatepetl", name: "Popocatépetl", lat: 19.023, lon: -98.622 },
+  { id: "fuego", name: "Volcán de Fuego", lat: 14.473, lon: -90.880 },
+  { id: "cotopaxi", name: "Cotopaxi", lat: -0.677, lon: -78.437 },
+  { id: "villarrica", name: "Villarrica", lat: -39.420, lon: -71.940 },
+  { id: "erebus", name: "Mt. Erebus", lat: -77.530, lon: 167.170 },
+  { id: "ruapehu", name: "Mt. Ruapehu", lat: -39.281, lon: 175.564 },
+  { id: "taupo", name: "Taupō Volcano", lat: -38.820, lon: 175.917 },
+  { id: "kamchatka", name: "Klyuchevskaya", lat: 56.057, lon: 160.642 },
+  { id: "iceland_eyja", name: "Eyjafjallajökull", lat: 63.633, lon: -19.629 },
+  { id: "iceland_hekla", name: "Hekla", lat: 63.992, lon: -19.666 },
+  { id: "kilimanjaro", name: "Kilimanjaro", lat: -3.066, lon: 37.359 },
+  { id: "tambora", name: "Tambora", lat: -8.247, lon: 117.991 },
+  { id: "pinatubo", name: "Pinatubo", lat: 15.13, lon: 120.35 },
+  { id: "santamaria", name: "Santa María", lat: 14.75, lon: -91.55 },
+  { id: "stHelens", name: "Mt. St. Helens", lat: 46.20, lon: -122.18 }
+];
 
 const defaultGlobe: GlobeSettings = {
   rotationSpeed: 0.05,
@@ -404,6 +436,15 @@ function App() {
 
   const updateGlobe = useCallback((patch: Partial<GlobeSettings>) => {
     setGlobe((prev) => ({ ...prev, ...patch }));
+  }, []);
+
+  const resetAllSettings = useCallback(() => {
+    if (!window.confirm("Reset all settings to defaults? Pins, bookmarks, and saved state will be cleared.")) return;
+    try {
+      window.localStorage.removeItem(STORAGE_KEY);
+      window.localStorage.removeItem("atlas-search-history");
+    } catch {/* ignore */}
+    window.location.reload();
   }, []);
 
   const resetView = useCallback(() => {
@@ -1354,6 +1395,7 @@ function App() {
           <ImageryPanel
             imagery={imagery}
             onUpdate={updateImagery}
+            onReset={resetAllSettings}
             loading={imageryLoading}
             progress={imageryProgress}
           />
@@ -1464,6 +1506,8 @@ function App() {
       )}
 
       {layers.miniMap && <MiniMap cameraState={cameraState} pins={pins} />}
+
+      {layers.compass && <CompassWidget cameraState={cameraState} />}
 
       {recordingState === "recording" && (
         <div className="atlasRecordIndicator" role="status">
@@ -1595,6 +1639,7 @@ function LayersPanel({ layers, onToggle, bordersLoading }: { layers: LayerVisibi
     { key: "pins", label: "Pin markers", icon: Bookmark },
     { key: "pinPaths", label: "Great-circle pin paths", icon: Compass },
     { key: "earthquakes", label: "Earthquakes (24h, USGS)", icon: Sparkles },
+    { key: "volcanoes", label: "Notable volcanoes (24)", icon: Sparkles },
     { key: "iss", label: "ISS — live position", icon: Telescope },
     { key: "tiangong", label: "Tiangong CSS — live position", icon: Telescope },
     { key: "hubble", label: "Hubble — live position", icon: Telescope },
@@ -1603,6 +1648,7 @@ function LayersPanel({ layers, onToggle, bordersLoading }: { layers: LayerVisibi
     { key: "terminator", label: "Day/night terminator line", icon: Compass },
     { key: "subsolar", label: "Subsolar point (sun overhead)", icon: SunIcon },
     { key: "constellations", label: "Constellation lines (Orion etc)", icon: Sparkles },
+    { key: "compass", label: "Compass / heading widget", icon: Navigation },
     { key: "miniMap", label: "Mini-map widget", icon: Compass }
   ];
   return (
@@ -1620,7 +1666,7 @@ function LayersPanel({ layers, onToggle, bordersLoading }: { layers: LayerVisibi
   );
 }
 
-function ImageryPanel({ imagery, onUpdate, loading, progress }: { imagery: Imagery; onUpdate: (patch: Partial<Imagery>) => void; loading: boolean; progress: number }) {
+function ImageryPanel({ imagery, onUpdate, onReset, loading, progress }: { imagery: Imagery; onUpdate: (patch: Partial<Imagery>) => void; onReset: () => void; loading: boolean; progress: number }) {
   const dayLayers = Object.values(GIBS_LAYERS).filter((l) => l.swap !== "night");
   const nightLayers = Object.values(GIBS_LAYERS).filter((l) => l.swap === "night");
   const today = todayUTC();
@@ -1628,9 +1674,10 @@ function ImageryPanel({ imagery, onUpdate, loading, progress }: { imagery: Image
   return (
     <>
       <PanelSection title="Imagery source" icon={Sparkles}>
-        <div className="atlasModeRow" style={{ gridTemplateColumns: "1fr 1fr" }}>
+        <div className="atlasModeRow" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
           <button type="button" className={imagery.source === "live" ? "active" : ""} onClick={() => onUpdate({ source: "live" })}>NASA live</button>
           <button type="button" className={imagery.source === "bundled" ? "active" : ""} onClick={() => onUpdate({ source: "bundled" })}>Bundled</button>
+          <button type="button" className={imagery.source === "custom" ? "active" : ""} onClick={() => onUpdate({ source: "custom" })}>Custom URL</button>
         </div>
         {imagery.source === "live" && (
           <p className="atlasHint">Streaming real Earth imagery from NASA GIBS. Default is yesterday's MODIS true-color.</p>
@@ -1638,6 +1685,23 @@ function ImageryPanel({ imagery, onUpdate, loading, progress }: { imagery: Image
         {imagery.source === "bundled" && (
           <p className="atlasHint">Using the local 2K Blue Marble texture (offline-friendly, instant).</p>
         )}
+        {imagery.source === "custom" && (
+          <>
+            <p className="atlasHint">Paste a WMTS / XYZ tile URL pattern. Use {"{z}"}, {"{y}"}, {"{x}"} placeholders.</p>
+            <input
+              type="text"
+              className="atlasSearchInput"
+              value={imagery.customUrl ?? ""}
+              onChange={(e) => onUpdate({ customUrl: e.target.value })}
+              placeholder="https://tile.example.com/{z}/{y}/{x}.jpg"
+              spellCheck={false}
+            />
+            <p className="atlasHint" style={{ fontSize: 10.5, opacity: 0.75 }}>(Custom-URL fetching is read as informational here; the GIBS pipeline is what's actively fetched. Switch to "NASA live" or "Bundled" for the rendered Earth.)</p>
+          </>
+        )}
+        <button type="button" className="atlasPrimaryBtn small" style={{ background: "transparent", color: "#ff8a8a", marginTop: 8 }} onClick={onReset}>
+          Reset all settings to defaults
+        </button>
       </PanelSection>
 
       {imagery.source === "live" && (
@@ -2230,6 +2294,24 @@ function PinInfoCard({ pin, onClose, onDelete, onUpdate, onFly }: { pin: Pin; on
   );
 }
 
+function CompassWidget({ cameraState }: { cameraState: CameraState }) {
+  // Compass shows where camera "north" points relative to the globe.
+  // For our orbit camera looking at origin, "up" in world is also screen-up,
+  // and north is at lat=90. Compute screen rotation from camera pos.
+  const rotDeg = -cameraState.lon; // rough heading indicator (longitude shift)
+  return (
+    <div className="atlasCompass" aria-label="Compass">
+      <div className="atlasCompassRose" style={{ transform: `rotate(${rotDeg}deg)` }}>
+        <span className="n">N</span>
+        <span className="e">E</span>
+        <span className="s">S</span>
+        <span className="w">W</span>
+        <span className="needle" />
+      </div>
+    </div>
+  );
+}
+
 function MiniMap({ cameraState, pins }: { cameraState: CameraState; pins: Pin[] }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const dayUrl = `${import.meta.env.BASE_URL}textures/earth_day.jpg`;
@@ -2430,6 +2512,7 @@ function GlobeCanvas({
           {layers.cardinals && <Cardinals />}
           {layers.timezones && <TimeZoneBands />}
           {layers.earthquakes && <EarthquakeMarkers data={earthquakes} />}
+          {layers.volcanoes && <VolcanoMarkers />}
           {layers.pinPaths && <PinPaths pins={pins} sunDirection={sunDirection} />}
           {layers.pins && <PinMarkers pins={pins} selectedId={selectedPinId} onSelect={onSelectPin} />}
           {layers.terminator && <TerminatorRing sunDirection={sunDirection} />}
@@ -2954,6 +3037,31 @@ function PinMarker({ pin, selected, onSelect }: { pin: Pin; selected: boolean; o
           <meshBasicMaterial color={pin.color} side={THREE.DoubleSide} transparent opacity={0.7} />
         </mesh>
       )}
+    </group>
+  );
+}
+
+function VolcanoMarkers() {
+  const groupRef = useRef<THREE.Group>(null);
+  useFrame(({ clock }) => {
+    if (!groupRef.current) return;
+    const t = clock.elapsedTime;
+    groupRef.current.children.forEach((child, i) => {
+      const phase = (t * 0.8 + i * 0.4) % 2;
+      child.scale.setScalar(1 + Math.max(0, 1 - phase) * 0.6);
+    });
+  });
+  return (
+    <group ref={groupRef}>
+      {FAMOUS_VOLCANOES.map((v) => {
+        const pos = latLonToVec3(v.lat, v.lon, 1.004);
+        return (
+          <mesh key={v.id} position={pos}>
+            <coneGeometry args={[0.008, 0.018, 6]} />
+            <meshBasicMaterial color="#ff6a3d" transparent opacity={0.9} />
+          </mesh>
+        );
+      })}
     </group>
   );
 }

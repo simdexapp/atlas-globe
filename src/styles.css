@@ -1286,6 +1286,54 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
   transition: width 200ms ease;
 }
 
+.atlasCompass {
+  position: fixed;
+  top: 78px;
+  right: 332px;
+  z-index: 6;
+  width: 64px;
+  height: 64px;
+  pointer-events: none;
+}
+
+.atlasCompassRose {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border: 1px solid color-mix(in srgb, var(--accent), transparent 60%);
+  border-radius: 50%;
+  background: rgba(10, 15, 28, 0.7);
+  backdrop-filter: blur(6px);
+  transition: transform 200ms ease;
+}
+
+.atlasCompassRose .n,
+.atlasCompassRose .e,
+.atlasCompassRose .s,
+.atlasCompassRose .w {
+  position: absolute;
+  font-family: ui-monospace, monospace;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.atlasCompassRose .n { top: 4px; left: 50%; transform: translateX(-50%); color: #ff7a7a; }
+.atlasCompassRose .s { bottom: 4px; left: 50%; transform: translateX(-50%); }
+.atlasCompassRose .e { right: 6px; top: 50%; transform: translateY(-50%); }
+.atlasCompassRose .w { left: 6px; top: 50%; transform: translateY(-50%); }
+
+.atlasCompassRose .needle {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  width: 2px;
+  height: 22px;
+  margin-left: -1px;
+  background: linear-gradient(180deg, #ff7a7a 0%, #ff7a7a 50%, transparent 50%, transparent 100%);
+  transform-origin: bottom center;
+}
+
 .atlasMiniMap {
   position: fixed;
   bottom: 44px;
