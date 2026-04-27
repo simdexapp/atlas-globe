@@ -49,6 +49,8 @@ type LayerVisibility = {
   stars: boolean;
   graticule: boolean;
   cardinals: boolean;
+  nightLights: boolean;
+  iss: boolean;
 };
 
 type GlobeSettings = {
@@ -58,6 +60,8 @@ type GlobeSettings = {
   sunAzimuth: number;     // 0..1 → 0..360°
   sunElevation: number;   // 0..1 → -90..90°
   exposure: number;
+  timeAnim: boolean;
+  timeSpeed: number;
 };
 
 type Bookmark = {
@@ -100,7 +104,9 @@ const defaultLayers: LayerVisibility = {
   atmosphere: true,
   stars: true,
   graticule: false,
-  cardinals: true
+  cardinals: true,
+  nightLights: true,
+  iss: false
 };
 
 const defaultGlobe: GlobeSettings = {
@@ -109,7 +115,9 @@ const defaultGlobe: GlobeSettings = {
   atmosphereIntensity: 0.85,
   sunAzimuth: 0.18,
   sunElevation: 0.6,
-  exposure: 1
+  exposure: 1,
+  timeAnim: false,
+  timeSpeed: 0.04
 };
 
 const cityBookmarks: Bookmark[] = [
@@ -158,9 +166,48 @@ function App() {
   const [paused, setPaused] = useState(false);
   const [orbiting, setOrbiting] = useState(true);
   const [cesiumToken, setCesiumToken] = useState<string>("");
+  const [issPosition, setIssPosition] = useState<{ lat: number; lon: number } | null>(null);
+  const [searchResults, setSearchResults] = useState<Bookmark[]>([]);
+  const [searching, setSearching] = useState(false);
   const skipPersistRef = useRef(true);
   const uiHiddenRef = useRef(false);
   uiHiddenRef.current = hideUi;
+
+  // Time-of-day auto-rotate sun
+  useEffect(() => {
+    if (!globe.timeAnim) return;
+    let raf = 0;
+    let last = performance.now();
+    const tick = (now: number) => {
+      const dt = (now - last) / 1000;
+      last = now;
+      setGlobe((g) => ({ ...g, sunAzimuth: (g.sunAzimuth + dt * g.timeSpeed) % 1 }));
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [globe.timeAnim, globe.timeSpeed]);
+
+  // ISS position polling
+  useEffect(() => {
+    if (!layers.iss) return;
+    let cancelled = false;
+    const fetchPos = async () => {
+      try {
+        const res = await fetch("https://api.wheretheiss.at/v1/satellites/25544");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled) {
+          setIssPosition({ lat: data.latitude, lon: data.longitude });
+        }
+      } catch {
+        // ignore
+      }
+    };
+    fetchPos();
+    const handle = window.setInterval(fetchPos, 5000);
+    return () => { cancelled = true; window.clearInterval(handle); };
+  }, [layers.iss]);
 
   // Persist
   useEffect(() => {
@@ -245,6 +292,38 @@ function App() {
     const q = searchQuery.toLowerCase();
     return bookmarks.filter((b) => b.name.toLowerCase().includes(q));
   }, [bookmarks, searchQuery]);
+
+  // Nominatim geocoding (debounced)
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (q.length < 3) { setSearchResults([]); setSearching(false); return; }
+    setSearching(true);
+    const handle = window.setTimeout(async () => {
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=8`, {
+          headers: { Accept: "application/json" }
+        });
+        if (!res.ok) { setSearching(false); return; }
+        const data = await res.json() as Array<{ place_id: number; lat: string; lon: string; display_name: string; type: string }>;
+        const results: Bookmark[] = data.map((r) => ({
+          id: `osm-${r.place_id}`,
+          name: r.display_name.split(",").slice(0, 2).join(",").trim(),
+          lat: Number(r.lat),
+          lon: Number(r.lon),
+          altKm: 1500,
+          savedAt: 0
+        }));
+        setSearchResults(results);
+      } catch {/* ignore */}
+      finally { setSearching(false); }
+    }, 280);
+    return () => window.clearTimeout(handle);
+  }, [searchQuery]);
+
+  const combinedSearchResults = useMemo(() => {
+    if (!searchQuery.trim()) return bookmarks;
+    return [...filteredBookmarks, ...searchResults.filter((s) => !filteredBookmarks.some((b) => b.name === s.name))];
+  }, [bookmarks, filteredBookmarks, searchQuery, searchResults]);
 
   const captureFrame = useCallback(() => {
     const canvas = document.querySelector("canvas") as HTMLCanvasElement | null;
@@ -361,6 +440,7 @@ function App() {
             paused={paused}
             orbiting={orbiting}
             flyTo={flyTo}
+            issPosition={issPosition}
             onCameraChange={onCameraChange}
           />
         ) : (
@@ -495,7 +575,8 @@ function App() {
         <SearchModal
           query={searchQuery}
           onQuery={setSearchQuery}
-          results={filteredBookmarks}
+          results={combinedSearchResults}
+          searching={searching}
           suggestions={initialSearchSuggestions}
           onSelect={(b) => { flyToBookmark(b); setShowSearch(false); }}
           onClose={() => setShowSearch(false)}
@@ -549,6 +630,14 @@ function GlobePanel({ globe, onUpdate }: { globe: GlobeSettings; onUpdate: (patc
       <PanelSection title="Sun position" icon={SunIcon}>
         <Slider label="Azimuth" value={globe.sunAzimuth} min={0} max={1} onChange={(v) => onUpdate({ sunAzimuth: v })} suffix="°" formatter={(v) => Math.round(v * 360).toString()} />
         <Slider label="Elevation" value={globe.sunElevation} min={0} max={1} onChange={(v) => onUpdate({ sunElevation: v })} suffix="°" formatter={(v) => `${Math.round((v - 0.5) * 180)}`} />
+        <label className="atlasLayerRow" style={{ marginTop: 4 }}>
+          <Telescope size={13} />
+          <span>Time of day animation</span>
+          <input type="checkbox" checked={globe.timeAnim} onChange={(e) => onUpdate({ timeAnim: e.target.checked })} />
+        </label>
+        {globe.timeAnim && (
+          <Slider label="Day speed" value={globe.timeSpeed} min={0.005} max={0.4} onChange={(v) => onUpdate({ timeSpeed: v })} formatter={(v) => `${(1 / Math.max(0.005, v)).toFixed(0)}s/day`} />
+        )}
       </PanelSection>
 
       <PanelSection title="Atmosphere" icon={Sparkles}>
@@ -569,10 +658,12 @@ function GlobePanel({ globe, onUpdate }: { globe: GlobeSettings; onUpdate: (patc
 function LayersPanel({ layers, onToggle }: { layers: LayerVisibility; onToggle: (key: keyof LayerVisibility) => void }) {
   const items: { key: keyof LayerVisibility; label: string; icon: IconComponent }[] = [
     { key: "clouds", label: "Cloud cover", icon: Cloud },
-    { key: "atmosphere", label: "Atmosphere", icon: Sparkles },
+    { key: "nightLights", label: "City lights (night side)", icon: SunIcon },
+    { key: "atmosphere", label: "Atmosphere glow", icon: Sparkles },
     { key: "stars", label: "Background stars", icon: Sparkles },
     { key: "graticule", label: "Lat/lon graticule", icon: Compass },
-    { key: "cardinals", label: "Cardinal markers", icon: Navigation }
+    { key: "cardinals", label: "Cardinal markers", icon: Navigation },
+    { key: "iss", label: "Live ISS position", icon: Telescope }
   ];
   return (
     <PanelSection title="Visibility" icon={Layers}>
@@ -726,12 +817,14 @@ function SearchModal({
   query,
   onQuery,
   results,
+  searching,
   onSelect,
   onClose
 }: {
   query: string;
   onQuery: (s: string) => void;
   results: Bookmark[];
+  searching: boolean;
   suggestions: string[];
   onSelect: (b: Bookmark) => void;
   onClose: () => void;
@@ -746,13 +839,14 @@ function SearchModal({
             autoFocus
             value={query}
             onChange={(e) => onQuery(e.target.value)}
-            placeholder="Search a place…"
+            placeholder="Search any place on Earth…"
             aria-label="Search a place"
           />
+          {searching && <span className="atlasSearchSpinner" aria-hidden />}
           <button type="button" className="atlasIconBtn" onClick={onClose} aria-label="Close"><X size={14} /></button>
         </div>
         <ul className="atlasSearchResults">
-          {results.length === 0 && <li className="atlasSearchEmpty">No matches.</li>}
+          {results.length === 0 && !searching && <li className="atlasSearchEmpty">{query.trim().length < 3 ? "Type at least 3 characters…" : "No matches."}</li>}
           {results.map((r) => (
             <li key={r.id}>
               <button type="button" onClick={() => onSelect(r)}>
@@ -765,6 +859,7 @@ function SearchModal({
             </li>
           ))}
         </ul>
+        <div className="atlasSearchFoot">Powered by OpenStreetMap Nominatim</div>
       </div>
     </div>
   );
@@ -796,6 +891,7 @@ function GlobeCanvas({
   paused,
   orbiting,
   flyTo,
+  issPosition,
   onCameraChange
 }: {
   globe: GlobeSettings;
@@ -803,8 +899,14 @@ function GlobeCanvas({
   paused: boolean;
   orbiting: boolean;
   flyTo: FlyToTarget;
+  issPosition: { lat: number; lon: number } | null;
   onCameraChange: (lat: number, lon: number, altKm: number) => void;
 }) {
+  const sunDirection = useMemo(() => {
+    const [x, y, z] = sunPosition(globe.sunAzimuth, globe.sunElevation, 1);
+    return new THREE.Vector3(x, y, z);
+  }, [globe.sunAzimuth, globe.sunElevation]);
+
   return (
     <Canvas
       dpr={[1, Math.min(window.devicePixelRatio, 2)]}
@@ -816,15 +918,41 @@ function GlobeCanvas({
         <ExposureBridge exposure={globe.exposure} />
         <ambientLight intensity={0.05} />
         <SunLight azimuth={globe.sunAzimuth} elevation={globe.sunElevation} />
-        <Earth globe={globe} layers={layers} paused={paused} />
+        <Earth globe={globe} layers={layers} paused={paused} sunDirection={sunDirection} />
         {layers.atmosphere && <Atmosphere intensity={globe.atmosphereIntensity} />}
         {layers.clouds && <Clouds opacity={globe.cloudOpacity} paused={paused} />}
         {layers.stars && <Stars radius={120} depth={50} count={4500} factor={4} saturation={0} fade speed={0.5} />}
         {layers.graticule && <Graticule />}
         {layers.cardinals && <Cardinals />}
+        {layers.iss && issPosition && <ISSMarker lat={issPosition.lat} lon={issPosition.lon} />}
         <GlobeControls flyTo={flyTo} onCameraChange={onCameraChange} autoOrbit={orbiting && !paused} />
       </Suspense>
     </Canvas>
+  );
+}
+
+function ISSMarker({ lat, lon }: { lat: number; lon: number }) {
+  // ISS orbital altitude ~408 km → at globe-radius=1, that's 1 + 408/6371
+  const altitude = 1 + 408 / EARTH_RADIUS_KM;
+  const pos = useMemo(() => latLonToVec3(lat, lon, altitude), [lat, lon, altitude]);
+  const ring = useRef<THREE.Mesh>(null);
+  useFrame(({ clock }) => {
+    if (ring.current) {
+      const t = clock.elapsedTime;
+      ring.current.scale.setScalar(1 + Math.sin(t * 3) * 0.15);
+    }
+  });
+  return (
+    <group position={pos}>
+      <mesh>
+        <sphereGeometry args={[0.012, 16, 16]} />
+        <meshBasicMaterial color="#ffd66b" />
+      </mesh>
+      <mesh ref={ring} rotation={[Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.022, 0.028, 32]} />
+        <meshBasicMaterial color="#ffd66b" transparent opacity={0.6} side={THREE.DoubleSide} />
+      </mesh>
+    </group>
   );
 }
 
@@ -837,53 +965,124 @@ function ExposureBridge({ exposure }: { exposure: number }) {
   return null;
 }
 
-function SunLight({ azimuth, elevation }: { azimuth: number; elevation: number }) {
+function sunPosition(azimuth: number, elevation: number, distance = 60): [number, number, number] {
   const az = azimuth * Math.PI * 2;
   const el = (elevation - 0.5) * Math.PI;
-  const distance = 60;
-  const position: [number, number, number] = [
+  return [
     Math.cos(az) * Math.cos(el) * distance,
     Math.sin(el) * distance,
     Math.sin(az) * Math.cos(el) * distance
   ];
+}
+
+function SunLight({ azimuth, elevation }: { azimuth: number; elevation: number }) {
   return (
-    <directionalLight position={position} intensity={3.6} color="#ffffff" />
+    <directionalLight position={sunPosition(azimuth, elevation)} intensity={2.2} color="#ffffff" />
   );
 }
 
-function Earth({ globe, paused }: { globe: GlobeSettings; layers: LayerVisibility; paused: boolean }) {
+const EARTH_VERTEX = `
+  varying vec3 vWorldNormal;
+  varying vec2 vUv;
+  varying vec3 vWorldPosition;
+  void main() {
+    vUv = uv;
+    vWorldNormal = normalize(mat3(modelMatrix) * normal);
+    vec4 worldPos = modelMatrix * vec4(position, 1.0);
+    vWorldPosition = worldPos.xyz;
+    gl_Position = projectionMatrix * viewMatrix * worldPos;
+  }
+`;
+
+const EARTH_FRAGMENT = `
+  uniform sampler2D uDayMap;
+  uniform sampler2D uNightMap;
+  uniform sampler2D uSpecularMap;
+  uniform vec3 uSunDirection;
+  uniform float uExposure;
+  uniform float uNightStrength;
+  varying vec3 vWorldNormal;
+  varying vec2 vUv;
+  varying vec3 vWorldPosition;
+
+  void main() {
+    vec3 N = normalize(vWorldNormal);
+    vec3 L = normalize(uSunDirection);
+    float ndotl = dot(N, L);
+    float diffuse = max(0.0, ndotl);
+    float terminator = smoothstep(-0.08, 0.16, ndotl);
+
+    vec3 dayColor = texture2D(uDayMap, vUv).rgb;
+    vec3 nightColor = texture2D(uNightMap, vUv).rgb;
+    float spec = texture2D(uSpecularMap, vUv).r;
+
+    // Water specular highlight (fake — adds shimmer to oceans on day side)
+    vec3 viewDir = normalize(cameraPosition - vWorldPosition);
+    vec3 H = normalize(L + viewDir);
+    float specHighlight = pow(max(0.0, dot(N, H)), 64.0) * spec * diffuse * 0.6;
+
+    vec3 lit = dayColor * (0.06 + diffuse * 1.08) + vec3(specHighlight);
+    vec3 night = nightColor * uNightStrength * (1.0 - terminator);
+    vec3 color = mix(night, lit, terminator);
+
+    // Atmospheric tint near terminator
+    float twilight = 1.0 - abs(ndotl);
+    twilight = pow(twilight, 5.0);
+    color += vec3(0.10, 0.07, 0.03) * twilight * 0.7;
+
+    gl_FragColor = vec4(color * uExposure, 1.0);
+  }
+`;
+
+function Earth({ globe, layers, paused, sunDirection }: { globe: GlobeSettings; layers: LayerVisibility; paused: boolean; sunDirection: THREE.Vector3 }) {
   const ref = useRef<THREE.Mesh>(null);
-  const [day, normal, specular] = useTexture([
+  const matRef = useRef<THREE.ShaderMaterial>(null);
+  const [day, night, specular] = useTexture([
     `${import.meta.env.BASE_URL}textures/earth_day.jpg`,
-    `${import.meta.env.BASE_URL}textures/earth_normal.jpg`,
+    `${import.meta.env.BASE_URL}textures/earth_night.jpg`,
     `${import.meta.env.BASE_URL}textures/earth_specular.jpg`
   ]);
 
   useEffect(() => {
-    [day, normal, specular].forEach((tex) => {
+    [day, night, specular].forEach((tex) => {
       tex.anisotropy = 8;
-      tex.colorSpace = tex === day ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.ClampToEdgeWrapping;
     });
-  }, [day, normal, specular]);
+    day.colorSpace = THREE.SRGBColorSpace;
+    night.colorSpace = THREE.SRGBColorSpace;
+    specular.colorSpace = THREE.NoColorSpace;
+  }, [day, night, specular]);
+
+  const uniforms = useMemo(() => ({
+    uDayMap: { value: day },
+    uNightMap: { value: night },
+    uSpecularMap: { value: specular },
+    uSunDirection: { value: sunDirection.clone() },
+    uExposure: { value: globe.exposure },
+    uNightStrength: { value: layers.nightLights ? 2.0 : 0 }
+  }), [day, night, specular]);
 
   useFrame((_, delta) => {
     if (ref.current && !paused) {
       ref.current.rotation.y += delta * globe.rotationSpeed * 0.4;
     }
+    if (matRef.current) {
+      const u = matRef.current.uniforms;
+      u.uSunDirection.value.copy(sunDirection);
+      u.uExposure.value = globe.exposure;
+      u.uNightStrength.value = layers.nightLights ? 2.0 : 0;
+    }
   });
 
   return (
     <mesh ref={ref} rotation={[0, 0, THREE.MathUtils.degToRad(-23.4)]}>
-      <sphereGeometry args={[1, 96, 96]} />
-      <meshPhysicalMaterial
-        map={day}
-        normalMap={normal}
-        normalScale={new THREE.Vector2(0.6, 0.6)}
-        roughnessMap={specular}
-        roughness={0.85}
-        metalness={0.05}
-        emissive="#0c1726"
-        emissiveIntensity={0.2}
+      <sphereGeometry args={[1, 128, 128]} />
+      <shaderMaterial
+        ref={matRef}
+        vertexShader={EARTH_VERTEX}
+        fragmentShader={EARTH_FRAGMENT}
+        uniforms={uniforms}
       />
     </mesh>
   );

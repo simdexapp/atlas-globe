@@ -835,6 +835,26 @@ input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; border: 2px s
   font-size: 12px;
 }
 
+.atlasSearchSpinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--accent), transparent 60%);
+  border-top-color: var(--accent);
+  animation: atlasSpin 800ms linear infinite;
+  margin-right: 6px;
+}
+
+@keyframes atlasSpin { to { transform: rotate(360deg); } }
+
+.atlasSearchFoot {
+  padding: 8px 16px;
+  border-top: 1px solid #1a2030;
+  color: #6f7c91;
+  font-size: 10.5px;
+  text-align: center;
+}
+
 .atlasShortcutsModal {
   padding: 20px;
 }
