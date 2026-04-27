@@ -1164,6 +1164,88 @@ input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; border: 2px s
   transition: width 200ms ease;
 }
 
+.atlasSelect {
+  width: 100%;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid #1a2030;
+  border-radius: 5px;
+  background: #0e1524;
+  color: #fff;
+  font-size: 12px;
+  outline: none;
+}
+
+.atlasSelect:focus {
+  border-color: color-mix(in srgb, var(--accent), transparent 50%);
+}
+
+input[type="date"].atlasSelect {
+  font-family: ui-monospace, monospace;
+}
+
+input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
+  filter: invert(1) brightness(0.75);
+}
+
+.atlasImageryProgress {
+  display: grid;
+  gap: 5px;
+  margin-top: 6px;
+  font-family: ui-monospace, monospace;
+  font-size: 10.5px;
+  color: var(--accent);
+}
+
+.atlasImageryBar {
+  height: 3px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.atlasImageryBar > div {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #5cb5ff, #ffd66b);
+  transition: width 200ms ease;
+}
+
+.atlasImageryStatus {
+  position: fixed;
+  top: 78px;
+  left: 60px;
+  z-index: 7;
+  display: grid;
+  grid-template-columns: 14px auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 240px;
+  padding: 8px 14px;
+  border: 1px solid color-mix(in srgb, var(--accent), transparent 60%);
+  border-radius: 99px;
+  background: rgba(10, 15, 28, 0.85);
+  backdrop-filter: blur(10px);
+  color: var(--accent);
+  font-family: ui-monospace, monospace;
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.atlasImageryStatus > div {
+  grid-column: 1 / -1;
+  height: 2px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.atlasImageryStatus > div > div {
+  height: 100%;
+  background: linear-gradient(90deg, #5cb5ff, #ffd66b);
+  transition: width 200ms ease;
+}
+
 .atlasMiniMap {
   position: fixed;
   bottom: 44px;

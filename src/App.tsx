@@ -38,12 +38,13 @@ import {
   X
 } from "lucide-react";
 import * as THREE from "three";
+import { GIBS_LAYERS, DEFAULT_GIBS_DAY, DEFAULT_GIBS_NIGHT, todayUTC, loadGibsComposite } from "./tiles";
 
 const SurfaceMode = lazy(() => import("./Surface"));
 
 type IconComponent = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
 type Mode = "atlas" | "surface";
-type InspectorTab = "globe" | "layers" | "bookmarks" | "data";
+type InspectorTab = "globe" | "layers" | "bookmarks" | "data" | "imagery";
 type RenderMode = "realistic" | "wireframe" | "blueprint";
 type RecordingState = "idle" | "recording" | "encoding";
 
@@ -101,6 +102,14 @@ type GlobeSettings = {
   highRes: boolean;
 };
 
+type Imagery = {
+  layerId: string;        // GIBS layer key
+  nightLayerId: string;   // GIBS night layer key
+  date: string;           // YYYY-MM-DD
+  zoom: number;           // 2 (SD) | 3 (HD) | 4 (UHD, slow)
+  source: "live" | "bundled";
+};
+
 type Bookmark = {
   id: string;
   name: string;
@@ -128,6 +137,8 @@ type PersistedState = {
   globe: GlobeSettings;
   bookmarks: Bookmark[];
   uiTheme: "dark" | "light";
+  imagery?: Imagery;
+  pins?: Pin[];
 };
 
 const STORAGE_KEY = "atlas-globe-state-v1";
@@ -166,6 +177,14 @@ const defaultGlobe: GlobeSettings = {
   realTimeSun: false,
   renderMode: "realistic",
   highRes: false
+};
+
+const defaultImagery: Imagery = {
+  layerId: DEFAULT_GIBS_DAY,
+  nightLayerId: DEFAULT_GIBS_NIGHT,
+  date: todayUTC(),
+  zoom: 3,
+  source: "live"
 };
 
 const cityBookmarks: Bookmark[] = [
@@ -217,6 +236,12 @@ function App() {
   const [issPosition, setIssPosition] = useState<{ lat: number; lon: number } | null>(null);
   const [searchResults, setSearchResults] = useState<Bookmark[]>([]);
   const [searching, setSearching] = useState(false);
+  const [imagery, setImagery] = useState<Imagery>(defaultImagery);
+  const [imageryLoading, setImageryLoading] = useState(false);
+  const [imageryProgress, setImageryProgress] = useState(0);
+  const [dayTexture, setDayTexture] = useState<THREE.Texture | null>(null);
+  const [nightTexture, setNightTexture] = useState<THREE.Texture | null>(null);
+  const imageryAbortRef = useRef<AbortController | null>(null);
   const [pins, setPins] = useState<Pin[]>([]);
   const [selectedPin, setSelectedPin] = useState<string | null>(null);
   const [earthquakes, setEarthquakes] = useState<Earthquake[]>([]);
@@ -283,11 +308,12 @@ function App() {
         if (data.layers) setLayers({ ...defaultLayers, ...data.layers });
         if (data.globe) setGlobe({ ...defaultGlobe, ...data.globe });
         if (Array.isArray(data.bookmarks)) {
-          // merge built-in with user-added (user's win on id collision)
           const ids = new Set(data.bookmarks.map((b) => b.id));
           setBookmarks([...data.bookmarks, ...cityBookmarks.filter((c) => !ids.has(c.id))]);
         }
         if (data.uiTheme) setUiTheme(data.uiTheme);
+        if (data.imagery) setImagery({ ...defaultImagery, ...data.imagery, date: todayUTC() });
+        if (Array.isArray(data.pins)) setPins(data.pins);
       }
     } catch {
       // ignore
@@ -301,9 +327,9 @@ function App() {
 
   useEffect(() => {
     if (skipPersistRef.current) return;
-    const payload: PersistedState = { layers, globe, bookmarks, uiTheme };
+    const payload: PersistedState = { layers, globe, bookmarks, uiTheme, imagery, pins };
     try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload)); } catch {}
-  }, [layers, globe, bookmarks, uiTheme]);
+  }, [layers, globe, bookmarks, uiTheme, imagery, pins]);
 
   const showToast = useCallback((text: string) => {
     setToast({ id: Date.now() + Math.random(), text });
@@ -411,6 +437,85 @@ function App() {
 
   const cycleTheme = useCallback(() => {
     setUiTheme((t) => (t === "dark" ? "light" : "dark"));
+  }, []);
+
+  // Fetch day + night GIBS composites whenever imagery settings change (debounced)
+  useEffect(() => {
+    if (imagery.source !== "live") {
+      setDayTexture(null);
+      setNightTexture(null);
+      return;
+    }
+    imageryAbortRef.current?.abort();
+    const controller = new AbortController();
+    imageryAbortRef.current = controller;
+    const handle = window.setTimeout(async () => {
+      const dayLayer = GIBS_LAYERS[imagery.layerId] ?? GIBS_LAYERS[DEFAULT_GIBS_DAY];
+      const nightLayer = GIBS_LAYERS[imagery.nightLayerId] ?? GIBS_LAYERS[DEFAULT_GIBS_NIGHT];
+      setImageryLoading(true);
+      setImageryProgress(0);
+      try {
+        // Day
+        const dayCanvas = await loadGibsComposite(
+          dayLayer,
+          imagery.date,
+          imagery.zoom,
+          controller.signal,
+          (loaded, total) => setImageryProgress(loaded / (total * 2))
+        );
+        if (controller.signal.aborted) return;
+        const newDay = new THREE.CanvasTexture(dayCanvas);
+        newDay.colorSpace = THREE.SRGBColorSpace;
+        newDay.anisotropy = 8;
+        newDay.wrapS = THREE.RepeatWrapping;
+        newDay.wrapT = THREE.ClampToEdgeWrapping;
+        newDay.flipY = true;
+        setDayTexture((prev) => { prev?.dispose(); return newDay; });
+
+        // Night (lower zoom — 1 level less, faster)
+        const nightCanvas = await loadGibsComposite(
+          nightLayer,
+          imagery.date,
+          Math.max(2, imagery.zoom - 1),
+          controller.signal,
+          (loaded, total) => setImageryProgress(0.5 + (loaded / total) * 0.5)
+        );
+        if (controller.signal.aborted) return;
+        const newNight = new THREE.CanvasTexture(nightCanvas);
+        newNight.colorSpace = THREE.SRGBColorSpace;
+        newNight.anisotropy = 8;
+        newNight.wrapS = THREE.RepeatWrapping;
+        newNight.wrapT = THREE.ClampToEdgeWrapping;
+        newNight.flipY = true;
+        setNightTexture((prev) => { prev?.dispose(); return newNight; });
+
+        showToast(`Imagery: ${dayLayer.name.split(" ")[0]} · ${imagery.date}`);
+      } catch (err) {
+        if ((err as Error).name !== "AbortError") {
+          showToast("Imagery fetch failed");
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setImageryLoading(false);
+          setImageryProgress(1);
+        }
+      }
+    }, 350);
+    return () => {
+      window.clearTimeout(handle);
+      controller.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [imagery.layerId, imagery.nightLayerId, imagery.date, imagery.zoom, imagery.source]);
+
+  useEffect(() => () => {
+    dayTexture?.dispose();
+    nightTexture?.dispose();
+    imageryAbortRef.current?.abort();
+  }, [dayTexture, nightTexture]);
+
+  const updateImagery = useCallback((patch: Partial<Imagery>) => {
+    setImagery((prev) => ({ ...prev, ...patch }));
   }, []);
 
   const onCameraChange = useCallback((lat: number, lon: number, altKm: number) => {
@@ -843,6 +948,8 @@ function App() {
             earthquakes={earthquakes}
             borders={borders}
             selectedPinId={selectedPin}
+            dayTexture={dayTexture}
+            nightTexture={nightTexture}
             onSelectPin={setSelectedPin}
             onGlobeClick={onGlobeClick}
             onCameraChange={onCameraChange}
@@ -932,11 +1039,21 @@ function App() {
 
       <aside className="atlasInspector" aria-label="Inspector">
         <div className="inspectorTabs">
+          <button className={inspectorTab === "imagery" ? "active" : ""} type="button" onClick={() => setInspectorTab("imagery")}>Imagery</button>
           <button className={inspectorTab === "globe" ? "active" : ""} type="button" onClick={() => setInspectorTab("globe")}>Globe</button>
           <button className={inspectorTab === "layers" ? "active" : ""} type="button" onClick={() => setInspectorTab("layers")}>Layers</button>
           <button className={inspectorTab === "bookmarks" ? "active" : ""} type="button" onClick={() => setInspectorTab("bookmarks")}>Saved</button>
           <button className={inspectorTab === "data" ? "active" : ""} type="button" onClick={() => setInspectorTab("data")}>Data</button>
         </div>
+
+        {inspectorTab === "imagery" && (
+          <ImageryPanel
+            imagery={imagery}
+            onUpdate={updateImagery}
+            loading={imageryLoading}
+            progress={imageryProgress}
+          />
+        )}
 
         {inspectorTab === "globe" && (
           <GlobePanel globe={globe} onUpdate={updateGlobe} />
@@ -1028,6 +1145,14 @@ function App() {
       {recordingState === "recording" && (
         <div className="atlasRecordIndicator" role="status">
           <span className="atlasRecordDot" /> REC {formatSeconds(recordingSeconds)}
+        </div>
+      )}
+
+      {imageryLoading && imagery.source === "live" && (
+        <div className="atlasImageryStatus" role="status">
+          <Sparkles size={11} />
+          <span>Streaming NASA imagery… {Math.round(imageryProgress * 100)}%</span>
+          <div className="atlasImageryStatusBar"><div style={{ width: `${imageryProgress * 100}%` }} /></div>
         </div>
       )}
 
@@ -1157,6 +1282,87 @@ function LayersPanel({ layers, onToggle, bordersLoading }: { layers: LayerVisibi
         ))}
       </div>
     </PanelSection>
+  );
+}
+
+function ImageryPanel({ imagery, onUpdate, loading, progress }: { imagery: Imagery; onUpdate: (patch: Partial<Imagery>) => void; loading: boolean; progress: number }) {
+  const dayLayers = Object.values(GIBS_LAYERS).filter((l) => l.swap !== "night");
+  const nightLayers = Object.values(GIBS_LAYERS).filter((l) => l.swap === "night");
+  const today = todayUTC();
+  const earliest = "2000-02-24";
+  return (
+    <>
+      <PanelSection title="Imagery source" icon={Sparkles}>
+        <div className="atlasModeRow" style={{ gridTemplateColumns: "1fr 1fr" }}>
+          <button type="button" className={imagery.source === "live" ? "active" : ""} onClick={() => onUpdate({ source: "live" })}>NASA live</button>
+          <button type="button" className={imagery.source === "bundled" ? "active" : ""} onClick={() => onUpdate({ source: "bundled" })}>Bundled</button>
+        </div>
+        {imagery.source === "live" && (
+          <p className="atlasHint">Streaming real Earth imagery from NASA GIBS. Default is yesterday's MODIS true-color.</p>
+        )}
+        {imagery.source === "bundled" && (
+          <p className="atlasHint">Using the local 2K Blue Marble texture (offline-friendly, instant).</p>
+        )}
+      </PanelSection>
+
+      {imagery.source === "live" && (
+        <>
+          <PanelSection title="Day product" icon={SunIcon}>
+            <select className="atlasSelect" value={imagery.layerId} onChange={(e) => onUpdate({ layerId: e.target.value })}>
+              {dayLayers.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+            </select>
+            <p className="atlasHint">{GIBS_LAYERS[imagery.layerId]?.description ?? ""}</p>
+          </PanelSection>
+
+          <PanelSection title="Night product" icon={Globe2}>
+            <select className="atlasSelect" value={imagery.nightLayerId} onChange={(e) => onUpdate({ nightLayerId: e.target.value })}>
+              {nightLayers.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+            </select>
+            <p className="atlasHint">{GIBS_LAYERS[imagery.nightLayerId]?.description ?? ""}</p>
+          </PanelSection>
+
+          <PanelSection title="Date" icon={Compass}>
+            <input
+              type="date"
+              className="atlasSelect"
+              min={earliest}
+              max={today}
+              value={imagery.date}
+              onChange={(e) => onUpdate({ date: e.target.value })}
+            />
+            <div className="atlasModeRow" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
+              <button type="button" onClick={() => {
+                const d = new Date(imagery.date + "T00:00:00Z");
+                d.setUTCDate(d.getUTCDate() - 1);
+                onUpdate({ date: d.toISOString().slice(0, 10) });
+              }}>−1d</button>
+              <button type="button" onClick={() => onUpdate({ date: today })}>Today</button>
+              <button type="button" onClick={() => {
+                const d = new Date(imagery.date + "T00:00:00Z");
+                d.setUTCDate(d.getUTCDate() + 1);
+                const next = d.toISOString().slice(0, 10);
+                if (next <= today) onUpdate({ date: next });
+              }}>+1d</button>
+            </div>
+            <p className="atlasHint">Drag the date back to see imagery from any day since 2000.</p>
+          </PanelSection>
+
+          <PanelSection title="Quality" icon={Camera}>
+            <div className="atlasModeRow">
+              <button type="button" className={imagery.zoom === 2 ? "active" : ""} onClick={() => onUpdate({ zoom: 2 })}>SD (32 tiles)</button>
+              <button type="button" className={imagery.zoom === 3 ? "active" : ""} onClick={() => onUpdate({ zoom: 3 })}>HD (128)</button>
+              <button type="button" className={imagery.zoom === 4 ? "active" : ""} onClick={() => onUpdate({ zoom: 4 })}>UHD (512)</button>
+            </div>
+            {loading && (
+              <div className="atlasImageryProgress">
+                <span>Streaming tiles… {Math.round(progress * 100)}%</span>
+                <div className="atlasImageryBar"><div style={{ width: `${progress * 100}%` }} /></div>
+              </div>
+            )}
+          </PanelSection>
+        </>
+      )}
+    </>
   );
 }
 
@@ -1688,6 +1894,8 @@ function GlobeCanvas({
   earthquakes,
   borders,
   selectedPinId,
+  dayTexture,
+  nightTexture,
   onSelectPin,
   onGlobeClick,
   onCameraChange
@@ -1702,6 +1910,8 @@ function GlobeCanvas({
   earthquakes: Earthquake[];
   borders: Float32Array | null;
   selectedPinId: string | null;
+  dayTexture: THREE.Texture | null;
+  nightTexture: THREE.Texture | null;
   onSelectPin: (id: string | null) => void;
   onGlobeClick: (lat: number, lon: number) => void;
   onCameraChange: (lat: number, lon: number, altKm: number) => void;
@@ -1723,7 +1933,7 @@ function GlobeCanvas({
         <ambientLight intensity={0.05} />
         <SunLight azimuth={globe.sunAzimuth} elevation={globe.sunElevation} />
         <EarthGroup globe={globe} paused={paused}>
-          <Earth globe={globe} layers={layers} sunDirection={sunDirection} onClick={onGlobeClick} />
+          <Earth globe={globe} layers={layers} sunDirection={sunDirection} dayOverride={dayTexture} nightOverride={nightTexture} onClick={onGlobeClick} />
           {layers.borders && borders && <Borders positions={borders} />}
           {layers.graticule && <Graticule />}
           {layers.cardinals && <Cardinals />}
@@ -1939,31 +2149,38 @@ function Earth({
   globe,
   layers,
   sunDirection,
+  dayOverride,
+  nightOverride,
   onClick
 }: {
   globe: GlobeSettings;
   layers: LayerVisibility;
   sunDirection: THREE.Vector3;
+  dayOverride: THREE.Texture | null;
+  nightOverride: THREE.Texture | null;
   onClick: (lat: number, lon: number) => void;
 }) {
   const ref = useRef<THREE.Mesh>(null);
   const matRef = useRef<THREE.ShaderMaterial>(null);
-  const [day, night, specular] = useTexture([
+  const [bundledDay, bundledNight, specular] = useTexture([
     `${import.meta.env.BASE_URL}textures/earth_day.jpg`,
     `${import.meta.env.BASE_URL}textures/earth_night.jpg`,
     `${import.meta.env.BASE_URL}textures/earth_specular.jpg`
   ]);
 
   useEffect(() => {
-    [day, night, specular].forEach((tex) => {
+    [bundledDay, bundledNight, specular].forEach((tex) => {
       tex.anisotropy = 8;
       tex.wrapS = THREE.RepeatWrapping;
       tex.wrapT = THREE.ClampToEdgeWrapping;
     });
-    day.colorSpace = THREE.SRGBColorSpace;
-    night.colorSpace = THREE.SRGBColorSpace;
+    bundledDay.colorSpace = THREE.SRGBColorSpace;
+    bundledNight.colorSpace = THREE.SRGBColorSpace;
     specular.colorSpace = THREE.NoColorSpace;
-  }, [day, night, specular]);
+  }, [bundledDay, bundledNight, specular]);
+
+  const day = dayOverride ?? bundledDay;
+  const night = nightOverride ?? bundledNight;
 
   const uniforms = useMemo(() => ({
     uDayMap: { value: day },
@@ -1980,6 +2197,9 @@ function Earth({
       u.uSunDirection.value.copy(sunDirection);
       u.uExposure.value = globe.exposure;
       u.uNightStrength.value = layers.nightLights ? 2.0 : 0;
+      // keep textures in sync if they swap
+      u.uDayMap.value = day;
+      u.uNightMap.value = night;
     }
   });
 
