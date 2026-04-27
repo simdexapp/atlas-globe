@@ -53,8 +53,11 @@ type Pin = {
   lon: number;
   label: string;
   color: string;
+  note?: string;
   createdAt: number;
 };
+
+const PIN_COLORS = ["#5cb5ff", "#ffd66b", "#ff7be0", "#7cffb1", "#ff8a4d", "#a8a8ff", "#ff5a5a", "#ffffff"];
 
 type Earthquake = {
   id: string;
@@ -78,6 +81,10 @@ type LayerVisibility = {
   earthquakes: boolean;
   timezones: boolean;
   pins: boolean;
+  sun: boolean;
+  moon: boolean;
+  pinPaths: boolean;
+  miniMap: boolean;
 };
 
 type GlobeSettings = {
@@ -125,8 +132,8 @@ type PersistedState = {
 
 const STORAGE_KEY = "atlas-globe-state-v1";
 const EARTH_RADIUS_KM = 6371;
-const MIN_DISTANCE = 1.05;          // ~333 km (just above surface)
-const MAX_DISTANCE = 8;             // far view from space
+const MIN_DISTANCE = 1.0008;        // ~5 km above surface (texture-pixelated, but real zoom)
+const MAX_DISTANCE = 12;            // far view from space
 const SPACE_DISTANCE = 2.6;          // default starting altitude
 
 const defaultLayers: LayerVisibility = {
@@ -140,7 +147,11 @@ const defaultLayers: LayerVisibility = {
   borders: false,
   earthquakes: false,
   timezones: false,
-  pins: true
+  pins: true,
+  sun: false,
+  moon: false,
+  pinPaths: true,
+  miniMap: true
 };
 
 const defaultGlobe: GlobeSettings = {
@@ -407,11 +418,10 @@ function App() {
     cameraStateRef.current = { lat, lon, altKm };
   }, []);
 
-  // Click-to-drop-pin
+  // Click-to-drop-pin (with reverse geocoding)
   const onGlobeClick = useCallback((lat: number, lon: number) => {
     const id = `pin-${Date.now()}`;
-    const colorChoices = ["#5cb5ff", "#ffd66b", "#ff7be0", "#7cffb1", "#ff8a4d"];
-    const color = colorChoices[Math.floor(Math.random() * colorChoices.length)];
+    const color = PIN_COLORS[Math.floor(Math.random() * PIN_COLORS.length)];
     const pin: Pin = {
       id,
       lat,
@@ -423,16 +433,101 @@ function App() {
     setPins((prev) => [...prev, pin]);
     setSelectedPin(id);
     showToast(`Pin dropped at ${formatLat(lat)} ${formatLon(lon)}`);
+
+    // Reverse geocode (best-effort, async)
+    (async () => {
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10`, {
+          headers: { Accept: "application/json" }
+        });
+        if (!res.ok) return;
+        const data = await res.json() as { display_name?: string; address?: Record<string, string> };
+        if (data?.address) {
+          const a = data.address;
+          const name = a.city || a.town || a.village || a.county || a.state || a.country || data.display_name?.split(",")[0]?.trim();
+          if (name) {
+            setPins((prev) => prev.map((p) => p.id === id ? { ...p, label: name } : p));
+          }
+        }
+      } catch {/* ignore */}
+    })();
   }, [pins.length, showToast]);
+
+  const updatePin = useCallback((id: string, patch: Partial<Pin>) => {
+    setPins((prev) => prev.map((p) => p.id === id ? { ...p, ...patch } : p));
+  }, []);
+
+  const exportPinsJson = useCallback(() => {
+    const blob = new Blob([JSON.stringify(pins, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = `atlas-pins-${Date.now()}.json`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 500);
+    showToast(`Exported ${pins.length} pins`);
+  }, [pins, showToast]);
+
+  const importPinsJson = useCallback((file: File) => {
+    file.text().then((text) => {
+      try {
+        const data = JSON.parse(text) as Pin[];
+        if (!Array.isArray(data)) throw new Error("not an array");
+        const cleaned = data.filter((p) => p && typeof p.lat === "number" && typeof p.lon === "number")
+          .map((p) => ({ ...p, id: p.id || `pin-${Math.random().toString(36).slice(2)}` }));
+        setPins((prev) => [...prev, ...cleaned]);
+        showToast(`Imported ${cleaned.length} pins`);
+      } catch {
+        showToast("Invalid pins JSON");
+      }
+    });
+  }, [showToast]);
+
+  // GIF export — captures N frames at given fps, encodes via gifenc
+  const exportGif = useCallback(async (frames = 60, fps = 20) => {
+    const canvas = document.querySelector(".globeLayer canvas") as HTMLCanvasElement | null;
+    if (!canvas) { showToast("Canvas not ready"); return; }
+    showToast("Capturing GIF…");
+    const dataUrls: string[] = [];
+    const interval = 1000 / fps;
+    for (let i = 0; i < frames; i++) {
+      await new Promise((r) => setTimeout(r, interval));
+      dataUrls.push(canvas.toDataURL("image/png"));
+    }
+    showToast("Encoding GIF…");
+    try {
+      const { GIFEncoder, quantize, applyPalette } = await import("gifenc");
+      const targetW = Math.min(720, canvas.width);
+      const scale = targetW / canvas.width;
+      const targetH = Math.floor(canvas.height * scale);
+      const off = document.createElement("canvas");
+      off.width = targetW; off.height = targetH;
+      const ctx = off.getContext("2d");
+      if (!ctx) throw new Error("ctx");
+      const gif = GIFEncoder();
+      for (const url of dataUrls) {
+        const img = new Image();
+        await new Promise((res, rej) => { img.onload = () => res(null); img.onerror = rej; img.src = url; });
+        ctx.drawImage(img, 0, 0, targetW, targetH);
+        const imgData = ctx.getImageData(0, 0, targetW, targetH);
+        const palette = quantize(imgData.data, 256);
+        const indexed = applyPalette(imgData.data, palette);
+        gif.writeFrame(indexed, targetW, targetH, { palette, delay: Math.round(1000 / fps) });
+      }
+      gif.finish();
+      const blob = new Blob([gif.bytes() as BlobPart], { type: "image/gif" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = url; a.download = `atlas-${Date.now()}.gif`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 500);
+      showToast("GIF saved");
+    } catch {
+      showToast("GIF encoding failed");
+    }
+  }, [showToast]);
 
   const deletePin = useCallback((id: string) => {
     setPins((prev) => prev.filter((p) => p.id !== id));
     if (selectedPin === id) setSelectedPin(null);
   }, [selectedPin]);
-
-  const renamePin = useCallback((id: string, label: string) => {
-    setPins((prev) => prev.map((p) => p.id === id ? { ...p, label } : p));
-  }, []);
 
   const flyToPin = useCallback((p: Pin) => {
     setFlyTo((current) => ({ id: current.id + 1, lat: p.lat, lon: p.lon, altKm: 1500 }));
@@ -874,6 +969,9 @@ function App() {
             recordingSeconds={recordingSeconds}
             onCopyShare={copyShareWithView}
             onOpenCoord={() => setShowCoordInput(true)}
+            onExportPins={exportPinsJson}
+            onImportPins={importPinsJson}
+            onExportGif={() => exportGif(60, 20)}
           />
         )}
       </aside>
@@ -920,10 +1018,12 @@ function App() {
           pin={pins.find((p) => p.id === selectedPin)!}
           onClose={() => setSelectedPin(null)}
           onDelete={(id) => deletePin(id)}
-          onRename={(id, label) => renamePin(id, label)}
+          onUpdate={updatePin}
           onFly={flyToPin}
         />
       )}
+
+      {layers.miniMap && <MiniMap cameraState={cameraState} pins={pins} />}
 
       {recordingState === "recording" && (
         <div className="atlasRecordIndicator" role="status">
@@ -939,6 +1039,13 @@ function App() {
       )}
 
       {pins.length > 0 && layers.pins && <PinsMiniList pins={pins} selectedId={selectedPin} onSelect={(id) => setSelectedPin(id)} onFly={flyToPin} onDelete={deletePin} />}
+
+      {mode === "atlas" && cameraState.altKm < 80 && cameraState.altKm > 0 && (
+        <button type="button" className="atlasSurfaceHint" onClick={switchToSurface}>
+          <Mountain size={13} />
+          <span>Texture's pixelated this close. Switch to Surface for real terrain →</span>
+        </button>
+      )}
 
       {toast && (
         <div className="atlasToast" role="status" key={toast.id}>{toast.text}</div>
@@ -1031,8 +1138,12 @@ function LayersPanel({ layers, onToggle, bordersLoading }: { layers: LayerVisibi
     { key: "timezones", label: "Time-zone meridians", icon: Compass },
     { key: "cardinals", label: "Cardinal markers", icon: Navigation },
     { key: "pins", label: "Pin markers", icon: Bookmark },
+    { key: "pinPaths", label: "Great-circle pin paths", icon: Compass },
     { key: "earthquakes", label: "Earthquakes (24h, USGS)", icon: Sparkles },
-    { key: "iss", label: "Live ISS position", icon: Telescope }
+    { key: "iss", label: "Live ISS position", icon: Telescope },
+    { key: "sun", label: "Visible sun (in space)", icon: SunIcon },
+    { key: "moon", label: "Visible moon (in space)", icon: Globe2 },
+    { key: "miniMap", label: "Mini-map widget", icon: Compass }
   ];
   return (
     <PanelSection title="Visibility" icon={Layers}>
@@ -1049,7 +1160,7 @@ function LayersPanel({ layers, onToggle, bordersLoading }: { layers: LayerVisibi
   );
 }
 
-function DataPanel({ pins, earthquakes, onSelectPin, onFlyPin, onDeletePin, onClearPins, onCapture, onStartRecord, onStopRecord, recordingState, recordingSeconds, onCopyShare, onOpenCoord }: {
+function DataPanel({ pins, earthquakes, onSelectPin, onFlyPin, onDeletePin, onClearPins, onCapture, onStartRecord, onStopRecord, recordingState, recordingSeconds, onCopyShare, onOpenCoord, onExportPins, onImportPins, onExportGif }: {
   pins: Pin[];
   earthquakes: Earthquake[];
   onSelectPin: (id: string) => void;
@@ -1063,6 +1174,9 @@ function DataPanel({ pins, earthquakes, onSelectPin, onFlyPin, onDeletePin, onCl
   recordingSeconds: number;
   onCopyShare: () => void;
   onOpenCoord: () => void;
+  onExportPins: () => void;
+  onImportPins: (file: File) => void;
+  onExportGif: () => void;
 }) {
   return (
     <>
@@ -1085,11 +1199,22 @@ function DataPanel({ pins, earthquakes, onSelectPin, onFlyPin, onDeletePin, onCl
             ))}
           </ul>
         )}
-        {pins.length > 0 && (
-          <button type="button" className="atlasPrimaryBtn small" style={{ background: "transparent", color: "#ff8a8a" }} onClick={onClearPins}>
-            <Trash2 size={12} /> Clear all pins
-          </button>
-        )}
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {pins.length > 0 && (
+            <button type="button" className="atlasPrimaryBtn small" style={{ background: "transparent", color: "#ff8a8a" }} onClick={onClearPins}>
+              <Trash2 size={12} /> Clear
+            </button>
+          )}
+          {pins.length > 0 && (
+            <button type="button" className="atlasPrimaryBtn small" style={{ background: "transparent" }} onClick={onExportPins}>
+              <Bookmark size={12} /> Export
+            </button>
+          )}
+          <label className="atlasPrimaryBtn small" style={{ background: "transparent", cursor: "pointer" }}>
+            <BookmarkPlus size={12} /> Import
+            <input type="file" accept="application/json" style={{ display: "none" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) onImportPins(f); e.currentTarget.value = ""; }} />
+          </label>
+        </div>
       </PanelSection>
 
       <PanelSection title={`Earthquakes (${earthquakes.length})`} icon={Sparkles}>
@@ -1113,7 +1238,7 @@ function DataPanel({ pins, earthquakes, onSelectPin, onFlyPin, onDeletePin, onCl
 
       <PanelSection title="Capture" icon={Camera}>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          <button type="button" className="atlasPrimaryBtn small" onClick={() => onCapture(1)}><Camera size={12} /> 1×</button>
+          <button type="button" className="atlasPrimaryBtn small" onClick={() => onCapture(1)}><Camera size={12} /> PNG 1×</button>
           <button type="button" className="atlasPrimaryBtn small" onClick={() => onCapture(2)}><Camera size={12} /> 2×</button>
           <button type="button" className="atlasPrimaryBtn small" onClick={() => onCapture(4)}><Camera size={12} /> 4×</button>
         </div>
@@ -1126,6 +1251,9 @@ function DataPanel({ pins, earthquakes, onSelectPin, onFlyPin, onDeletePin, onCl
             <Telescope size={12} /> {recordingState === "encoding" ? "Encoding…" : "Record WebM"}
           </button>
         )}
+        <button type="button" className="atlasPrimaryBtn small" style={{ background: "transparent" }} onClick={onExportGif}>
+          <Wand2 size={12} /> Export GIF (3s, 20fps)
+        </button>
       </PanelSection>
 
       <PanelSection title="Tools" icon={Compass}>
@@ -1354,10 +1482,12 @@ function CoordInputModal({ onSubmit, onClose }: { onSubmit: (lat: number, lon: n
   );
 }
 
-function PinInfoCard({ pin, onClose, onDelete, onRename, onFly }: { pin: Pin; onClose: () => void; onDelete: (id: string) => void; onRename: (id: string, label: string) => void; onFly: (p: Pin) => void }) {
+function PinInfoCard({ pin, onClose, onDelete, onUpdate, onFly }: { pin: Pin; onClose: () => void; onDelete: (id: string) => void; onUpdate: (id: string, patch: Partial<Pin>) => void; onFly: (p: Pin) => void }) {
   const [editing, setEditing] = useState(false);
   const [label, setLabel] = useState(pin.label);
+  const [note, setNote] = useState(pin.note ?? "");
   useEffect(() => { setLabel(pin.label); }, [pin.label]);
+  useEffect(() => { setNote(pin.note ?? ""); }, [pin.note]);
   const localTimeMs = Date.now() + (pin.lon / 15) * 3600 * 1000;
   const localTime = new Date(localTimeMs).toUTCString().split(" ").slice(4, 5)[0];
   const copy = (text: string) => navigator.clipboard?.writeText(text);
@@ -1370,8 +1500,8 @@ function PinInfoCard({ pin, onClose, onDelete, onRename, onFly }: { pin: Pin; on
             autoFocus
             value={label}
             onChange={(e) => setLabel(e.target.value)}
-            onBlur={() => { onRename(pin.id, label || pin.label); setEditing(false); }}
-            onKeyDown={(e) => { if (e.key === "Enter") { onRename(pin.id, label || pin.label); setEditing(false); } if (e.key === "Escape") { setLabel(pin.label); setEditing(false); } }}
+            onBlur={() => { onUpdate(pin.id, { label: label || pin.label }); setEditing(false); }}
+            onKeyDown={(e) => { if (e.key === "Enter") { onUpdate(pin.id, { label: label || pin.label }); setEditing(false); } if (e.key === "Escape") { setLabel(pin.label); setEditing(false); } }}
           />
         ) : (
           <strong onClick={() => setEditing(true)}>{pin.label}</strong>
@@ -1383,6 +1513,25 @@ function PinInfoCard({ pin, onClose, onDelete, onRename, onFly }: { pin: Pin; on
         <div><span>Lon</span><strong>{formatLon(pin.lon)}</strong></div>
         <div><span>Local</span><strong>{localTime} (approx)</strong></div>
       </div>
+      <div className="atlasPinColors">
+        {PIN_COLORS.map((c) => (
+          <button
+            key={c}
+            type="button"
+            className={pin.color === c ? "atlasPinSwatch active" : "atlasPinSwatch"}
+            style={{ background: c }}
+            onClick={() => onUpdate(pin.id, { color: c })}
+            aria-label={`Color ${c}`}
+          />
+        ))}
+      </div>
+      <textarea
+        className="atlasPinNote"
+        value={note}
+        placeholder="Notes…"
+        onChange={(e) => setNote(e.target.value)}
+        onBlur={() => onUpdate(pin.id, { note })}
+      />
       <div className="atlasPinActions">
         <button type="button" className="atlasPrimaryBtn small" onClick={() => onFly(pin)}><Navigation size={11} /> Fly</button>
         <button type="button" className="atlasPrimaryBtn small" style={{ background: "transparent" }} onClick={() => copy(`${pin.lat}, ${pin.lon}`)}><Bookmark size={11} /> Copy</button>
@@ -1390,6 +1539,70 @@ function PinInfoCard({ pin, onClose, onDelete, onRename, onFly }: { pin: Pin; on
       </div>
     </div>
   );
+}
+
+function MiniMap({ cameraState, pins }: { cameraState: CameraState; pins: Pin[] }) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const dayUrl = `${import.meta.env.BASE_URL}textures/earth_day.jpg`;
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const img = new Image();
+    img.onload = () => {
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      // Re-draw markers + camera position over the image
+      drawOverlay(ctx, canvas.width, canvas.height, cameraState, pins);
+    };
+    img.src = dayUrl;
+    // If already cached, draw overlay immediately too
+    if (img.complete) drawOverlay(ctx, canvas.width, canvas.height, cameraState, pins);
+  }, [dayUrl, cameraState, pins]);
+
+  return (
+    <div className="atlasMiniMap" aria-label="Mini map">
+      <canvas ref={canvasRef} width={220} height={110} />
+      <div className="atlasMiniMapLabel">{formatLat(cameraState.lat)} {formatLon(cameraState.lon)}</div>
+    </div>
+  );
+}
+
+function drawOverlay(ctx: CanvasRenderingContext2D, w: number, h: number, cam: CameraState, pins: Pin[]) {
+  // Dim the texture
+  ctx.fillStyle = "rgba(0, 10, 25, 0.55)";
+  ctx.fillRect(0, 0, w, h);
+  // Pins
+  for (const p of pins) {
+    const x = ((p.lon + 180) / 360) * w;
+    const y = ((90 - p.lat) / 180) * h;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Camera position
+  const cx = ((cam.lon + 180) / 360) * w;
+  const cy = ((90 - cam.lat) / 180) * h;
+  ctx.strokeStyle = "#5cb5ff";
+  ctx.lineWidth = 1.5;
+  ctx.shadowColor = "#5cb5ff";
+  ctx.shadowBlur = 10;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = "#5cb5ff";
+  ctx.beginPath();
+  ctx.arc(cx, cy, 1.5, 0, Math.PI * 2);
+  ctx.fill();
+  // Crosshair lines
+  ctx.strokeStyle = "rgba(92, 181, 255, 0.4)";
+  ctx.lineWidth = 0.5;
+  ctx.setLineDash([2, 3]);
+  ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, h); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0, cy); ctx.lineTo(w, cy); ctx.stroke();
+  ctx.setLineDash([]);
 }
 
 function PinsMiniList({ pins, selectedId, onSelect, onFly, onDelete }: { pins: Pin[]; selectedId: string | null; onSelect: (id: string) => void; onFly: (p: Pin) => void; onDelete: (id: string) => void }) {
@@ -1501,8 +1714,8 @@ function GlobeCanvas({
   return (
     <Canvas
       dpr={[1, Math.min(window.devicePixelRatio, 2)]}
-      camera={{ position: [0, 0, SPACE_DISTANCE], fov: 55, near: 0.01, far: 1000 }}
-      gl={{ antialias: true, powerPreference: "high-performance", preserveDrawingBuffer: true }}
+      camera={{ position: [0, 0, SPACE_DISTANCE], fov: 55, near: 0.0001, far: 2000 }}
+      gl={{ antialias: true, powerPreference: "high-performance", preserveDrawingBuffer: true, logarithmicDepthBuffer: true }}
     >
       <color attach="background" args={["#04060c"]} />
       <Suspense fallback={null}>
@@ -1516,8 +1729,11 @@ function GlobeCanvas({
           {layers.cardinals && <Cardinals />}
           {layers.timezones && <TimeZoneBands />}
           {layers.earthquakes && <EarthquakeMarkers data={earthquakes} />}
+          {layers.pinPaths && <PinPaths pins={pins} sunDirection={sunDirection} />}
           {layers.pins && <PinMarkers pins={pins} selectedId={selectedPinId} onSelect={onSelectPin} />}
         </EarthGroup>
+        {layers.sun && <SunMesh azimuth={globe.sunAzimuth} elevation={globe.sunElevation} />}
+        {layers.moon && <MoonMesh />}
         {layers.atmosphere && <Atmosphere intensity={globe.atmosphereIntensity} />}
         {layers.clouds && <Clouds opacity={globe.cloudOpacity} paused={paused} />}
         {layers.stars && <Stars radius={120} depth={50} count={4500} factor={4} saturation={0} fade speed={0.5} />}
@@ -1540,6 +1756,80 @@ function EarthGroup({ globe, paused, children }: { globe: GlobeSettings; paused:
       {children}
     </group>
   );
+}
+
+function SunMesh({ azimuth, elevation }: { azimuth: number; elevation: number }) {
+  const pos = useMemo(() => sunPosition(azimuth, elevation, 50), [azimuth, elevation]);
+  return (
+    <mesh position={pos}>
+      <sphereGeometry args={[2.4, 24, 24]} />
+      <meshBasicMaterial color="#fff5cc" />
+    </mesh>
+  );
+}
+
+function MoonMesh() {
+  const ref = useRef<THREE.Group>(null);
+  useFrame(({ clock }) => {
+    if (!ref.current) return;
+    const t = clock.elapsedTime;
+    ref.current.rotation.y = t * 0.04;
+  });
+  return (
+    <group ref={ref}>
+      <mesh position={[15, 1.5, 0]}>
+        <sphereGeometry args={[0.27, 24, 24]} />
+        <meshStandardMaterial color="#aaaaaa" emissive="#222222" roughness={1} />
+      </mesh>
+    </group>
+  );
+}
+
+function PinPaths({ pins, sunDirection }: { pins: Pin[]; sunDirection: THREE.Vector3 }) {
+  void sunDirection;
+  const positions = useMemo(() => {
+    if (pins.length < 2) return null;
+    const arr: number[] = [];
+    for (let i = 0; i < pins.length - 1; i++) {
+      const a = latLonToVec3(pins[i].lat, pins[i].lon, 1.005);
+      const b = latLonToVec3(pins[i + 1].lat, pins[i + 1].lon, 1.005);
+      const angle = a.angleTo(b);
+      const steps = Math.max(8, Math.ceil(angle * 24));
+      for (let s = 0; s < steps; s++) {
+        const t1 = s / steps;
+        const t2 = (s + 1) / steps;
+        const p1 = slerp(a, b, t1).multiplyScalar(1.005);
+        const p2 = slerp(a, b, t2).multiplyScalar(1.005);
+        arr.push(p1.x, p1.y, p1.z, p2.x, p2.y, p2.z);
+      }
+    }
+    return new Float32Array(arr);
+  }, [pins]);
+  const geom = useMemo(() => {
+    if (!positions) return null;
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    return g;
+  }, [positions]);
+  useEffect(() => () => geom?.dispose(), [geom]);
+  if (!geom) return null;
+  return (
+    <lineSegments geometry={geom}>
+      <lineBasicMaterial color="#5cb5ff" transparent opacity={0.7} depthWrite={false} />
+    </lineSegments>
+  );
+}
+
+function slerp(a: THREE.Vector3, b: THREE.Vector3, t: number): THREE.Vector3 {
+  const an = a.clone().normalize();
+  const bn = b.clone().normalize();
+  const dot = THREE.MathUtils.clamp(an.dot(bn), -1, 1);
+  const omega = Math.acos(dot);
+  if (omega < 1e-6) return an.lerp(bn, t);
+  const sinO = Math.sin(omega);
+  const wa = Math.sin((1 - t) * omega) / sinO;
+  const wb = Math.sin(t * omega) / sinO;
+  return new THREE.Vector3(an.x * wa + bn.x * wb, an.y * wa + bn.y * wb, an.z * wa + bn.z * wb);
 }
 
 function ISSMarker({ lat, lon }: { lat: number; lon: number }) {
@@ -2032,6 +2322,12 @@ function GlobeControls({
       const lat = THREE.MathUtils.radToDeg(Math.asin(pos.y / distance));
       const lon = THREE.MathUtils.radToDeg(Math.atan2(pos.z, pos.x));
       onCameraChange(lat, lon, altKm);
+
+      // Adaptive rotate speed: slow down as we get close to surface
+      if (controlsRef.current) {
+        const altT = THREE.MathUtils.clamp((distance - 1) / 3, 0, 1);
+        controlsRef.current.rotateSpeed = 0.05 + altT * 0.55;
+      }
     }
   });
 
@@ -2039,10 +2335,11 @@ function GlobeControls({
     <OrbitControls
       ref={controlsRef}
       enableDamping
-      dampingFactor={0.08}
+      dampingFactor={0.12}
       enablePan={false}
       rotateSpeed={0.45}
-      zoomSpeed={0.7}
+      zoomSpeed={1.1}
+      zoomToCursor
       minDistance={MIN_DISTANCE}
       maxDistance={MAX_DISTANCE}
       makeDefault
