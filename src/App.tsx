@@ -305,6 +305,17 @@ function App() {
   const uiHiddenRef = useRef(false);
   uiHiddenRef.current = hideUi;
 
+  // After initial mount, force a window resize so r3f's <Canvas> ResizeObserver
+  // picks up the actual viewport size. Without this, on some browsers the first
+  // render frame happens before layout, leaving the canvas blank until any user
+  // interaction. Dispatch a resize twice (immediate + delayed) to be safe.
+  useEffect(() => {
+    const fire = () => window.dispatchEvent(new Event("resize"));
+    requestAnimationFrame(fire);
+    const t = window.setTimeout(fire, 250);
+    return () => window.clearTimeout(t);
+  }, []);
+
   // Time-of-day auto-rotate sun
   useEffect(() => {
     if (!globe.timeAnim) return;
@@ -2404,6 +2415,8 @@ function GlobeCanvas({
       dpr={[1, Math.min(window.devicePixelRatio, 2)]}
       camera={{ position: [0, 0, SPACE_DISTANCE], fov: 55, near: 0.0001, far: 2000 }}
       gl={{ antialias: true, powerPreference: "high-performance", preserveDrawingBuffer: true, logarithmicDepthBuffer: true }}
+      frameloop="always"
+      resize={{ scroll: false, debounce: { scroll: 50, resize: 0 } }}
     >
       <color attach="background" args={["#04060c"]} />
       <Suspense fallback={null}>
