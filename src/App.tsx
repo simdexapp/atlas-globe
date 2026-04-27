@@ -254,17 +254,28 @@ function App() {
   const [dayTexture, setDayTexture] = useState<THREE.Texture | null>(null);
   const [nightTexture, setNightTexture] = useState<THREE.Texture | null>(null);
   const imageryAbortRef = useRef<AbortController | null>(null);
-  const fallbackImagesRef = useRef<{ day: HTMLImageElement | null; night: HTMLImageElement | null }>({ day: null, night: null });
+  const fallbackImagesRef = useRef<{
+    day: HTMLImageElement | null;
+    night: HTMLImageElement | null;
+    dayPromise: Promise<HTMLImageElement>;
+    nightPromise: Promise<HTMLImageElement>;
+  }>(initFallbackImages());
 
-  // Pre-load the bundled day + night images so failed GIBS tiles can fall back to them
-  useEffect(() => {
-    const day = new Image();
-    day.src = `${import.meta.env.BASE_URL}textures/earth_day.jpg`;
-    day.onload = () => { fallbackImagesRef.current.day = day; };
-    const night = new Image();
-    night.src = `${import.meta.env.BASE_URL}textures/earth_night.jpg`;
-    night.onload = () => { fallbackImagesRef.current.night = night; };
-  }, []);
+  function initFallbackImages() {
+    const dayImg = new Image();
+    dayImg.src = `${typeof import.meta !== "undefined" && (import.meta as any).env ? (import.meta as any).env.BASE_URL : "/"}textures/earth_day.jpg`;
+    const nightImg = new Image();
+    nightImg.src = `${typeof import.meta !== "undefined" && (import.meta as any).env ? (import.meta as any).env.BASE_URL : "/"}textures/earth_night.jpg`;
+    const dayPromise = new Promise<HTMLImageElement>((resolve, reject) => {
+      if (dayImg.complete && dayImg.naturalWidth > 0) resolve(dayImg);
+      else { dayImg.onload = () => resolve(dayImg); dayImg.onerror = reject; }
+    });
+    const nightPromise = new Promise<HTMLImageElement>((resolve, reject) => {
+      if (nightImg.complete && nightImg.naturalWidth > 0) resolve(nightImg);
+      else { nightImg.onload = () => resolve(nightImg); nightImg.onerror = reject; }
+    });
+    return { day: dayImg, night: nightImg, dayPromise, nightPromise };
+  }
   const [pins, setPins] = useState<Pin[]>([]);
   const [selectedPin, setSelectedPin] = useState<string | null>(null);
   const [earthquakes, setEarthquakes] = useState<Earthquake[]>([]);
@@ -508,6 +519,14 @@ function App() {
       setImageryLoading(true);
       setImageryProgress(0);
       try {
+        // Wait for bundled fallback images so they can underlay the GIBS tiles.
+        // (Without this, on a fresh load the fallback Image isn't ready yet and we get black gaps.)
+        const [dayFallback, nightFallback] = await Promise.all([
+          fallbackImagesRef.current.dayPromise.catch(() => null),
+          fallbackImagesRef.current.nightPromise.catch(() => null)
+        ]);
+        if (controller.signal.aborted) return;
+
         // Day
         const dayCanvas = await loadGibsComposite(
           dayLayer,
@@ -515,7 +534,7 @@ function App() {
           imagery.zoom,
           controller.signal,
           (loaded, total) => setImageryProgress(loaded / (total * 2)),
-          fallbackImagesRef.current.day ?? undefined
+          dayFallback ?? undefined
         );
         if (controller.signal.aborted) return;
         const newDay = new THREE.CanvasTexture(dayCanvas);
@@ -533,7 +552,7 @@ function App() {
           Math.max(2, imagery.zoom - 1),
           controller.signal,
           (loaded, total) => setImageryProgress(0.5 + (loaded / total) * 0.5),
-          fallbackImagesRef.current.night ?? undefined
+          nightFallback ?? undefined
         );
         if (controller.signal.aborted) return;
         const newNight = new THREE.CanvasTexture(nightCanvas);
