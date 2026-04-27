@@ -88,6 +88,9 @@ type LayerVisibility = {
   moon: boolean;
   pinPaths: boolean;
   miniMap: boolean;
+  terminator: boolean;
+  subsolar: boolean;
+  constellations: boolean;
 };
 
 type GlobeSettings = {
@@ -166,7 +169,10 @@ const defaultLayers: LayerVisibility = {
   sun: false,
   moon: false,
   pinPaths: true,
-  miniMap: true
+  miniMap: true,
+  terminator: false,
+  subsolar: false,
+  constellations: false
 };
 
 const defaultGlobe: GlobeSettings = {
@@ -259,6 +265,11 @@ function App() {
   const [exportProgress] = useState<{ label: string; pct: number } | null>(null);
   const [showCoordInput, setShowCoordInput] = useState(false);
   const [pinTool, setPinTool] = useState(false);
+  const [pinSearch, setPinSearch] = useState("");
+  const [showEmbed, setShowEmbed] = useState(false);
+  const [tourPlaying, setTourPlaying] = useState(false);
+  const tourIndexRef = useRef(0);
+  const tourTimerRef = useRef<number | null>(null);
   const [coordFormat, setCoordFormat] = useState<"decimal" | "dms">("decimal");
   const [searchHistory, setSearchHistory] = useState<string[]>([]);
   const [timelapse, setTimelapse] = useState<{ active: boolean; from: string; to: string; days: number; fps: number; recording: boolean }>({ active: false, from: "", to: "", days: 30, fps: 6, recording: false });
@@ -267,7 +278,6 @@ function App() {
   const recorderTimerRef = useRef<number | null>(null);
   const recorderStartRef = useRef(0);
   const tourIntervalRef = useRef<number | null>(null);
-  const tourIndexRef = useRef(0);
   const cameraStateRef = useRef<CameraState>({ lat: 25, lon: 0, altKm: SPACE_DISTANCE * EARTH_RADIUS_KM });
   const skipPersistRef = useRef(true);
   const uiHiddenRef = useRef(false);
@@ -1018,6 +1028,98 @@ function App() {
     } catch {/* ignore */}
   }, []);
 
+  // Geolocation — fly to user's real location
+  const flyToMyLocation = useCallback(() => {
+    if (!navigator.geolocation) {
+      showToast("Geolocation unsupported");
+      return;
+    }
+    showToast("Locating…");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setFlyTo((c) => ({ id: c.id + 1, lat: pos.coords.latitude, lon: pos.coords.longitude, altKm: 1500 }));
+        showToast(`You: ${formatLat(pos.coords.latitude)} ${formatLon(pos.coords.longitude)}`);
+      },
+      (err) => showToast(`Location: ${err.message}`),
+      { timeout: 10000, enableHighAccuracy: false }
+    );
+  }, [showToast]);
+
+  // Pin tour — sequence of pins with auto-fly between
+  const startPinTour = useCallback(() => {
+    if (pins.length < 2) {
+      showToast("Drop at least 2 pins to start a tour");
+      return;
+    }
+    tourIndexRef.current = 0;
+    setTourPlaying(true);
+    showToast(`Pin tour: ${pins.length} stops`);
+    const advance = () => {
+      const target = pins[tourIndexRef.current % pins.length];
+      setFlyTo((c) => ({ id: c.id + 1, lat: target.lat, lon: target.lon, altKm: 1500 }));
+      setSelectedPin(target.id);
+      tourIndexRef.current++;
+      tourTimerRef.current = window.setTimeout(advance, 5000);
+    };
+    advance();
+  }, [pins, showToast]);
+
+  const stopPinTour = useCallback(() => {
+    if (tourTimerRef.current) clearTimeout(tourTimerRef.current);
+    tourTimerRef.current = null;
+    setTourPlaying(false);
+    showToast("Pin tour stopped");
+  }, [showToast]);
+
+  useEffect(() => () => {
+    if (tourTimerRef.current) clearTimeout(tourTimerRef.current);
+  }, []);
+
+  // KML export (Google Earth)
+  const exportPinsKml = useCallback(() => {
+    if (pins.length === 0) { showToast("No pins to export"); return; }
+    const placemarks = pins.map((p) => `
+    <Placemark>
+      <name>${escapeXml(p.label)}</name>
+      <description>${escapeXml(p.note ?? "")}</description>
+      <Point><coordinates>${p.lon},${p.lat},0</coordinates></Point>
+    </Placemark>`).join("");
+    const kml = `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Atlas Pins (${new Date().toISOString().slice(0, 10)})</name>${placemarks}
+  </Document>
+</kml>`;
+    const blob = new Blob([kml], { type: "application/vnd.google-earth.kml+xml" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = `atlas-pins-${Date.now()}.kml`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 500);
+    showToast(`Exported ${pins.length} pins to KML`);
+  }, [pins, showToast]);
+
+  // JPG capture
+  const captureJpg = useCallback(() => {
+    const canvas = document.querySelector(".globeLayer canvas") as HTMLCanvasElement | null;
+    if (!canvas) { showToast("Canvas not ready"); return; }
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
+    const a = document.createElement("a"); a.href = dataUrl; a.download = `atlas-${Date.now()}.jpg`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    showToast("JPG captured");
+  }, [showToast]);
+
+  // Sun preset (sunrise / noon / sunset)
+  const setSunPreset = useCallback((preset: "sunrise" | "noon" | "sunset") => {
+    const map: Record<string, { az: number; el: number }> = {
+      sunrise: { az: 0.5, el: 0.55 },
+      noon: { az: 0.25, el: 0.85 },
+      sunset: { az: 0.0, el: 0.55 }
+    };
+    const v = map[preset];
+    setGlobe((g) => ({ ...g, sunAzimuth: v.az, sunElevation: v.el, realTimeSun: false, timeAnim: false }));
+    showToast(`Sun: ${preset}`);
+  }, [showToast]);
+
   const onCoordSubmit = useCallback((lat: number, lon: number, altKm: number) => {
     setFlyTo((current) => ({ id: current.id + 1, lat, lon, altKm }));
     setShowCoordInput(false);
@@ -1215,7 +1317,7 @@ function App() {
         )}
 
         {inspectorTab === "globe" && (
-          <GlobePanel globe={globe} onUpdate={updateGlobe} />
+          <GlobePanel globe={globe} onUpdate={updateGlobe} onSunPreset={setSunPreset} />
         )}
         {inspectorTab === "layers" && (
           <LayersPanel layers={layers} onToggle={toggleLayer} bordersLoading={bordersLoading} />
@@ -1235,6 +1337,9 @@ function App() {
             pins={pins}
             earthquakes={earthquakes}
             coordFormat={coordFormat}
+            pinSearch={pinSearch}
+            tourPlaying={tourPlaying}
+            onPinSearch={setPinSearch}
             onSetCoordFormat={setCoordFormat}
             onSelectPin={(id) => setSelectedPin(id)}
             onFlyPin={flyToPin}
@@ -1249,12 +1354,18 @@ function App() {
             onOpenCoord={() => setShowCoordInput(true)}
             onExportPins={exportPinsJson}
             onImportPins={importPinsJson}
+            onExportPinsKml={exportPinsKml}
             onExportGif={() => exportGif(60, 20)}
             onExportProject={exportProject}
             onImportProject={importProject}
             onTimelapse={runTimelapse}
             timelapseRecording={timelapse.recording}
             cameraState={cameraState}
+            onFlyMyLocation={flyToMyLocation}
+            onCaptureJpg={captureJpg}
+            onStartTour={startPinTour}
+            onStopTour={stopPinTour}
+            onShowEmbed={() => setShowEmbed(true)}
           />
         )}
       </aside>
@@ -1294,6 +1405,8 @@ function App() {
       )}
 
       {showShortcuts && <ShortcutsModal onClose={() => setShowShortcuts(false)} />}
+
+      {showEmbed && <EmbedModal onClose={() => setShowEmbed(false)} />}
 
       {showCoordInput && <CoordInputModal onSubmit={onCoordSubmit} onClose={() => setShowCoordInput(false)} />}
 
@@ -1374,7 +1487,7 @@ function RailButton({ icon: Icon, label, onClick, active }: { icon: IconComponen
   );
 }
 
-function GlobePanel({ globe, onUpdate }: { globe: GlobeSettings; onUpdate: (patch: Partial<GlobeSettings>) => void }) {
+function GlobePanel({ globe, onUpdate, onSunPreset }: { globe: GlobeSettings; onUpdate: (patch: Partial<GlobeSettings>) => void; onSunPreset?: (preset: "sunrise" | "noon" | "sunset") => void }) {
   return (
     <>
       <PanelSection title="Rotation" icon={RotateCcw}>
@@ -1384,6 +1497,13 @@ function GlobePanel({ globe, onUpdate }: { globe: GlobeSettings; onUpdate: (patc
       <PanelSection title="Sun position" icon={SunIcon}>
         <Slider label="Azimuth" value={globe.sunAzimuth} min={0} max={1} onChange={(v) => onUpdate({ sunAzimuth: v })} suffix="°" formatter={(v) => Math.round(v * 360).toString()} />
         <Slider label="Elevation" value={globe.sunElevation} min={0} max={1} onChange={(v) => onUpdate({ sunElevation: v })} suffix="°" formatter={(v) => `${Math.round((v - 0.5) * 180)}`} />
+        {onSunPreset && (
+          <div className="atlasModeRow">
+            <button type="button" onClick={() => onSunPreset("sunrise")}>Sunrise</button>
+            <button type="button" onClick={() => onSunPreset("noon")}>Noon</button>
+            <button type="button" onClick={() => onSunPreset("sunset")}>Sunset</button>
+          </div>
+        )}
         <label className="atlasLayerRow" style={{ marginTop: 4 }}>
           <Telescope size={13} />
           <span>Time of day animation</span>
@@ -1437,6 +1557,9 @@ function LayersPanel({ layers, onToggle, bordersLoading }: { layers: LayerVisibi
     { key: "hubble", label: "Hubble — live position", icon: Telescope },
     { key: "sun", label: "Visible sun (in space)", icon: SunIcon },
     { key: "moon", label: "Visible moon (in space)", icon: Globe2 },
+    { key: "terminator", label: "Day/night terminator line", icon: Compass },
+    { key: "subsolar", label: "Subsolar point (sun overhead)", icon: SunIcon },
+    { key: "constellations", label: "Constellation lines (Orion etc)", icon: Sparkles },
     { key: "miniMap", label: "Mini-map widget", icon: Compass }
   ];
   return (
@@ -1535,10 +1658,13 @@ function ImageryPanel({ imagery, onUpdate, loading, progress }: { imagery: Image
   );
 }
 
-function DataPanel({ pins, earthquakes, coordFormat, onSetCoordFormat, onSelectPin, onFlyPin, onDeletePin, onClearPins, onCapture, onStartRecord, onStopRecord, recordingState, recordingSeconds, onCopyShare, onOpenCoord, onExportPins, onImportPins, onExportGif, onExportProject, onImportProject, onTimelapse, timelapseRecording, cameraState }: {
+function DataPanel({ pins, earthquakes, coordFormat, pinSearch, tourPlaying, onPinSearch, onSetCoordFormat, onSelectPin, onFlyPin, onDeletePin, onClearPins, onCapture, onStartRecord, onStopRecord, recordingState, recordingSeconds, onCopyShare, onOpenCoord, onExportPins, onImportPins, onExportPinsKml, onExportGif, onExportProject, onImportProject, onTimelapse, timelapseRecording, cameraState, onFlyMyLocation, onCaptureJpg, onStartTour, onStopTour, onShowEmbed }: {
   pins: Pin[];
   earthquakes: Earthquake[];
   coordFormat: "decimal" | "dms";
+  pinSearch: string;
+  tourPlaying: boolean;
+  onPinSearch: (q: string) => void;
   onSetCoordFormat: (m: "decimal" | "dms") => void;
   onSelectPin: (id: string) => void;
   onFlyPin: (p: Pin) => void;
@@ -1553,13 +1679,24 @@ function DataPanel({ pins, earthquakes, coordFormat, onSetCoordFormat, onSelectP
   onOpenCoord: () => void;
   onExportPins: () => void;
   onImportPins: (file: File) => void;
+  onExportPinsKml: () => void;
   onExportGif: () => void;
   onExportProject: () => void;
   onImportProject: (file: File) => void;
   onTimelapse: (days: number, fps: number) => void;
   timelapseRecording: boolean;
   cameraState: CameraState;
+  onFlyMyLocation: () => void;
+  onCaptureJpg: () => void;
+  onStartTour: () => void;
+  onStopTour: () => void;
+  onShowEmbed: () => void;
 }) {
+  const filteredPins = useMemo(() => {
+    const q = pinSearch.trim().toLowerCase();
+    if (!q) return pins;
+    return pins.filter((p) => p.label.toLowerCase().includes(q) || (p.note ?? "").toLowerCase().includes(q));
+  }, [pins, pinSearch]);
   const stats = useMemo(() => {
     const big = earthquakes.filter((q) => q.mag >= 5).length;
     const med = earthquakes.filter((q) => q.mag >= 3.5 && q.mag < 5).length;
@@ -1586,11 +1723,20 @@ function DataPanel({ pins, earthquakes, coordFormat, onSetCoordFormat, onSelectP
         </div>
       </PanelSection>
 
-      <PanelSection title={`Pins (${pins.length})`} icon={Bookmark}>
+      <PanelSection title={`Pins (${filteredPins.length}${filteredPins.length !== pins.length ? `/${pins.length}` : ""})`} icon={Bookmark}>
         {pins.length === 0 && <p className="atlasHint">Switch to Pin tool in the rail (or hold Shift) and click the globe to drop a pin.</p>}
         {pins.length > 0 && (
+          <input
+            type="text"
+            className="atlasSearchInput"
+            value={pinSearch}
+            onChange={(e) => onPinSearch(e.target.value)}
+            placeholder="Filter pins by name or note…"
+          />
+        )}
+        {pins.length > 0 && (
           <ul className="atlasBookmarkList">
-            {pins.map((p) => (
+            {filteredPins.map((p) => (
               <li key={p.id}>
                 <button type="button" className="atlasBookmarkRow" onClick={() => onSelectPin(p.id)}>
                   <span className="atlasPinDot" style={{ background: p.color }} />
@@ -1620,7 +1766,18 @@ function DataPanel({ pins, earthquakes, coordFormat, onSetCoordFormat, onSelectP
             <BookmarkPlus size={12} /> Import
             <input type="file" accept="application/json" style={{ display: "none" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) onImportPins(f); e.currentTarget.value = ""; }} />
           </label>
+          {pins.length > 0 && (
+            <button type="button" className="atlasPrimaryBtn small" style={{ background: "transparent" }} onClick={onExportPinsKml}>
+              <Bookmark size={12} /> KML
+            </button>
+          )}
         </div>
+        {pins.length >= 2 && (
+          <button type="button" className="atlasPrimaryBtn small" onClick={tourPlaying ? onStopTour : onStartTour}>
+            {tourPlaying ? <Square size={12} /> : <Play size={12} />}
+            {tourPlaying ? "Stop tour" : "Start pin tour"}
+          </button>
+        )}
       </PanelSection>
 
       <PanelSection title={`Earthquakes (${earthquakes.length})`} icon={Sparkles}>
@@ -1647,6 +1804,7 @@ function DataPanel({ pins, earthquakes, coordFormat, onSetCoordFormat, onSelectP
           <button type="button" className="atlasPrimaryBtn small" onClick={() => onCapture(1)}><Camera size={12} /> PNG 1×</button>
           <button type="button" className="atlasPrimaryBtn small" onClick={() => onCapture(2)}><Camera size={12} /> 2×</button>
           <button type="button" className="atlasPrimaryBtn small" onClick={() => onCapture(4)}><Camera size={12} /> 4×</button>
+          <button type="button" className="atlasPrimaryBtn small" style={{ background: "transparent" }} onClick={onCaptureJpg}><Camera size={12} /> JPG</button>
         </div>
         {recordingState === "recording" ? (
           <button type="button" className="atlasPrimaryBtn small" style={{ background: "#ff4d5d", color: "#fff" }} onClick={onStopRecord}>
@@ -1685,10 +1843,45 @@ function DataPanel({ pins, earthquakes, coordFormat, onSetCoordFormat, onSelectP
       </PanelSection>
 
       <PanelSection title="Tools" icon={Compass}>
+        <button type="button" className="atlasPrimaryBtn small" onClick={onFlyMyLocation}><Navigation size={12} /> Fly to my location</button>
         <button type="button" className="atlasPrimaryBtn small" onClick={onOpenCoord}><Navigation size={12} /> Fly to coordinates</button>
         <button type="button" className="atlasPrimaryBtn small" onClick={onCopyShare}><Share2 size={12} /> Copy share URL with view</button>
+        <button type="button" className="atlasPrimaryBtn small" onClick={onShowEmbed}><Share2 size={12} /> Embed iframe snippet</button>
       </PanelSection>
     </>
+  );
+}
+
+function EmbedModal({ onClose }: { onClose: () => void }) {
+  const url = window.location.origin + window.location.pathname + window.location.hash;
+  const html = `<iframe src="${url}" width="800" height="600" style="border:0;border-radius:12px" allow="autoplay; fullscreen; geolocation" title="Atlas Globe"></iframe>`;
+  const [copied, setCopied] = useState<"url" | "html" | null>(null);
+  const copy = async (text: string, kind: "url" | "html") => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(kind);
+      setTimeout(() => setCopied(null), 1500);
+    } catch {/* ignore */}
+  };
+  return (
+    <div className="atlasModalShade" onClick={onClose} role="dialog" aria-modal="true">
+      <div className="atlasShortcutsModal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 540 }}>
+        <div className="atlasModalHead">
+          <strong>Embed snippet</strong>
+          <button type="button" className="atlasIconBtn" onClick={onClose} aria-label="Close"><X size={14} /></button>
+        </div>
+        <p className="atlasHint" style={{ marginBottom: 8 }}>Direct URL — opens this exact view in any browser.</p>
+        <textarea readOnly value={url} className="atlasPinNote" style={{ fontFamily: "ui-monospace, monospace", fontSize: 11, minHeight: 40 }} />
+        <button type="button" className="atlasPrimaryBtn small" style={{ marginTop: 6 }} onClick={() => copy(url, "url")}>
+          {copied === "url" ? "Copied!" : "Copy URL"}
+        </button>
+        <p className="atlasHint" style={{ marginTop: 14, marginBottom: 8 }}>HTML embed snippet — paste into any page.</p>
+        <textarea readOnly value={html} className="atlasPinNote" style={{ fontFamily: "ui-monospace, monospace", fontSize: 11, minHeight: 80 }} />
+        <button type="button" className="atlasPrimaryBtn small" style={{ marginTop: 6 }} onClick={() => copy(html, "html")}>
+          {copied === "html" ? "Copied!" : "Copy embed HTML"}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -2194,9 +2387,12 @@ function GlobeCanvas({
           {layers.earthquakes && <EarthquakeMarkers data={earthquakes} />}
           {layers.pinPaths && <PinPaths pins={pins} sunDirection={sunDirection} />}
           {layers.pins && <PinMarkers pins={pins} selectedId={selectedPinId} onSelect={onSelectPin} />}
+          {layers.terminator && <TerminatorRing sunDirection={sunDirection} />}
+          {layers.subsolar && <SubsolarPoint sunDirection={sunDirection} />}
         </EarthGroup>
         {layers.sun && <SunMesh azimuth={globe.sunAzimuth} elevation={globe.sunElevation} />}
         {layers.moon && <MoonMesh />}
+        {layers.constellations && <ConstellationLines />}
         {layers.atmosphere && <Atmosphere intensity={globe.atmosphereIntensity} />}
         {layers.clouds && <Clouds opacity={globe.cloudOpacity} paused={paused} />}
         {layers.stars && <Stars radius={120} depth={50} count={4500} factor={4} saturation={0} fade speed={0.5} />}
@@ -2230,6 +2426,146 @@ function SunMesh({ azimuth, elevation }: { azimuth: number; elevation: number })
       <sphereGeometry args={[2.4, 24, 24]} />
       <meshBasicMaterial color="#fff5cc" />
     </mesh>
+  );
+}
+
+function TerminatorRing({ sunDirection }: { sunDirection: THREE.Vector3 }) {
+  const ref = useRef<THREE.LineSegments>(null);
+  const geom = useMemo(() => {
+    // 64 points on the great circle perpendicular to sun direction
+    const points: number[] = [];
+    const segments = 96;
+    for (let i = 0; i < segments; i++) {
+      const a = (i / segments) * Math.PI * 2;
+      const b = ((i + 1) / segments) * Math.PI * 2;
+      const p1 = new THREE.Vector3(Math.cos(a), 0, Math.sin(a));
+      const p2 = new THREE.Vector3(Math.cos(b), 0, Math.sin(b));
+      points.push(p1.x, p1.y, p1.z, p2.x, p2.y, p2.z);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(points), 3));
+    return g;
+  }, []);
+  useEffect(() => () => geom.dispose(), [geom]);
+  useFrame(() => {
+    if (!ref.current) return;
+    // Orient ring perpendicular to sunDirection
+    const sd = sunDirection.clone().normalize();
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), sd);
+    ref.current.quaternion.copy(q);
+    ref.current.scale.setScalar(1.003);
+  });
+  return (
+    <lineSegments ref={ref} geometry={geom}>
+      <lineBasicMaterial color="#ffd66b" transparent opacity={0.55} depthWrite={false} />
+    </lineSegments>
+  );
+}
+
+function SubsolarPoint({ sunDirection }: { sunDirection: THREE.Vector3 }) {
+  // The point on Earth where sun is directly overhead = sunDirection projected to sphere surface
+  const ref = useRef<THREE.Mesh>(null);
+  const ringRef = useRef<THREE.Mesh>(null);
+  useFrame(({ clock }) => {
+    if (!ref.current) return;
+    const sd = sunDirection.clone().normalize().multiplyScalar(1.005);
+    ref.current.position.copy(sd);
+    if (ringRef.current) {
+      ringRef.current.position.copy(sd);
+      const t = clock.elapsedTime;
+      ringRef.current.scale.setScalar(1 + Math.sin(t * 2) * 0.25);
+      // Orient ring tangent to surface at this point
+      ringRef.current.lookAt(0, 0, 0);
+    }
+  });
+  return (
+    <group>
+      <mesh ref={ref}>
+        <sphereGeometry args={[0.013, 16, 16]} />
+        <meshBasicMaterial color="#ffd66b" />
+      </mesh>
+      <mesh ref={ringRef}>
+        <ringGeometry args={[0.022, 0.030, 32]} />
+        <meshBasicMaterial color="#ffd66b" transparent opacity={0.7} side={THREE.DoubleSide} />
+      </mesh>
+    </group>
+  );
+}
+
+// Major constellation patterns simplified (RA/Dec → projected to a fixed star sphere at radius 100)
+const CONSTELLATIONS: { name: string; lines: Array<[number, number, number, number]> }[] = [
+  // Each line is [ra1Hr, dec1Deg, ra2Hr, dec2Deg]
+  {
+    name: "Orion",
+    lines: [
+      [5.92, 7.4, 5.55, -1.2],   // Betelgeuse to Alnitak
+      [5.55, -1.2, 5.42, -8.2],   // Alnitak to Saiph
+      [5.42, -8.2, 5.24, -8.2],   // Saiph to Rigel
+      [5.24, -8.2, 5.92, 7.4],   // Rigel to Betelgeuse
+      [5.68, -1.9, 5.6, -1.2],   // Belt
+      [5.6, -1.2, 5.55, -1.2]
+    ]
+  },
+  {
+    name: "Big Dipper",
+    lines: [
+      [11.06, 61.75, 11.9, 53.7],
+      [11.9, 53.7, 12.26, 57.03],
+      [12.26, 57.03, 12.9, 55.96],
+      [12.9, 55.96, 13.4, 54.93],
+      [13.4, 54.93, 13.79, 49.31],
+      [13.79, 49.31, 13.4, 54.93]
+    ]
+  },
+  {
+    name: "Cassiopeia",
+    lines: [
+      [0.13, 59.15, 0.67, 56.54],
+      [0.67, 56.54, 0.95, 60.72],
+      [0.95, 60.72, 1.43, 60.24],
+      [1.43, 60.24, 1.91, 63.67]
+    ]
+  },
+  {
+    name: "Southern Cross",
+    lines: [
+      [12.44, -63.1, 12.79, -59.69],
+      [12.79, -59.69, 12.52, -57.11],
+      [12.52, -57.11, 12.42, -60.4],
+      [12.42, -60.4, 12.44, -63.1]
+    ]
+  }
+];
+
+function raDecToVec3(raHours: number, decDeg: number, radius: number): THREE.Vector3 {
+  const ra = (raHours / 24) * Math.PI * 2;
+  const dec = (decDeg / 180) * Math.PI;
+  return new THREE.Vector3(
+    Math.cos(dec) * Math.cos(ra) * radius,
+    Math.sin(dec) * radius,
+    Math.cos(dec) * Math.sin(ra) * radius
+  );
+}
+
+function ConstellationLines() {
+  const geom = useMemo(() => {
+    const positions: number[] = [];
+    for (const c of CONSTELLATIONS) {
+      for (const line of c.lines) {
+        const a = raDecToVec3(line[0], line[1], 100);
+        const b = raDecToVec3(line[2], line[3], 100);
+        positions.push(a.x, a.y, a.z, b.x, b.y, b.z);
+      }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(positions), 3));
+    return g;
+  }, []);
+  useEffect(() => () => geom.dispose(), [geom]);
+  return (
+    <lineSegments geometry={geom}>
+      <lineBasicMaterial color="#5cb5ff" transparent opacity={0.45} depthWrite={false} />
+    </lineSegments>
   );
 }
 
@@ -2928,6 +3264,10 @@ function solarTimes(lat: number, lon: number, date: Date): { sunrise: number; su
   const sunrise = solarNoon - H / 15;
   const sunset = solarNoon + H / 15;
   return { sunrise: ((sunrise % 24) + 24) % 24, sunset: ((sunset % 24) + 24) % 24, solarNoon: ((solarNoon % 24) + 24) % 24 };
+}
+
+function escapeXml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
 }
 
 function formatHour(h: number) {

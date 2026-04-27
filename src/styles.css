@@ -396,11 +396,21 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   top: 0;
   z-index: 2;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   gap: 1px;
   padding: 6px;
   border-bottom: 1px solid #1a2030;
   background: #0c1220;
+}
+
+.inspectorTabs button {
+  padding: 0 6px;
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .inspectorTabs button {
@@ -692,7 +702,7 @@ input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; border: 2px s
 
 .atlasFps {
   position: fixed;
-  top: 78px;
+  bottom: 80px;
   right: 332px;
   z-index: 7;
   padding: 4px 10px;
@@ -929,9 +939,9 @@ input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; border: 2px s
 /* Pin info card (floating right) */
 .atlasPinCard {
   position: fixed;
-  top: 76px;
+  top: 78px;
   right: 332px;
-  z-index: 8;
+  z-index: 9;
   width: 240px;
   padding: 12px;
   border: 1px solid #2a3044;
@@ -1101,8 +1111,9 @@ input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; border: 2px s
 .atlasRecordIndicator {
   position: fixed;
   top: 78px;
-  right: 332px;
-  z-index: 8;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 11;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1244,7 +1255,7 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
   position: fixed;
   top: 78px;
   left: 60px;
-  z-index: 7;
+  z-index: 10;
   display: grid;
   grid-template-columns: 14px auto;
   align-items: center;
@@ -1348,7 +1359,7 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
 
 .atlasSurfaceHint {
   position: fixed;
-  top: 78px;
+  bottom: 56px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 8;
@@ -1373,7 +1384,7 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
 }
 
 @keyframes atlasHintIn {
-  from { opacity: 0; transform: translate(-50%, -8px); }
+  from { opacity: 0; transform: translate(-50%, 8px); }
   to { opacity: 1; transform: translate(-50%, 0); }
 }
 
