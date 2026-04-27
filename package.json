@@ -12,11 +12,14 @@
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.4.0",
     "@react-three/postprocessing": "^3.0.4",
+    "@types/topojson-client": "^3.1.5",
     "cesium": "^1.121.0",
     "lucide-react": "^0.468.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "three": "^0.181.2"
+    "three": "^0.181.2",
+    "topojson-client": "^3.1.0",
+    "world-atlas": "^2.0.2"
   },
   "devDependencies": {
     "@types/react": "^19.2.6",
