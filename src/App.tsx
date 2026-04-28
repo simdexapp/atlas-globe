@@ -2455,6 +2455,28 @@ function App() {
             // Encodes camera lat/lon/altKm into the URL's hash and copies
             // it to the clipboard. Pasting the URL in another tab lands
             // the user at the same view.
+            // Fly to the antipodal point (opposite side of the globe).
+            // For the curious — drop a pen through the center of the
+            // earth, this is where it would come out the other side.
+            { id: "antipode", label: "Fly to antipode of current view", group: "View", icon: Navigation, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const antiLat = -c.lat;
+              const antiLon = c.lon > 0 ? c.lon - 180 : c.lon + 180;
+              setFlyTo((p) => ({ id: p.id + 1, lat: antiLat, lon: antiLon, altKm: c.altKm }));
+              showToast(`Antipode: ${formatLat(antiLat)} ${formatLon(antiLon)}`);
+            }},
+            // Random bookmarked place — useful for exploring the globe
+            // without a destination in mind.
+            { id: "randomFlyTo", label: "Fly to a random place", group: "View", icon: Navigation, run: () => {
+              if (bookmarks.length === 0) return;
+              const b = bookmarks[Math.floor(Math.random() * bookmarks.length)];
+              setFlyTo((p) => ({ id: p.id + 1, lat: b.lat, lon: b.lon, altKm: 5 }));
+              showToast(`✈ Surprise: ${b.name}`);
+            }},
+            // Pole quick-views.
+            { id: "viewNorthPole", label: "View North Pole", group: "View", icon: Navigation, run: () => setFlyTo((p) => ({ id: p.id + 1, lat: 89.99, lon: 0, altKm: 4500 })) },
+            { id: "viewSouthPole", label: "View South Pole", group: "View", icon: Navigation, run: () => setFlyTo((p) => ({ id: p.id + 1, lat: -89.99, lon: 0, altKm: 4500 })) },
             { id: "shareView", label: "Copy share-link to current view", group: "Tools", icon: Bookmark, run: () => {
               const c = cameraStateRef.current;
               if (!c) { showToast("Camera position unknown"); return; }
