@@ -368,6 +368,7 @@ function App() {
   const [surfaceTerrainExag, setSurfaceTerrainExag] = useState(1);
   const [surfaceFog, setSurfaceFog] = useState(true);
   const [surfaceManualHour, setSurfaceManualHour] = useState<number | null>(null);
+  const [surfaceScreenshotCmd, setSurfaceScreenshotCmd] = useState<{ id: number } | null>(null);
 
   // Per-aircraft history: last 12 polled positions (~2.4 minutes) so the
   // selected plane can render a fading trail behind it. Stored in a ref so
@@ -1940,6 +1941,19 @@ function App() {
               terrainExaggeration={surfaceTerrainExag}
               fogEnabled={surfaceFog}
               manualUtcHour={surfaceManualHour ?? undefined}
+              screenshotCommand={surfaceScreenshotCmd}
+              onScreenshot={(blob) => {
+                // Trigger a download
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `atlas-surface-${Date.now()}.png`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+                showToast("Screenshot saved");
+              }}
               selectedAircraft={selectedAircraftId && aircraftSnapshot ? (() => {
                 const a = aircraftSnapshot.aircraft.find((x) => x.icao24 === selectedAircraftId);
                 return a ? { icao24: a.icao24, lat: a.lat, lon: a.lon, altitudeM: a.altitudeM, headingDeg: a.headingDeg, velocityMs: a.velocityMs } : null;
@@ -2254,6 +2268,7 @@ function App() {
             { id: "time12", label: "Surface clock: 12:00 UTC (noon Greenwich)", group: "Imagery", icon: SunIcon, run: () => { updateGlobe({ realTimeSun: false }); setSurfaceManualHour(12); } },
             { id: "time18", label: "Surface clock: 18:00 UTC (sunset Greenwich)", group: "Imagery", icon: SunIcon, run: () => { updateGlobe({ realTimeSun: false }); setSurfaceManualHour(18); } },
             { id: "time00", label: "Surface clock: 00:00 UTC (midnight Greenwich)", group: "Imagery", icon: SunIcon, run: () => { updateGlobe({ realTimeSun: false }); setSurfaceManualHour(0); } },
+            { id: "surfShot", label: "Save Surface screenshot (.png)", group: "Tools", icon: Camera, run: () => setSurfaceScreenshotCmd((c) => ({ id: (c?.id ?? 0) + 1 })) },
             { id: "imgViirs", label: "Imagery: NASA Live VIIRS true-color", group: "Imagery", icon: Sparkles, run: () => updateImagery({ source: "live", layerId: "viirsTrueColor" }) },
             { id: "imgModis", label: "Imagery: NASA Live MODIS Terra", group: "Imagery", icon: Sparkles, run: () => updateImagery({ source: "live", layerId: "modisTrueColor" }) },
             { id: "imgFires", label: "Imagery: MODIS active fires overlay", group: "Imagery", icon: Sparkles, run: () => updateImagery({ source: "live", layerId: "modisFires" }) },

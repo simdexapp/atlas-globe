@@ -80,7 +80,9 @@ export default function Surface({
   tiltCommand,
   terrainExaggeration,
   fogEnabled,
-  manualUtcHour
+  manualUtcHour,
+  screenshotCommand,
+  onScreenshot
 }: {
   token: string;
   onCameraChange: (lat: number, lon: number, altKm: number) => void;
@@ -112,6 +114,11 @@ export default function Surface({
   // realTimeSun is false; ignored otherwise so the user can switch back to
   // real-time without restarting the viewer.
   manualUtcHour?: number;
+  // Trigger a screenshot — Surface captures viewer.scene.canvas to a Blob
+  // and emits via onScreenshot. Component handles requestRender first to
+  // ensure the latest frame is in the buffer.
+  screenshotCommand?: { id: number } | null;
+  onScreenshot?: (blob: Blob, dataUrl: string) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Cesium.Viewer | null>(null);
@@ -506,6 +513,23 @@ export default function Surface({
       tooltip.remove();
     };
   }, [onSelectAircraft, aircraft]);
+
+  // ===== Screenshot command =====
+  const lastScreenshotIdRef = useRef(0);
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer || !screenshotCommand || !onScreenshot) return;
+    if (screenshotCommand.id === lastScreenshotIdRef.current) return;
+    lastScreenshotIdRef.current = screenshotCommand.id;
+    if (screenshotCommand.id === 0) return;
+    // Force a fresh render so the canvas has the latest frame.
+    viewer.scene.requestRender();
+    requestAnimationFrame(() => {
+      const canvas = viewer.scene.canvas;
+      const dataUrl = canvas.toDataURL("image/png");
+      canvas.toBlob((blob) => { if (blob) onScreenshot(blob, dataUrl); }, "image/png");
+    });
+  }, [screenshotCommand, onScreenshot]);
 
   // ===== Real-time-sun toggle / manual hour =====
   useEffect(() => {
