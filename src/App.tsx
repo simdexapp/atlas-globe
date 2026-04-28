@@ -315,6 +315,16 @@ function App() {
   const [hoveredAircraftId, setHoveredAircraftId] = useState<string | null>(null);
   const [hoverPos, setHoverPos] = useState<{ x: number; y: number } | null>(null);
 
+  // Per-aircraft history: last 12 polled positions (~2.4 minutes) so the
+  // selected plane can render a fading trail behind it. Stored in a ref so
+  // we don't re-render every poll. We bump aircraftHistoryTick once per
+  // successful poll so the AircraftTrail component re-renders with fresh
+  // history, while the rest of the tree doesn't.
+  const aircraftHistoryRef = useRef<Map<string, Array<{ lat: number; lon: number; alt: number; t: number }>>>(new Map());
+  // The tick counter is set-only; its purpose is purely to trigger re-renders
+  // of components that read aircraftHistoryRef on each successful poll.
+  const [, setAircraftHistoryTick] = useState(0);
+
   // auroraSnapshot's grid is only used inside the texture-build effect; we
   // hold it in a ref to avoid a state-only-set-never-read TS warning.
   const [, setAuroraSnapshot] = useState<AuroraSnapshot | null>(null);
@@ -515,6 +525,20 @@ function App() {
         setAircraftSnapshot(snap);
         setAircraftError(null);
         consecutiveFailures = 0;
+        // Maintain rolling per-aircraft history (last 12 polls).
+        const map = aircraftHistoryRef.current;
+        const HISTORY_CAP = 12;
+        const seen = new Set<string>();
+        for (const a of snap.aircraft) {
+          seen.add(a.icao24);
+          let arr = map.get(a.icao24);
+          if (!arr) { arr = []; map.set(a.icao24, arr); }
+          arr.push({ lat: a.lat, lon: a.lon, alt: a.altitudeM, t: snap.fetchedAt });
+          if (arr.length > HISTORY_CAP) arr.shift();
+        }
+        // Garbage-collect history for aircraft we haven't seen this poll.
+        for (const k of map.keys()) if (!seen.has(k)) map.delete(k);
+        setAircraftHistoryTick((t) => t + 1);
       } catch (e) {
         if ((e as Error).name === "AbortError") return;
         if (!cancelled) {
@@ -1701,6 +1725,7 @@ function App() {
             selectedEonetId={selectedEonetId}
             onSelectEonet={setSelectedEonetId}
             auroraTexture={auroraTexture}
+            aircraftHistory={aircraftHistoryRef.current}
             onAircraftHover={(id, p) => { setHoveredAircraftId(id); setHoverPos(p); }}
             pins={pins}
             earthquakes={earthquakes}
@@ -3532,6 +3557,7 @@ function GlobeCanvas({
   selectedEonetId,
   onSelectEonet,
   auroraTexture,
+  aircraftHistory,
   onAircraftHover,
   pins,
   earthquakes,
@@ -3561,6 +3587,7 @@ function GlobeCanvas({
   selectedEonetId: string | null;
   onSelectEonet: (id: string | null) => void;
   auroraTexture: THREE.Texture | null;
+  aircraftHistory?: Map<string, Array<{ lat: number; lon: number; alt: number; t: number }>>;
   onAircraftHover: (id: string | null, screen: { x: number; y: number } | null) => void;
   pins: Pin[];
   earthquakes: Earthquake[];
@@ -3603,7 +3630,7 @@ function GlobeCanvas({
           {layers.pinPaths && <PinPaths pins={pins} sunDirection={sunDirection} />}
           {layers.pins && <PinMarkers pins={pins} selectedId={selectedPinId} onSelect={onSelectPin} />}
           {layers.aircraft && aircraft.length > 0 && (
-            <AircraftLayer aircraft={aircraft} selectedId={selectedAircraftId} onSelect={onSelectAircraft} onHover={onAircraftHover} />
+            <AircraftLayer aircraft={aircraft} selectedId={selectedAircraftId} onSelect={onSelectAircraft} onHover={onAircraftHover} aircraftHistory={aircraftHistory} />
           )}
           {layers.weather && radarTexture && (
             <WeatherRadar texture={radarTexture} opacity={radarOpacity} />
@@ -4001,12 +4028,14 @@ function AircraftLayer({
   aircraft,
   selectedId,
   onSelect,
-  onHover
+  onHover,
+  aircraftHistory
 }: {
   aircraft: Aircraft[];
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   onHover?: (id: string | null, screen: { x: number; y: number } | null) => void;
+  aircraftHistory?: Map<string, Array<{ lat: number; lon: number; alt: number; t: number }>>;
 }) {
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const haloRef = useRef<THREE.InstancedMesh>(null);
@@ -4158,32 +4187,51 @@ function AircraftLayer({
         frustumCulled={false}
         renderOrder={21}
       />
-      {selectedAircraft && <AircraftTrail aircraft={selectedAircraft} />}
+      {selectedAircraft && (
+        <AircraftTrail
+          aircraft={selectedAircraft}
+          history={aircraftHistory?.get(selectedAircraft.icao24) ?? []}
+        />
+      )}
     </>
   );
 }
 
-// Predicted-path trail for the selected aircraft: extend a great-circle line
-// 5 minutes ahead based on its current heading + ground speed. Renders as a
-// fading polyline that smoothly anchors to the plane's altitude shell.
-function AircraftTrail({ aircraft }: { aircraft: Aircraft }) {
+// Trail for the selected aircraft: past polled positions (fading from
+// transparent at the oldest to bright cyan at the current position) plus a
+// 5-minute great-circle prediction ahead.
+function AircraftTrail({ aircraft, history }: {
+  aircraft: Aircraft;
+  history: Array<{ lat: number; lon: number; alt: number; t: number }>;
+}) {
   const { positions, colors } = useMemo(() => {
-    const segments = 32;
+    // ===== past trail (history → bright at current) =====
+    const pastPoints: Array<{ lat: number; lon: number; alt: number }> = [];
+    if (history.length > 0) {
+      // Keep only points distinct enough to be visible (skip duplicates from
+      // when an aircraft is parked or polled twice with the same position).
+      let last: { lat: number; lon: number } | null = null;
+      for (const h of history) {
+        if (!last || Math.abs(h.lat - last.lat) > 0.001 || Math.abs(h.lon - last.lon) > 0.001) {
+          pastPoints.push({ lat: h.lat, lon: h.lon, alt: h.alt });
+          last = h;
+        }
+      }
+    }
+    pastPoints.push({ lat: aircraft.lat, lon: aircraft.lon, alt: aircraft.altitudeM });
+
+    // ===== future prediction (current → 5 min ahead) =====
+    const futureSegments = 32;
     const minutesAhead = 5;
     const distanceM = aircraft.velocityMs * minutesAhead * 60;
     const distanceRad = distanceM / 1000 / EARTH_RADIUS_KM;
     const lat0 = aircraft.lat * Math.PI / 180;
     const lon0 = aircraft.lon * Math.PI / 180;
     const heading = (aircraft.headingDeg || 0) * Math.PI / 180;
-    const altKm = Math.max(0, aircraft.altitudeM / 1000);
-    const radius = 1 + altKm / EARTH_RADIUS_KM + 0.005;
-
-    const pos = new Float32Array((segments + 1) * 3);
-    const col = new Float32Array((segments + 1) * 3);
-    for (let i = 0; i <= segments; i++) {
-      const t = i / segments;
+    const futurePoints: Array<{ lat: number; lon: number; alt: number }> = [];
+    for (let i = 1; i <= futureSegments; i++) {
+      const t = i / futureSegments;
       const d = distanceRad * t;
-      // Forward great-circle stepping by initial bearing
       const lat2 = Math.asin(
         Math.sin(lat0) * Math.cos(d) + Math.cos(lat0) * Math.sin(d) * Math.cos(heading)
       );
@@ -4191,18 +4239,52 @@ function AircraftTrail({ aircraft }: { aircraft: Aircraft }) {
         Math.sin(heading) * Math.sin(d) * Math.cos(lat0),
         Math.cos(d) - Math.sin(lat0) * Math.sin(lat2)
       );
-      const phi = Math.PI / 2 - lat2;
-      // Negate lon to match latLonToVec3's convention; otherwise the trail
-      // diverges from the plane (which IS at the negated lat/lon).
-      const theta = -lon2;
-      pos[i * 3 + 0] = radius * Math.sin(phi) * Math.cos(theta);
-      pos[i * 3 + 1] = radius * Math.cos(phi);
-      pos[i * 3 + 2] = radius * Math.sin(phi) * Math.sin(theta);
-      // Fade from accent at start to transparent at tip
-      const alpha = 1 - t;
+      futurePoints.push({
+        lat: lat2 * 180 / Math.PI,
+        lon: lon2 * 180 / Math.PI,
+        alt: aircraft.altitudeM,
+      });
+    }
+
+    // Helper: lat/lon (deg) + alt (m) → 3D coord matching latLonToVec3.
+    const toXYZ = (lat: number, lon: number, alt: number) => {
+      const altKm = Math.max(0, alt / 1000);
+      const radius = 1 + altKm / EARTH_RADIUS_KM + 0.005;
+      const phi = (90 - lat) * Math.PI / 180;
+      const theta = -lon * Math.PI / 180;
+      return [
+        radius * Math.sin(phi) * Math.cos(theta),
+        radius * Math.cos(phi),
+        radius * Math.sin(phi) * Math.sin(theta),
+      ];
+    };
+
+    const totalPoints = pastPoints.length + futurePoints.length;
+    const pos = new Float32Array(totalPoints * 3);
+    const col = new Float32Array(totalPoints * 3);
+    let i = 0;
+    // Past: fade in from low alpha to full alpha
+    const pastN = pastPoints.length;
+    for (const p of pastPoints) {
+      const t = pastN > 1 ? i / (pastN - 1) : 1;        // 0 = oldest, 1 = current
+      const xyz = toXYZ(p.lat, p.lon, p.alt);
+      pos[i * 3 + 0] = xyz[0]; pos[i * 3 + 1] = xyz[1]; pos[i * 3 + 2] = xyz[2];
+      const alpha = 0.18 + 0.82 * t;                    // dim trail history
       col[i * 3 + 0] = 0.36 * alpha;
       col[i * 3 + 1] = 0.71 * alpha;
       col[i * 3 + 2] = 1.0 * alpha;
+      i += 1;
+    }
+    // Future: fade from full at current → transparent at tip
+    for (let f = 0; f < futurePoints.length; f++) {
+      const p = futurePoints[f];
+      const xyz = toXYZ(p.lat, p.lon, p.alt);
+      pos[i * 3 + 0] = xyz[0]; pos[i * 3 + 1] = xyz[1]; pos[i * 3 + 2] = xyz[2];
+      const alpha = 1 - (f + 1) / futurePoints.length;
+      col[i * 3 + 0] = 1.0 * alpha;     // warmer (yellow→white) for predicted
+      col[i * 3 + 1] = 0.85 * alpha;
+      col[i * 3 + 2] = 0.45 * alpha;
+      i += 1;
     }
     return { positions: pos, colors: col };
   }, [aircraft.lat, aircraft.lon, aircraft.headingDeg, aircraft.velocityMs, aircraft.altitudeM]);
