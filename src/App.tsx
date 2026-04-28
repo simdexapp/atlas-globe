@@ -412,6 +412,9 @@ function App() {
   // Cesium-side day/night terminator polyline overlay. Independent of
   // the Atlas-mode terminator layer so users can have it on per-mode.
   const [surfaceTerminator, setSurfaceTerminator] = useState(false);
+  // Cesium globe-lighting override. undefined = use auto (off on mobile,
+  // on otherwise). User can flip via Cmd+K.
+  const [surfaceGlobeLighting, setSurfaceGlobeLighting] = useState<boolean | undefined>(undefined);
   // GeoJSON drag-import state — set by the body-level dragdrop listener.
   const [geoJsonImport, setGeoJsonImport] = useState<any | null>(null);
 
@@ -2064,6 +2067,7 @@ function App() {
               }}
               followSelectedAircraft={followSelectedAircraft}
               showTerminator={surfaceTerminator}
+              enableGlobeLighting={surfaceGlobeLighting}
               issPosition={layers.iss ? issPosition : null}
               tiangongPosition={layers.tiangong ? tiangongPosition : null}
               hubblePosition={layers.hubble ? hubblePosition : null}
@@ -2378,6 +2382,7 @@ function App() {
             { id: "exag3", label: "Terrain exaggeration: 3× (extreme)", group: "Imagery", icon: Mountain, run: () => setSurfaceTerrainExag(3) },
             { id: "toggleFog", label: surfaceFog ? "Hide atmospheric fog" : "Show atmospheric fog", group: "Imagery", icon: Cloud, run: () => setSurfaceFog((v) => !v) },
             { id: "toggleTerminator", label: surfaceTerminator ? "Hide day/night terminator (Surface)" : "Show day/night terminator (Surface)", group: "Layers", icon: SunIcon, run: () => setSurfaceTerminator((v) => !v) },
+            { id: "toggleGlobeLighting", label: surfaceGlobeLighting === false ? "Enable Cesium globe lighting (sun-shaded)" : "Disable Cesium globe lighting (flat)", group: "Imagery", icon: SunIcon, run: () => setSurfaceGlobeLighting((v) => v === false ? true : false) },
             // Camera-follow only makes sense when an aircraft is selected
             // and we're in Surface mode. The label changes based on state so
             // users always see whether the toggle would start or stop following.

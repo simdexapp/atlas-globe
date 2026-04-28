@@ -89,6 +89,7 @@ export default function Surface({
   geoJson,
   followSelectedAircraft,
   showTerminator,
+  enableGlobeLighting,
   issPosition,
   tiangongPosition,
   hubblePosition
@@ -141,6 +142,10 @@ export default function Surface({
   // with the Cesium clock (real-time or manual hour). Used to visualize
   // the solar limb without baking it into the imagery shader.
   showTerminator?: boolean;
+  // Override Cesium's globe.enableLighting (sun-driven shading on
+  // imagery). Default behavior auto-degrades on mobile; setting this
+  // explicitly lets the user override that.
+  enableGlobeLighting?: boolean;
   // Live LEO satellite ground positions (polled in App.tsx). Each is
   // null when the layer is off OR the wheretheiss.at fetch hasn't
   // returned yet, so handle gracefully. Altitude is hard-coded to a
@@ -1462,6 +1467,17 @@ export default function Surface({
     viewer.scene.fog.enabled = fogEnabled !== false;
     viewer.scene.requestRender();
   }, [fogEnabled]);
+
+  // ===== Globe-lighting override =====
+  // Mobile auto-disables enableLighting at viewer creation. This effect
+  // lets the user explicitly turn it back on (or off) at runtime via
+  // Cmd+K, regardless of the auto-detection.
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer || enableGlobeLighting === undefined) return;
+    viewer.scene.globe.enableLighting = enableGlobeLighting;
+    viewer.scene.requestRender();
+  }, [enableGlobeLighting]);
 
   // ===== Tilt command: re-orient camera at current position =====
   const lastTiltIdRef = useRef(0);
