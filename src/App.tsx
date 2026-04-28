@@ -149,7 +149,7 @@ type PersistedState = {
   pins?: Pin[];
 };
 
-const STORAGE_KEY = "atlas-globe-state-v3";
+const STORAGE_KEY = "atlas-globe-state-v4";
 const EARTH_RADIUS_KM = 6371;
 const MIN_DISTANCE = 1.0008;        // ~5 km above surface (texture-pixelated, but real zoom)
 const MAX_DISTANCE = 12;            // far view from space
