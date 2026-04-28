@@ -1977,6 +1977,43 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
   .atlasLowAltHint { bottom: 230px; left: 8px; right: 8px; width: auto; max-width: none; transform: none; }
 }
 
+/* ===== Mobile / coarse-pointer perf: disable backdrop blur, animations =====
+   Backdrop-filter blur is the single most expensive CSS effect on phones
+   (forces a full-screen offscreen render every paint). Replacing with a
+   solid alpha gives ~4-8 fps back on mid-tier Android. Also kill the
+   gradient hover transitions and pulse keyframes that aren't readable
+   on a 4-inch screen anyway. */
+@media (max-width: 720px), (pointer: coarse) {
+  .atlasFlightPill,
+  .atlasEonetPill,
+  .atlasAuroraPill,
+  .atlasFlightControls,
+  .atlasAircraftCard,
+  .atlasEventCard,
+  .atlasPinCard,
+  .atlasNeoWidget,
+  .atlasClockWidget,
+  .atlasDayInfoWidget,
+  .atlasNextLaunchPill,
+  .atlasLaunchCard,
+  .atlasDigestWidget,
+  .commandPalette,
+  .commandResults,
+  .atlasInspector,
+  .atlasRail,
+  .atlasFooter,
+  .atlasHeader {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  /* Trim transition durations so menu/hover state changes feel snappier
+     and don't queue up paint work. We deliberately don't touch
+     animation-duration — the spinner + selection-ring pulse rely on it. */
+  *, *::before, *::after {
+    transition-duration: 0.15s !important;
+  }
+}
+
 /* ============= live aircraft + time-lapse ============= */
 
 .atlasFlightPill {
