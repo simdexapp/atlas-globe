@@ -50,6 +50,7 @@ import { fetchEonetEvents, categoryColor, categoryIconLabel, type EonetEvent } f
 import { fetchSpaceWeather, fetchAuroraSnapshot, auroraIntensityToRGBA, kpScale, type SpaceWeather, type AuroraSnapshot } from "./space";
 import { fetchNeoToday, type NearEarthObject } from "./nearEarthObjects";
 import { fetchUpcomingLaunches, timeUntilLaunch, type RocketLaunch } from "./launches";
+import { fetchWikiSummary } from "./wiki";
 
 const SurfaceMode = lazy(() => import("./Surface"));
 
@@ -3463,8 +3464,18 @@ function PinInfoCard({ pin, onClose, onDelete, onUpdate, onFly }: { pin: Pin; on
   const [editing, setEditing] = useState(false);
   const [label, setLabel] = useState(pin.label);
   const [note, setNote] = useState(pin.note ?? "");
+  const [wiki, setWiki] = useState<{ title: string; extract: string; pageUrl: string; thumbnail: string | null } | null>(null);
   useEffect(() => { setLabel(pin.label); }, [pin.label]);
   useEffect(() => { setNote(pin.note ?? ""); }, [pin.note]);
+  // Lazy-load Wikipedia summary based on the pin's reverse-geocoded label.
+  useEffect(() => {
+    let cancelled = false;
+    setWiki(null);
+    if (!pin.label || pin.label.startsWith("Pin ")) return;   // skip default labels
+    const ac = new AbortController();
+    fetchWikiSummary(pin.label, ac.signal).then((w) => { if (!cancelled && w) setWiki(w); }).catch(() => {});
+    return () => { cancelled = true; ac.abort(); };
+  }, [pin.label]);
   const localTimeMs = Date.now() + (pin.lon / 15) * 3600 * 1000;
   const localTime = new Date(localTimeMs).toUTCString().split(" ").slice(4, 5)[0];
   const sun = solarTimes(pin.lat, pin.lon, new Date());
@@ -3500,6 +3511,12 @@ function PinInfoCard({ pin, onClose, onDelete, onUpdate, onFly }: { pin: Pin; on
         {sun === "polar-day" && <div><span>Today</span><strong>Polar day (sun never sets)</strong></div>}
         {sun === "polar-night" && <div><span>Today</span><strong>Polar night (sun never rises)</strong></div>}
       </div>
+      {wiki && wiki.extract && (
+        <div className="atlasPinWiki">
+          <p>{wiki.extract.length > 200 ? wiki.extract.slice(0, 197) + "…" : wiki.extract}</p>
+          <a href={wiki.pageUrl} target="_blank" rel="noreferrer">Wikipedia ↗</a>
+        </div>
+      )}
       <div className="atlasPinColors">
         {PIN_COLORS.map((c) => (
           <button
