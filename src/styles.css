@@ -1965,7 +1965,16 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
     max-width: none;
   }
   .atlasFlightPill { top: 102px; left: 8px; right: 8px; max-width: none; }
-  .atlasAircraftCard { top: 70px; left: 8px; right: 8px; width: auto; max-width: none; }
+  .atlasFlightControls { top: 102px; left: 8px; right: 8px; width: auto; max-width: none; }
+  .atlasAircraftCard { top: auto; bottom: 230px; left: 8px; right: 8px; width: auto; max-width: none; }
+  /* New layer pills + widgets stack vertically below the loading bar */
+  .atlasEonetPill { top: 134px; left: 8px; right: 8px; max-width: none; }
+  .atlasAuroraPill { top: 168px; left: 8px; right: 8px; max-width: none; }
+  .atlasWeatherControls { top: 200px; left: 8px; right: 8px; width: auto; max-width: none; }
+  .atlasNeoWidget { display: none; }       /* asteroid widget — too space-hungry */
+  .atlasClockWidget { display: none; }     /* world-clock — same */
+  .atlasEventCard { bottom: 230px; left: 8px; right: 8px; max-width: none; transform: none; left: 8px; }
+  .atlasLowAltHint { bottom: 230px; left: 8px; right: 8px; width: auto; max-width: none; transform: none; }
 }
 
 /* ============= live aircraft + time-lapse ============= */

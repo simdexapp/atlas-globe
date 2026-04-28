@@ -4648,6 +4648,24 @@ function VolcanoMarkers() {
   );
 }
 
+// Per-event marker size — bigger for high-magnitude wildfires/storms so the
+// most consequential events stand out.
+function eonetMarkerSize(ev: EonetEvent, isSelected: boolean): number {
+  const base =
+    ev.category === "severeStorms" ? 0.011 :
+    ev.category === "volcanoes"    ? 0.011 :
+    ev.category === "wildfires"    ? 0.009 :
+    ev.category === "earthquakes"  ? 0.009 :
+    0.007;
+  let mag = 0;
+  if (ev.magnitude !== null) {
+    if (ev.magnitudeUnit === "acres") mag = Math.min(0.012, Math.log10(Math.max(1, ev.magnitude)) * 0.0025);
+    else if (ev.magnitudeUnit === "kts" || ev.magnitudeUnit === "mph") mag = Math.min(0.010, ev.magnitude * 0.00007);
+    else if (ev.magnitudeUnit === "Magnitude") mag = Math.min(0.010, ev.magnitude * 0.0014);
+  }
+  return (base + mag) * (isSelected ? 1.6 : 1.0);
+}
+
 function EonetMarkers({ events, selectedId, onSelect }: {
   events: EonetEvent[];
   selectedId: string | null;
@@ -4669,6 +4687,7 @@ function EonetMarkers({ events, selectedId, onSelect }: {
         const pos = latLonToVec3(ev.lat, ev.lon, 1.006);
         const color = categoryColor(ev.category);
         const isSelected = ev.id === selectedId;
+        const size = eonetMarkerSize(ev, isSelected);
         return (
           <mesh
             key={ev.id}
@@ -4678,7 +4697,7 @@ function EonetMarkers({ events, selectedId, onSelect }: {
               onSelect(ev.id);
             }}
           >
-            <sphereGeometry args={[isSelected ? 0.013 : 0.008, 16, 16]} />
+            <sphereGeometry args={[size, 16, 16]} />
             <meshBasicMaterial color={color} transparent opacity={isSelected ? 1 : 0.85} toneMapped={false} />
           </mesh>
         );
