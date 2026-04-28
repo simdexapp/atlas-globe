@@ -1822,7 +1822,15 @@ function App() {
           />
         ) : (
           <Suspense fallback={<div className="surfaceLoading">Loading Surface mode (Cesium)…</div>}>
-            <SurfaceMode token={cesiumToken} onCameraChange={onCameraChange} flyTo={flyTo} />
+            <SurfaceMode
+              token={cesiumToken}
+              onCameraChange={onCameraChange}
+              onPickLocation={onGlobeClick}
+              flyTo={flyTo}
+              pins={pins.map((p) => ({ id: p.id, lat: p.lat, lon: p.lon, label: p.label, color: p.color }))}
+              aircraft={layers.aircraft ? filteredAircraft.map((a) => ({ icao24: a.icao24, callsign: a.callsign, lat: a.lat, lon: a.lon, altitudeM: a.altitudeM, headingDeg: a.headingDeg })) : []}
+              realTimeSun={globe.realTimeSun}
+            />
           </Suspense>
         )}
       </div>
