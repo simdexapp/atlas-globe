@@ -87,7 +87,8 @@ export default function Surface({
   onScreenshot,
   measurePoints,
   geoJson,
-  followSelectedAircraft
+  followSelectedAircraft,
+  showTerminator
 }: {
   token: string;
   onCameraChange: (lat: number, lon: number, altKm: number) => void;
@@ -133,6 +134,10 @@ export default function Surface({
   // When true and selectedAircraft is set, the camera locks-on to the plane
   // (Cesium tracked-entity mode). Click "Stop following" or deselect to free.
   followSelectedAircraft?: boolean;
+  // Renders a polyline along the day/night terminator that auto-updates
+  // with the Cesium clock (real-time or manual hour). Used to visualize
+  // the solar limb without baking it into the imagery shader.
+  showTerminator?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Cesium.Viewer | null>(null);
@@ -159,6 +164,7 @@ export default function Surface({
   const volcanoEntitiesRef = useRef<Cesium.Entity[]>([]);
   const launchEntitiesRef = useRef<Cesium.Entity[]>([]);
   const weatherImageryLayerRef = useRef<Cesium.ImageryLayer | null>(null);
+  const terminatorEntityRef = useRef<Cesium.Entity | null>(null);
 
   // Resolve env token if no prop token. Production deploys bake VITE_CESIUM_TOKEN.
   const env = (import.meta as any).env;
@@ -677,6 +683,102 @@ export default function Surface({
       }
     };
   }, [selectedAircraft]);
+
+  // ===== Solar terminator polyline =====
+  // Computes the day/night great-circle live each frame. Subsolar
+  // point is derived from the Cesium clock so manual UTC-hour overrides
+  // work too. Uses CallbackProperty on positions so we don't need our
+  // own RAF loop — Cesium's render-on-demand picks it up automatically.
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    if (terminatorEntityRef.current) {
+      viewer.entities.remove(terminatorEntityRef.current);
+      terminatorEntityRef.current = null;
+    }
+    if (!showTerminator) return;
+
+    // Position generator — recomputed every render. Cheap enough (180
+    // sin/cos calls per frame) that we don't bother memoizing.
+    const computePositions = () => {
+      // Pull current time from the Cesium clock (works for both real-time
+      // and manual-UTC modes since we sync clock.currentTime in that effect).
+      const jd = viewer.clock.currentTime;
+      const date = Cesium.JulianDate.toDate(jd);
+      // Day-of-year for axial tilt approximation.
+      const start = Date.UTC(date.getUTCFullYear(), 0, 0);
+      const diff = (date.getTime() - start);
+      const doy = Math.floor(diff / 86400000);
+      // Solar declination (deg): 23.45° × sin(360°/365 × (doy − 81))
+      const declRad = 23.45 * Math.PI / 180 * Math.sin(2 * Math.PI / 365 * (doy - 81));
+      // Subsolar longitude: -((UTC hours - 12) × 15°)
+      const utcHours = date.getUTCHours() + date.getUTCMinutes() / 60 + date.getUTCSeconds() / 3600;
+      const subsolarLonDeg = -((utcHours - 12) * 15);
+      const subsolarLonRad = subsolarLonDeg * Math.PI / 180;
+      // Walk the terminator great circle: parameterize by an angle θ ∈ [0,2π].
+      // Standard formula: terminator at solar longitude L is the great
+      // circle perpendicular to the subsolar direction, parameterized by:
+      //   lat(θ) = asin(cos(decl) sin(θ))
+      //   lon(θ) = subsolarLon + atan2(-sin(decl) sin(θ), cos(θ)) ± π/2
+      // We use the simpler equivalent: walk θ from 0..2π, build a unit
+      // vector perpendicular to the subsolar direction, convert to lat/lon.
+      const positions: Cesium.Cartesian3[] = [];
+      const subX = Math.cos(declRad) * Math.cos(subsolarLonRad);
+      const subY = Math.cos(declRad) * Math.sin(subsolarLonRad);
+      const subZ = Math.sin(declRad);
+      // East and north tangent vectors at the subsolar point.
+      const eastX = -Math.sin(subsolarLonRad);
+      const eastY =  Math.cos(subsolarLonRad);
+      const eastZ = 0;
+      const northX = -Math.sin(declRad) * Math.cos(subsolarLonRad);
+      const northY = -Math.sin(declRad) * Math.sin(subsolarLonRad);
+      const northZ =  Math.cos(declRad);
+      const STEPS = 180;
+      for (let i = 0; i <= STEPS; i++) {
+        const t = (i / STEPS) * 2 * Math.PI;
+        // Point on the great circle 90° from subsolar — combine east and
+        // north tangents weighted by cos/sin θ.
+        const x = eastX * Math.cos(t) + northX * Math.sin(t);
+        const y = eastY * Math.cos(t) + northY * Math.sin(t);
+        const z = eastZ * Math.cos(t) + northZ * Math.sin(t);
+        const lat = Math.asin(z) * 180 / Math.PI;
+        const lon = Math.atan2(y, x) * 180 / Math.PI;
+        positions.push(Cesium.Cartesian3.fromDegrees(lon, lat, 0));
+      }
+      // Suppress unused-var warning for subX/subY/subZ — declared for
+      // clarity even if not directly used in the position formula.
+      void subX; void subY; void subZ;
+      return positions;
+    };
+
+    terminatorEntityRef.current = viewer.entities.add({
+      polyline: {
+        positions: new Cesium.CallbackProperty(computePositions, false),
+        width: 2,
+        material: new Cesium.PolylineDashMaterialProperty({
+          color: Cesium.Color.fromCssColorString("#ffd66b").withAlpha(0.85),
+          dashLength: 18,
+        }),
+        clampToGround: true,
+      },
+    });
+
+    // requestRenderMode means Cesium only redraws when something marks
+    // the scene dirty. The CallbackProperty needs us to nudge it — we
+    // force a redraw every 60s, which advances the terminator ~0.25°
+    // per step (smooth enough at any reasonable zoom level).
+    const tickHandle = window.setInterval(() => {
+      viewer.scene.requestRender();
+    }, 60_000);
+
+    return () => {
+      window.clearInterval(tickHandle);
+      if (terminatorEntityRef.current) {
+        viewer.entities.remove(terminatorEntityRef.current);
+        terminatorEntityRef.current = null;
+      }
+    };
+  }, [showTerminator]);
 
   // ===== Selected-aircraft callsign label (DOM-overlay style billboard label) =====
   // Floats just above the billboard with the callsign and altitude. Uses an

@@ -409,6 +409,9 @@ function App() {
   const [surfaceScreenshotCmd, setSurfaceScreenshotCmd] = useState<{ id: number } | null>(null);
   // Lock Cesium camera onto the currently selected aircraft.
   const [followSelectedAircraft, setFollowSelectedAircraft] = useState(false);
+  // Cesium-side day/night terminator polyline overlay. Independent of
+  // the Atlas-mode terminator layer so users can have it on per-mode.
+  const [surfaceTerminator, setSurfaceTerminator] = useState(false);
   // GeoJSON drag-import state — set by the body-level dragdrop listener.
   const [geoJsonImport, setGeoJsonImport] = useState<any | null>(null);
 
@@ -2060,6 +2063,7 @@ function App() {
                 if (!id) setFollowSelectedAircraft(false);
               }}
               followSelectedAircraft={followSelectedAircraft}
+              showTerminator={surfaceTerminator}
             />
           </Suspense>
         )}
@@ -2370,6 +2374,7 @@ function App() {
             { id: "exag2", label: "Terrain exaggeration: 2× (dramatic)", group: "Imagery", icon: Mountain, run: () => setSurfaceTerrainExag(2) },
             { id: "exag3", label: "Terrain exaggeration: 3× (extreme)", group: "Imagery", icon: Mountain, run: () => setSurfaceTerrainExag(3) },
             { id: "toggleFog", label: surfaceFog ? "Hide atmospheric fog" : "Show atmospheric fog", group: "Imagery", icon: Cloud, run: () => setSurfaceFog((v) => !v) },
+            { id: "toggleTerminator", label: surfaceTerminator ? "Hide day/night terminator (Surface)" : "Show day/night terminator (Surface)", group: "Layers", icon: SunIcon, run: () => setSurfaceTerminator((v) => !v) },
             // Camera-follow only makes sense when an aircraft is selected
             // and we're in Surface mode. The label changes based on state so
             // users always see whether the toggle would start or stop following.
