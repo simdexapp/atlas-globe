@@ -322,14 +322,31 @@ export default function Surface({
     // Tier 1 (huge nations) show from very far out (orbital view).
     // Tier 2 nations only appear once camera < ~6000km altitude.
     // All country labels fade out as you zoom *into* a country, so cities
-    // take over without visual clutter.
+    // take over without visual clutter. Each label gets the country's
+    // flag emoji built from the ISO 3166-1 alpha-2 code (regional
+    // indicator pair). Antarctica (AQ) and Greenland (GL) fall back to
+    // "🏳️" since they don't have widely-supported flag glyphs.
+    const codeToFlag = (code: string) => {
+      // AQ = Antarctica (no flag), reserve for special cases below.
+      if (code === "AQ") return "🏳️";
+      const A = 0x41;
+      const RI_BASE = 0x1F1E6;       // 🇦
+      const c1 = code.charCodeAt(0) - A + RI_BASE;
+      const c2 = code.charCodeAt(1) - A + RI_BASE;
+      return String.fromCodePoint(c1, c2);
+    };
     for (const country of COUNTRY_CENTROIDS) {
       const farKm = country.tier === 1 ? 25_000 : 6_000;
       const nearKm = 350;            // fade out below ~350km altitude
+      const flag = codeToFlag(country.code);
+      const labelText = `${flag} ${country.name.toUpperCase()}`;
       const entity = viewer.entities.add({
         position: Cesium.Cartesian3.fromDegrees(country.lon, country.lat, 0),
+        // id used by the click handler to detect a country click and fly to it.
+        id: `country-${country.code}`,
+        properties: { isCountry: true, countryCode: country.code, countryLat: country.lat, countryLon: country.lon },
         label: {
-          text: country.name.toUpperCase(),
+          text: labelText,
           font: country.tier === 1 ? "700 14px Inter, sans-serif" : "600 11px Inter, sans-serif",
           fillColor: Cesium.Color.fromCssColorString(country.tier === 1 ? "rgba(245, 220, 180, 0.95)" : "rgba(220, 220, 235, 0.85)"),
           outlineColor: Cesium.Color.fromCssColorString("rgba(0,0,0,0.95)"),
@@ -837,15 +854,28 @@ export default function Surface({
     tooltip.style.cssText = "position:absolute;pointer-events:none;padding:6px 10px;border-radius:8px;border:1px solid #2a3349;background:rgba(8,14,26,.95);backdrop-filter:blur(6px);color:#f1f4f8;font:600 11px Inter,sans-serif;box-shadow:0 4px 12px rgba(0,0,0,.35);z-index:99;display:none;white-space:nowrap;letter-spacing:.04em;";
     viewer.container.appendChild(tooltip);
 
-    if (onSelectAircraft) {
-      handler.setInputAction((click: Cesium.ScreenSpaceEventHandler.PositionedEvent) => {
-        const picked = viewer.scene.pick(click.position);
-        if (picked && picked.primitive instanceof Cesium.Billboard) {
-          const icao = aircraftBillboardIndexRef.current.get(picked.primitive);
-          if (icao) onSelectAircraft(icao);
-        }
-      }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
-    }
+    handler.setInputAction((click: Cesium.ScreenSpaceEventHandler.PositionedEvent) => {
+      const picked = viewer.scene.pick(click.position);
+      // Country label click → fly to centroid at 1500km altitude. Trumps
+      // the surface-pick handler so a click on a country label doesn't
+      // also drop a pin at the click point underneath.
+      if (picked && picked.id instanceof Cesium.Entity && picked.id.properties?.isCountry?.getValue()) {
+        const props = picked.id.properties;
+        const lon = props.countryLon.getValue();
+        const lat = props.countryLat.getValue();
+        viewer.camera.flyTo({
+          destination: Cesium.Cartesian3.fromDegrees(lon, lat, 1_500_000),
+          orientation: { heading: 0, pitch: -Cesium.Math.PI_OVER_TWO, roll: 0 },
+          duration: 1.6,
+        });
+        return;
+      }
+      // Aircraft billboard click → select.
+      if (picked && picked.primitive instanceof Cesium.Billboard && onSelectAircraft) {
+        const icao = aircraftBillboardIndexRef.current.get(picked.primitive);
+        if (icao) onSelectAircraft(icao);
+      }
+    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
     handler.setInputAction((move: Cesium.ScreenSpaceEventHandler.MotionEvent) => {
       const picked = viewer.scene.pick(move.endPosition);
