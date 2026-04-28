@@ -210,11 +210,16 @@ export default function Surface({
   const issEntityRef = useRef<Cesium.Entity | null>(null);
   const tiangongEntityRef = useRef<Cesium.Entity | null>(null);
   const hubbleEntityRef = useRef<Cesium.Entity | null>(null);
-  // Past positions buffer for ISS — used to draw the visible portion of
-  // the ground track behind the current spot. Limited to ~90 min worth
-  // of polled samples (= ~1 orbit, since one orbit is 92 min).
+  // Past positions buffer for each LEO sat — used to draw the visible
+  // portion of the ground track behind the current spot. Limited to
+  // ~90 min worth of polled samples (= ~1 orbit, since one LEO orbit
+  // is 92 min).
   const issTrackPositionsRef = useRef<Array<{ lat: number; lon: number; t: number }>>([]);
+  const tiangongTrackPositionsRef = useRef<Array<{ lat: number; lon: number; t: number }>>([]);
+  const hubbleTrackPositionsRef = useRef<Array<{ lat: number; lon: number; t: number }>>([]);
   const issGroundTrackEntityRef = useRef<Cesium.Entity | null>(null);
+  const tiangongGroundTrackEntityRef = useRef<Cesium.Entity | null>(null);
+  const hubbleGroundTrackEntityRef = useRef<Cesium.Entity | null>(null);
 
   // Resolve env token if no prop token. Production deploys bake VITE_CESIUM_TOKEN.
   const env = (import.meta as any).env;
@@ -511,9 +516,11 @@ export default function Surface({
       stormEntitiesRef.current = [];
       auroraOvalEntitiesRef.current.forEach((e) => viewer.entities.remove(e));
       auroraOvalEntitiesRef.current = [];
-      if (issGroundTrackEntityRef.current) {
-        viewer.entities.remove(issGroundTrackEntityRef.current);
-        issGroundTrackEntityRef.current = null;
+      for (const ref of [issGroundTrackEntityRef, tiangongGroundTrackEntityRef, hubbleGroundTrackEntityRef]) {
+        if (ref.current) {
+          viewer.entities.remove(ref.current);
+          ref.current = null;
+        }
       }
       countryLabelsRef.current.forEach((e) => viewer.entities.remove(e));
       countryLabelsRef.current = [];
@@ -884,59 +891,60 @@ export default function Surface({
     };
   }, [showTerminator]);
 
-  // ===== ISS ground-track polyline =====
-  // Builds a recent track of the ISS sub-satellite point by appending
-  // each polled position to a ring buffer. Older than ~90 min are
-  // dropped (one full orbit). Drawn as a soft glowing polyline.
+  // ===== LEO satellite ground tracks (ISS / Tiangong / Hubble) =====
+  // Each polled position is appended to a ring buffer; older than 90 min
+  // (≈ one orbit) are dropped. Render the buffer as a glowing polyline
+  // clamped to the globe surface.
   useEffect(() => {
     const viewer = viewerRef.current;
     if (!viewer) return;
-    if (!issPosition) {
-      // Layer disabled or position not yet loaded → drop the polyline.
-      if (issGroundTrackEntityRef.current) {
-        viewer.entities.remove(issGroundTrackEntityRef.current);
-        issGroundTrackEntityRef.current = null;
-      }
-      issTrackPositionsRef.current = [];
-      return;
-    }
+    type Track = {
+      pos: { lat: number; lon: number } | null | undefined;
+      buf: React.MutableRefObject<Array<{ lat: number; lon: number; t: number }>>;
+      entity: React.MutableRefObject<Cesium.Entity | null>;
+      color: string;
+    };
+    const tracks: Track[] = [
+      { pos: issPosition,      buf: issTrackPositionsRef,      entity: issGroundTrackEntityRef,      color: "#7cffb1" },
+      { pos: tiangongPosition, buf: tiangongTrackPositionsRef, entity: tiangongGroundTrackEntityRef, color: "#ffd66b" },
+      { pos: hubblePosition,   buf: hubbleTrackPositionsRef,   entity: hubbleGroundTrackEntityRef,   color: "#5cb5ff" },
+    ];
     const now = Date.now();
-    const buf = issTrackPositionsRef.current;
-    // Push the latest reading. If we've already got a sample at this
-    // exact lat/lon (no movement since last poll), skip — avoids
-    // ballooning the buffer when the layer is freshly toggled and the
-    // poll interval hasn't ticked yet.
-    const lastSample = buf[buf.length - 1];
-    if (!lastSample || lastSample.lat !== issPosition.lat || lastSample.lon !== issPosition.lon) {
-      buf.push({ lat: issPosition.lat, lon: issPosition.lon, t: now });
-    }
-    // Trim to last 90 min.
     const cutoff = now - 90 * 60 * 1000;
-    while (buf.length > 0 && buf[0].t < cutoff) buf.shift();
-
-    if (issGroundTrackEntityRef.current) {
-      viewer.entities.remove(issGroundTrackEntityRef.current);
+    for (const t of tracks) {
+      if (!t.pos) {
+        if (t.entity.current) {
+          viewer.entities.remove(t.entity.current);
+          t.entity.current = null;
+        }
+        t.buf.current = [];
+        continue;
+      }
+      const buf = t.buf.current;
+      const last = buf[buf.length - 1];
+      if (!last || last.lat !== t.pos.lat || last.lon !== t.pos.lon) {
+        buf.push({ lat: t.pos.lat, lon: t.pos.lon, t: now });
+      }
+      while (buf.length > 0 && buf[0].t < cutoff) buf.shift();
+      if (t.entity.current) viewer.entities.remove(t.entity.current);
+      if (buf.length < 2) {
+        t.entity.current = null;
+        continue;
+      }
+      const positions = buf.map((p) => Cesium.Cartesian3.fromDegrees(p.lon, p.lat, 0));
+      t.entity.current = viewer.entities.add({
+        polyline: {
+          positions,
+          width: 2,
+          material: new Cesium.PolylineGlowMaterialProperty({
+            color: Cesium.Color.fromCssColorString(t.color).withAlpha(0.55),
+            glowPower: 0.25,
+          }),
+          clampToGround: true,
+        },
+      });
     }
-    if (buf.length < 2) {
-      issGroundTrackEntityRef.current = null;
-      return;
-    }
-    // Convert to Cartesians at sea level so the line clamps to the globe.
-    const positions: Cesium.Cartesian3[] = buf.map((p) =>
-      Cesium.Cartesian3.fromDegrees(p.lon, p.lat, 0)
-    );
-    issGroundTrackEntityRef.current = viewer.entities.add({
-      polyline: {
-        positions,
-        width: 2,
-        material: new Cesium.PolylineGlowMaterialProperty({
-          color: Cesium.Color.fromCssColorString("#7cffb1").withAlpha(0.6),
-          glowPower: 0.25,
-        }),
-        clampToGround: true,
-      },
-    });
-  }, [issPosition]);
+  }, [issPosition, tiangongPosition, hubblePosition]);
 
   // ===== Live LEO satellite markers (ISS / Tiangong / Hubble) =====
   // Reuses the polled positions from App.tsx. Each satellite is a
