@@ -363,6 +363,7 @@ function App() {
   // Surface → Atlas at high ones, so the user gets the right engine for the
   // zoom level without thinking about modes.
   const [autoModeSwitch, setAutoModeSwitch] = useState(false);
+  const [surfaceImagery, setSurfaceImagery] = useState<"bing" | "esri" | "osm">("bing");
 
   // Per-aircraft history: last 12 polled positions (~2.4 minutes) so the
   // selected plane can render a fading trail behind it. Stored in a ref so
@@ -1930,6 +1931,7 @@ function App() {
                 : undefined}
               weatherOpacity={radarOpacity}
               show3DBuildings={layers.buildings3D !== false}
+              imageryStyle={surfaceImagery}
               selectedAircraft={selectedAircraftId && aircraftSnapshot ? (() => {
                 const a = aircraftSnapshot.aircraft.find((x) => x.icao24 === selectedAircraftId);
                 return a ? { icao24: a.icao24, lat: a.lat, lon: a.lon, altitudeM: a.altitudeM, headingDeg: a.headingDeg, velocityMs: a.velocityMs } : null;
@@ -2225,6 +2227,9 @@ function App() {
             { id: "layerPinPaths", label: layers.pinPaths ? "Hide pin paths" : "Show great-circle pin paths", group: "Layers", icon: Compass, run: () => toggleLayer("pinPaths") },
             // Imagery
             { id: "imgBundled", label: "Imagery: Bundled (offline)", group: "Imagery", icon: Sparkles, run: () => updateImagery({ source: "bundled" }) },
+            { id: "surfBing", label: "Surface imagery: Bing Aerial", group: "Imagery", icon: Mountain, run: () => setSurfaceImagery("bing") },
+            { id: "surfEsri", label: "Surface imagery: ESRI World Imagery", group: "Imagery", icon: Mountain, run: () => setSurfaceImagery("esri") },
+            { id: "surfOsm", label: "Surface imagery: OpenStreetMap", group: "Imagery", icon: Mountain, run: () => setSurfaceImagery("osm") },
             { id: "imgViirs", label: "Imagery: NASA Live VIIRS true-color", group: "Imagery", icon: Sparkles, run: () => updateImagery({ source: "live", layerId: "viirsTrueColor" }) },
             { id: "imgModis", label: "Imagery: NASA Live MODIS Terra", group: "Imagery", icon: Sparkles, run: () => updateImagery({ source: "live", layerId: "modisTrueColor" }) },
             { id: "imgFires", label: "Imagery: MODIS active fires overlay", group: "Imagery", icon: Sparkles, run: () => updateImagery({ source: "live", layerId: "modisFires" }) },

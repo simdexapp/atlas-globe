@@ -75,7 +75,8 @@ export default function Surface({
   weatherOpacity,
   show3DBuildings,
   selectedAircraft,
-  onSelectAircraft
+  onSelectAircraft,
+  imageryStyle
 }: {
   token: string;
   onCameraChange: (lat: number, lon: number, altKm: number) => void;
@@ -92,11 +93,11 @@ export default function Surface({
   weatherTilePath?: string;
   weatherOpacity?: number;
   show3DBuildings?: boolean;
-  // Selected aircraft (matched by icao24) — when set, renders a 5-min
-  // predicted-path polyline like Atlas does.
   selectedAircraft?: { icao24: string; lat: number; lon: number; altitudeM: number; headingDeg: number; velocityMs: number } | null;
-  // Click handler for billboards: returns the icao24 of the clicked plane.
   onSelectAircraft?: (icao24: string | null) => void;
+  // Base imagery: 'bing' = Bing Aerial (Cesium ion asset 2),
+  // 'esri' = ESRI World Imagery (asset 3812), 'osm' = OpenStreetMap.
+  imageryStyle?: "bing" | "esri" | "osm";
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Cesium.Viewer | null>(null);
@@ -189,20 +190,7 @@ export default function Surface({
         .then((terrain) => { viewer.terrainProvider = terrain; })
         .catch(() => { /* fallback to ellipsoid */ });
 
-      // Cesium World Imagery (asset 2 = Bing Aerial). Best-quality global imagery.
-      Cesium.IonImageryProvider.fromAssetId(2)
-        .then((provider) => {
-          viewer.imageryLayers.removeAll();
-          viewer.imageryLayers.addImageryProvider(provider);
-        })
-        .catch(() => {
-          // Fallback: OpenStreetMap (free, no token needed)
-          viewer.imageryLayers.addImageryProvider(
-            new Cesium.OpenStreetMapImageryProvider({
-              url: "https://tile.openstreetmap.org/",
-            })
-          );
-        });
+      // Initial imagery is set by the imageryStyle effect below.
 
       // Cesium OSM Buildings — global 3D building footprints + heights.
       Cesium.Cesium3DTileset.fromIonAssetId(96188)
@@ -361,6 +349,44 @@ export default function Surface({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tokenToUse]);
+
+  // ===== Base imagery picker =====
+  // Replace the base layer when imageryStyle changes. Weather radar (if
+  // enabled) is added as a separate layer above, so swapping the base
+  // doesn't disturb it — but we re-add radar after to keep it on top.
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    const style = imageryStyle || "bing";
+    const apply = async () => {
+      try {
+        let provider: Cesium.ImageryProvider;
+        if (style === "osm") {
+          provider = new Cesium.OpenStreetMapImageryProvider({ url: "https://tile.openstreetmap.org/" });
+        } else if (style === "esri") {
+          provider = await Cesium.IonImageryProvider.fromAssetId(3812);
+        } else {
+          provider = await Cesium.IonImageryProvider.fromAssetId(2);
+        }
+        // Remove all existing imagery, add the new base.
+        const radarLayer = weatherImageryLayerRef.current;
+        viewer.imageryLayers.removeAll(false);
+        viewer.imageryLayers.addImageryProvider(provider);
+        // Re-attach the weather radar layer if it was active so it stays
+        // on top of the new base.
+        if (radarLayer) {
+          // The radar provider stays valid; just re-add it on top.
+          viewer.imageryLayers.add(radarLayer);
+        }
+      } catch {
+        // Fall back to OSM
+        const osm = new Cesium.OpenStreetMapImageryProvider({ url: "https://tile.openstreetmap.org/" });
+        viewer.imageryLayers.removeAll(false);
+        viewer.imageryLayers.addImageryProvider(osm);
+      }
+    };
+    apply();
+  }, [imageryStyle]);
 
   // ===== 3D Buildings toggle =====
   useEffect(() => {
