@@ -2441,6 +2441,7 @@ function App() {
             { id: "surfTiltTop", label: "Surface camera: top-down (90°)", group: "Imagery", icon: Mountain, run: () => setSurfaceTilt((c) => ({ id: (c?.id ?? 0) + 1, pitchDeg: 90 })) },
             { id: "surfTilt45", label: "Surface camera: oblique (45°)", group: "Imagery", icon: Mountain, run: () => setSurfaceTilt((c) => ({ id: (c?.id ?? 0) + 1, pitchDeg: 45 })) },
             { id: "surfTilt30", label: "Surface camera: low oblique (30°)", group: "Imagery", icon: Mountain, run: () => setSurfaceTilt((c) => ({ id: (c?.id ?? 0) + 1, pitchDeg: 30 })) },
+            { id: "surfTiltHorizon", label: "Surface camera: horizon view (10°)", group: "Imagery", icon: Mountain, run: () => setSurfaceTilt((c) => ({ id: (c?.id ?? 0) + 1, pitchDeg: 10 })) },
             { id: "exag1", label: "Terrain exaggeration: 1× (real)", group: "Imagery", icon: Mountain, run: () => setSurfaceTerrainExag(1) },
             { id: "exag15", label: "Terrain exaggeration: 1.5×", group: "Imagery", icon: Mountain, run: () => setSurfaceTerrainExag(1.5) },
             { id: "exag2", label: "Terrain exaggeration: 2× (dramatic)", group: "Imagery", icon: Mountain, run: () => setSurfaceTerrainExag(2) },
