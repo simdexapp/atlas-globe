@@ -227,7 +227,9 @@ export default function Surface({
     // Cesium build it's a getter-only property — assigning it throws. Skip.)
 
     // ===== Atmosphere + lighting =====
-    viewer.scene.globe.enableLighting = true;            // sun-driven day/night on globe
+    // enableLighting samples sun direction per pixel for the day/night
+    // terminator. It's pretty but pricey on mobile GPUs — off there.
+    viewer.scene.globe.enableLighting = !isLow;
     viewer.scene.fog.enabled = true;
     viewer.scene.fog.density = 0.0001;
     if (viewer.scene.skyAtmosphere) {
@@ -242,7 +244,13 @@ export default function Surface({
 
     // ===== Async asset loading: terrain + imagery + 3D buildings =====
     if (tokenToUse) {
-      Cesium.createWorldTerrainAsync({ requestVertexNormals: true, requestWaterMask: true })
+      // Mobile: skip vertex normals (no shaded relief) and water mask (no
+      // shimmer) to halve the per-tile payload. Visual loss is minor at the
+      // mobile fillrate ceiling we're operating in.
+      Cesium.createWorldTerrainAsync({
+        requestVertexNormals: !isLow,
+        requestWaterMask: !isLow,
+      })
         .then((terrain) => { viewer.terrainProvider = terrain; })
         .catch(() => { /* fallback to ellipsoid */ });
 
