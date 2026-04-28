@@ -115,6 +115,7 @@ type LayerVisibility = {
   dayInfo: boolean;
   launches: boolean;
   worldDigest: boolean;
+  noonMeridian: boolean;
 };
 
 type GlobeSettings = {
@@ -171,7 +172,7 @@ type PersistedState = {
   pins?: Pin[];
 };
 
-const STORAGE_KEY = "atlas-globe-state-v13";
+const STORAGE_KEY = "atlas-globe-state-v14";
 const EARTH_RADIUS_KM = 6371;
 const MIN_DISTANCE = 1.0008;        // ~5 km above surface (texture-pixelated, but real zoom)
 const MAX_DISTANCE = 12;            // far view from space
@@ -208,7 +209,8 @@ const defaultLayers: LayerVisibility = {
   timeClock: false,
   dayInfo: false,
   launches: false,
-  worldDigest: false
+  worldDigest: false,
+  noonMeridian: false
 };
 
 const FAMOUS_VOLCANOES: { id: string; name: string; lat: number; lon: number }[] = [
@@ -340,6 +342,9 @@ function App() {
   const [aircraftMinAltFt, setAircraftMinAltFt] = useState(0);
   const [aircraftMaxAltFt, setAircraftMaxAltFt] = useState(50000);
   const [aircraftCategory, setAircraftCategory] = useState<"all" | "commercial" | "private" | "military" | "heli">("all");
+  // Optional callsign-prefix filter on top of category. e.g. 'UAL' = United,
+  // 'AAL' = American, 'DAL' = Delta. Empty = all airlines.
+  const [aircraftAirlinePrefix, setAircraftAirlinePrefix] = useState("");
   const [hoveredAircraftId, setHoveredAircraftId] = useState<string | null>(null);
   const [hoverPos, setHoverPos] = useState<{ x: number; y: number } | null>(null);
 
@@ -407,8 +412,11 @@ function App() {
     if (list.length === 0) return list;
     const minM = aircraftMinAltFt * 0.3048;
     const maxM = aircraftMaxAltFt * 0.3048;
+    const prefix = aircraftAirlinePrefix.trim().toUpperCase();
     return list.filter((a) => {
       if (a.altitudeM < minM || a.altitudeM > maxM) return false;
+      // Airline filter is independent of category — applies on top.
+      if (prefix && !(a.callsign || "").toUpperCase().startsWith(prefix)) return false;
       if (aircraftCategory === "all") return true;
       // ADS-B category codes:
       //   A1-A3 = light/medium/heavy commercial fixed-wing
@@ -431,7 +439,7 @@ function App() {
         default:           return true;
       }
     });
-  }, [aircraftSnapshot, aircraftMinAltFt, aircraftMaxAltFt, aircraftCategory]);
+  }, [aircraftSnapshot, aircraftMinAltFt, aircraftMaxAltFt, aircraftCategory, aircraftAirlinePrefix]);
   const [selectedAircraftId, setSelectedAircraftId] = useState<string | null>(null);
   const [timelapseOpen, setTimelapseOpen] = useState(false);
   const [timelapseFrames, setTimelapseFrames] = useState<TimelapseFrame[]>([]);
@@ -2167,6 +2175,9 @@ function App() {
             { id: "layerEonet", label: layers.eonet ? "Hide natural-events overlay" : "Show natural events (NASA EONET)", group: "Layers", icon: Sparkles, run: () => toggleLayer("eonet") },
             { id: "layerAurora", label: layers.aurora ? "Hide aurora forecast" : "Show aurora forecast (NOAA OVATION)", group: "Layers", icon: Sparkles, run: () => toggleLayer("aurora") },
             { id: "layerLaunches", label: layers.launches ? "Hide rocket launches" : "Show upcoming rocket launches", group: "Layers", icon: Telescope, run: () => toggleLayer("launches") },
+            { id: "layerNoon", label: layers.noonMeridian ? "Hide solar-noon meridian" : "Show solar-noon meridian", group: "Layers", icon: SunIcon, run: () => toggleLayer("noonMeridian") },
+            { id: "layerTerminator", label: layers.terminator ? "Hide day/night terminator" : "Show day/night terminator", group: "Layers", icon: Compass, run: () => toggleLayer("terminator") },
+            { id: "layerSubsolar", label: layers.subsolar ? "Hide subsolar point" : "Show subsolar point (sun overhead)", group: "Layers", icon: SunIcon, run: () => toggleLayer("subsolar") },
             { id: "widgetNeo", label: layers.neoWatch ? "Hide asteroid watch" : "Show asteroid watch (NASA NeoWS)", group: "Widgets", icon: Telescope, run: () => toggleLayer("neoWatch") },
             { id: "widgetClock", label: layers.timeClock ? "Hide world-clock widget" : "Show world-clock widget", group: "Widgets", icon: Compass, run: () => toggleLayer("timeClock") },
             { id: "widgetDayInfo", label: layers.dayInfo ? "Hide sunrise/sunset widget" : "Show sunrise/sunset for camera location", group: "Widgets", icon: SunIcon, run: () => toggleLayer("dayInfo") },
@@ -2741,6 +2752,17 @@ function App() {
                 />
               </div>
             </label>
+            <label className="atlasFlightAirline">
+              <span>Airline (callsign prefix)</span>
+              <input
+                type="text"
+                className="atlasFlightAirlineInput"
+                value={aircraftAirlinePrefix}
+                onChange={(e) => setAircraftAirlinePrefix(e.target.value.toUpperCase())}
+                placeholder="UAL · AAL · DAL · BAW · …"
+                maxLength={6}
+              />
+            </label>
           </div>
         </div>
       )}
@@ -2907,6 +2929,7 @@ function LayersPanel({ layers, onToggle, bordersLoading }: { layers: LayerVisibi
     { key: "sun", label: "Visible sun (in space)", icon: SunIcon },
     { key: "moon", label: "Visible moon (in space)", icon: Globe2 },
     { key: "terminator", label: "Day/night terminator line", icon: Compass },
+    { key: "noonMeridian", label: "Solar-noon meridian (where sun is overhead)", icon: SunIcon },
     { key: "subsolar", label: "Subsolar point (sun overhead)", icon: SunIcon },
     { key: "constellations", label: "Constellation lines (Orion etc)", icon: Sparkles },
     { key: "compass", label: "Compass / heading widget", icon: Navigation },
@@ -4241,6 +4264,7 @@ function GlobeCanvas({
             <AuroraOverlay texture={auroraTexture} />
           )}
           {layers.terminator && <TerminatorRing sunDirection={sunDirection} />}
+          {layers.noonMeridian && <SolarNoonMeridian />}
           {layers.subsolar && <SubsolarPoint sunDirection={sunDirection} />}
         </EarthGroup>
         {layers.sun && <SunMesh azimuth={globe.sunAzimuth} elevation={globe.sunElevation} />}
@@ -4279,6 +4303,57 @@ function SunMesh({ azimuth, elevation }: { azimuth: number; elevation: number })
       <sphereGeometry args={[2.4, 24, 24]} />
       <meshBasicMaterial color="#fff5cc" />
     </mesh>
+  );
+}
+
+// Solar-noon meridian: the longitude line directly under the sun right now.
+// At any instant, half the Earth is in daylight and the meridian where the
+// sun is highest overhead is at lon = -(utcHours-12)*15. Draw it as a thin
+// gold great-circle curve from north pole to south pole through that lon.
+function SolarNoonMeridian() {
+  const ref = useRef<THREE.LineSegments>(null);
+  const positions = useMemo(() => {
+    const pts: number[] = [];
+    // Build at lon=0; we'll rotate the line in useFrame so the geometry
+    // is allocated once and just orients toward the current subsolar lon.
+    const radius = 1.001;
+    const segments = 64;
+    for (let i = 0; i <= segments; i++) {
+      const t = i / segments;
+      const lat = 90 - t * 180;     // +90 → -90
+      const phi = (90 - lat) * Math.PI / 180;
+      const x = radius * Math.sin(phi);
+      const y = radius * Math.cos(phi);
+      // z=0 because lon=0 in our convention puts +X
+      // Build segment pairs (i,i+1) for lineSegments
+      pts.push(x, y, 0);
+      if (i > 0 && i < segments) pts.push(x, y, 0); // duplicate inner so each segment has 2 points
+    }
+    return new Float32Array(pts);
+  }, []);
+  const geom = useMemo(() => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    return g;
+  }, [positions]);
+  useEffect(() => () => geom.dispose(), [geom]);
+
+  // Spin to current subsolar lon every frame.
+  useFrame(() => {
+    if (!ref.current) return;
+    const now = new Date();
+    const utcHours = now.getUTCHours() + now.getUTCMinutes() / 60 + now.getUTCSeconds() / 3600;
+    const subsolarLon = -((utcHours - 12) * 15);
+    // Our latLonToVec3 negates lon, so spin by +lon*π/180 (positive Y rotation)
+    // to bring the lon=0 meridian to subsolarLon's actual sphere position.
+    const theta = -subsolarLon * Math.PI / 180;
+    ref.current.rotation.set(0, theta, 0);
+  });
+
+  return (
+    <lineSegments ref={ref} geometry={geom}>
+      <lineBasicMaterial color="#ffd66b" transparent opacity={0.7} depthWrite={false} />
+    </lineSegments>
   );
 }
 
