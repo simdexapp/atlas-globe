@@ -45,6 +45,7 @@ import * as THREE from "three";
 import { GIBS_LAYERS, DEFAULT_GIBS_DAY, DEFAULT_GIBS_NIGHT, todayUTC, loadGibsComposite } from "./tiles";
 import { fetchAllAircraft, altitudeColor, altitudeFt, knotsFromMs, type Aircraft, type FlightSnapshot } from "./flights";
 import { dateRange, shiftDate, loadTimelapseFrames, disposeFrames, type TimelapseFrame } from "./timelapse";
+import { fetchRadarManifest, composeRadarFrame, frameLabel, type RadarManifest, type RadarFrame } from "./weather";
 
 const SurfaceMode = lazy(() => import("./Surface"));
 
@@ -100,6 +101,7 @@ type LayerVisibility = {
   volcanoes: boolean;
   compass: boolean;
   aircraft: boolean;
+  weather: boolean;
 };
 
 type GlobeSettings = {
@@ -156,7 +158,7 @@ type PersistedState = {
   pins?: Pin[];
 };
 
-const STORAGE_KEY = "atlas-globe-state-v5";
+const STORAGE_KEY = "atlas-globe-state-v6";
 const EARTH_RADIUS_KM = 6371;
 const MIN_DISTANCE = 1.0008;        // ~5 km above surface (texture-pixelated, but real zoom)
 const MAX_DISTANCE = 12;            // far view from space
@@ -185,7 +187,8 @@ const defaultLayers: LayerVisibility = {
   constellations: false,
   volcanoes: false,
   compass: true,
-  aircraft: false
+  aircraft: false,
+  weather: false
 };
 
 const FAMOUS_VOLCANOES: { id: string; name: string; lat: number; lon: number }[] = [
@@ -295,6 +298,15 @@ function App() {
   const [aircraftMinAltFt, setAircraftMinAltFt] = useState(0);
   const [aircraftMaxAltFt, setAircraftMaxAltFt] = useState(50000);
   const [aircraftCategory, setAircraftCategory] = useState<"all" | "commercial" | "private" | "military" | "heli">("all");
+  const [hoveredAircraftId, setHoveredAircraftId] = useState<string | null>(null);
+  const [hoverPos, setHoverPos] = useState<{ x: number; y: number } | null>(null);
+
+  const [radarManifest, setRadarManifest] = useState<RadarManifest | null>(null);
+  const [radarTexture, setRadarTexture] = useState<THREE.CanvasTexture | null>(null);
+  const [radarFrameIndex, setRadarFrameIndex] = useState(-1);   // -1 = latest
+  const [radarLoading, setRadarLoading] = useState(false);
+  const [radarOpacity, setRadarOpacity] = useState(0.7);
+  const radarAbortRef = useRef<AbortController | null>(null);
 
   const filteredAircraft = useMemo(() => {
     const list = aircraftSnapshot?.aircraft ?? [];
@@ -482,6 +494,61 @@ function App() {
       window.clearInterval(handle);
     };
   }, [layers.aircraft]);
+
+  // Weather radar — fetch the manifest once when the layer turns on, then refresh every 5 min
+  useEffect(() => {
+    if (!layers.weather) {
+      setRadarManifest(null);
+      setRadarTexture((prev) => { prev?.dispose(); return null; });
+      return;
+    }
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const m = await fetchRadarManifest();
+        if (!cancelled) setRadarManifest(m);
+      } catch (e) {
+        if (!cancelled) showToast(`Weather: ${(e as Error).message}`);
+      }
+    };
+    tick();
+    const handle = window.setInterval(tick, 5 * 60 * 1000);
+    return () => { cancelled = true; window.clearInterval(handle); };
+  }, [layers.weather]);
+
+  // Compose the requested radar frame into a CanvasTexture whenever the
+  // manifest or selected frame index changes.
+  useEffect(() => {
+    if (!layers.weather || !radarManifest) {
+      setRadarTexture((prev) => { prev?.dispose(); return null; });
+      return;
+    }
+    const past = radarManifest.past;
+    if (past.length === 0) return;
+    const frame: RadarFrame = radarFrameIndex < 0 ? past[past.length - 1] : past[Math.min(radarFrameIndex, past.length - 1)];
+
+    radarAbortRef.current?.abort();
+    const controller = new AbortController();
+    radarAbortRef.current = controller;
+    setRadarLoading(true);
+    composeRadarFrame(radarManifest, frame, 2, controller.signal)
+      .then((canvas) => {
+        if (controller.signal.aborted) return;
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.flipY = false;
+        tex.wrapS = THREE.RepeatWrapping;
+        tex.wrapT = THREE.ClampToEdgeWrapping;
+        tex.needsUpdate = true;
+        setRadarTexture((prev) => { prev?.dispose(); return tex; });
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!controller.signal.aborted) setRadarLoading(false);
+      });
+    return () => controller.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layers.weather, radarManifest, radarFrameIndex]);
 
   // Persist
   useEffect(() => {
@@ -1451,6 +1518,9 @@ function App() {
             hubblePosition={hubblePosition}
             aircraft={filteredAircraft}
             selectedAircraftId={selectedAircraftId}
+            radarTexture={radarTexture}
+            radarOpacity={radarOpacity}
+            onAircraftHover={(id, p) => { setHoveredAircraftId(id); setHoverPos(p); }}
             pins={pins}
             earthquakes={earthquakes}
             borders={borders}
@@ -1675,6 +1745,7 @@ function App() {
             { id: "myLoc", label: "Fly to my location", group: "View", icon: Navigation, run: () => flyToMyLocation() },
             // Layers
             { id: "layerAircraft", label: layers.aircraft ? "Hide aircraft" : "Show live aircraft", group: "Layers", icon: Plane, run: () => toggleLayer("aircraft") },
+            { id: "layerWeather", label: layers.weather ? "Hide weather radar" : "Show live weather radar", group: "Layers", icon: Cloud, run: () => toggleLayer("weather") },
             { id: "layerClouds", label: layers.clouds ? "Hide clouds" : "Show clouds", group: "Layers", icon: Cloud, run: () => toggleLayer("clouds") },
             { id: "layerNight", label: layers.nightLights ? "Hide city lights" : "Show city lights", group: "Layers", icon: SunIcon, run: () => toggleLayer("nightLights") },
             { id: "layerAtm", label: layers.atmosphere ? "Hide atmosphere" : "Show atmosphere", group: "Layers", icon: Sparkles, run: () => toggleLayer("atmosphere") },
@@ -1734,6 +1805,54 @@ function App() {
           <Sparkles size={11} />
           <span>Streaming NASA imagery… {Math.round(imageryProgress * 100)}%</span>
           <div className="atlasImageryStatusBar"><div style={{ width: `${imageryProgress * 100}%` }} /></div>
+        </div>
+      )}
+
+      {hoveredAircraftId && hoverPos && aircraftSnapshot && !selectedAircraftId && (() => {
+        const a = aircraftSnapshot.aircraft.find((x) => x.icao24 === hoveredAircraftId);
+        if (!a) return null;
+        return (
+          <div className="atlasHoverTip" style={{ left: hoverPos.x + 14, top: hoverPos.y + 14 }}>
+            <strong>{a.callsign || a.icao24.toUpperCase()}</strong>
+            <span>{altitudeFt(a.altitudeM).toLocaleString()} ft · {knotsFromMs(a.velocityMs)} kt</span>
+            {(a.registration || a.type) && (
+              <span className="atlasHoverTipSub">{a.registration} {a.type}</span>
+            )}
+          </div>
+        );
+      })()}
+
+      {layers.weather && radarManifest && radarManifest.past.length > 0 && (
+        <div className="atlasWeatherControls" role="status">
+          <div className="atlasWeatherHead">
+            <Cloud size={12} />
+            <span>Live precipitation radar</span>
+            <span className="atlasWeatherFrame">
+              {(() => {
+                const idx = radarFrameIndex < 0 ? radarManifest.past.length - 1 : radarFrameIndex;
+                return frameLabel(radarManifest.past[idx]);
+              })()}
+            </span>
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={radarManifest.past.length - 1}
+            value={radarFrameIndex < 0 ? radarManifest.past.length - 1 : radarFrameIndex}
+            onChange={(e) => setRadarFrameIndex(parseInt(e.target.value, 10))}
+          />
+          <div className="atlasWeatherFooter">
+            <button type="button" className="atlasBtn small" onClick={() => setRadarFrameIndex(-1)}>Latest</button>
+            <label>
+              <span>Opacity</span>
+              <input
+                type="range" min={0.1} max={1} step={0.05}
+                value={radarOpacity}
+                onChange={(e) => setRadarOpacity(parseFloat(e.target.value))}
+              />
+            </label>
+            {radarLoading && <span className="atlasWeatherLoading">loading…</span>}
+          </div>
         </div>
       )}
 
@@ -1962,6 +2081,7 @@ function LayersPanel({ layers, onToggle, bordersLoading }: { layers: LayerVisibi
     { key: "earthquakes", label: "Earthquakes (24h, USGS)", icon: Sparkles },
     { key: "volcanoes", label: "Notable volcanoes (24)", icon: Sparkles },
     { key: "aircraft", label: "Aircraft — live (every plane)", icon: Plane },
+    { key: "weather", label: "Weather radar — live precipitation (RainViewer)", icon: Cloud },
     { key: "iss", label: "ISS — live position", icon: Telescope },
     { key: "tiangong", label: "Tiangong CSS — live position", icon: Telescope },
     { key: "hubble", label: "Hubble — live position", icon: Telescope },
@@ -3017,6 +3137,9 @@ function GlobeCanvas({
   hubblePosition,
   aircraft,
   selectedAircraftId,
+  radarTexture,
+  radarOpacity,
+  onAircraftHover,
   pins,
   earthquakes,
   borders,
@@ -3039,6 +3162,9 @@ function GlobeCanvas({
   hubblePosition: { lat: number; lon: number } | null;
   aircraft: Aircraft[];
   selectedAircraftId: string | null;
+  radarTexture: THREE.Texture | null;
+  radarOpacity: number;
+  onAircraftHover: (id: string | null, screen: { x: number; y: number } | null) => void;
   pins: Pin[];
   earthquakes: Earthquake[];
   borders: Float32Array | null;
@@ -3080,7 +3206,10 @@ function GlobeCanvas({
           {layers.pinPaths && <PinPaths pins={pins} sunDirection={sunDirection} />}
           {layers.pins && <PinMarkers pins={pins} selectedId={selectedPinId} onSelect={onSelectPin} />}
           {layers.aircraft && aircraft.length > 0 && (
-            <AircraftLayer aircraft={aircraft} selectedId={selectedAircraftId} onSelect={onSelectAircraft} />
+            <AircraftLayer aircraft={aircraft} selectedId={selectedAircraftId} onSelect={onSelectAircraft} onHover={onAircraftHover} />
+          )}
+          {layers.weather && radarTexture && (
+            <WeatherRadar texture={radarTexture} opacity={radarOpacity} />
           )}
           {layers.terminator && <TerminatorRing sunDirection={sunDirection} />}
           {layers.subsolar && <SubsolarPoint sunDirection={sunDirection} />}
@@ -3403,11 +3532,13 @@ const AIRCRAFT_FRAG = `
 function AircraftLayer({
   aircraft,
   selectedId,
-  onSelect
+  onSelect,
+  onHover
 }: {
   aircraft: Aircraft[];
   selectedId: string | null;
   onSelect: (id: string | null) => void;
+  onHover?: (id: string | null, screen: { x: number; y: number } | null) => void;
 }) {
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const haloRef = useRef<THREE.InstancedMesh>(null);
@@ -3541,6 +3672,12 @@ function AircraftLayer({
         ref={meshRef}
         args={[triGeometry, triMaterial, Math.max(1, aircraft.length)]}
         onPointerDown={handleClick}
+        onPointerMove={(e: any) => {
+          if (typeof e.instanceId !== "number") return;
+          const a = aircraft[e.instanceId];
+          if (a && onHover) onHover(a.icao24, { x: e.clientX, y: e.clientY });
+        }}
+        onPointerOut={() => onHover?.(null, null)}
         frustumCulled={false}
         renderOrder={20}
       />
@@ -4026,6 +4163,70 @@ function Clouds({ opacity, paused }: { opacity: number; paused: boolean }) {
         opacity={opacity}
         depthWrite={false}
       />
+    </mesh>
+  );
+}
+
+// Radar overlay sphere — a thin shell at radius 1.0015 with a custom shader that
+// remaps the source mercator texture to the sphere's lat/lon. We can't just slap
+// a mercator-tiled canvas onto a UV sphere — the standard equirectangular UV
+// would stretch tropics and squish poles incorrectly.
+const RADAR_VERT = `
+  varying vec3 vWorldNormal;
+  void main() {
+    vec4 wp = modelMatrix * vec4(position, 1.0);
+    vWorldNormal = normalize(wp.xyz);
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+const RADAR_FRAG = `
+  precision mediump float;
+  uniform sampler2D uTexture;
+  uniform float uOpacity;
+  varying vec3 vWorldNormal;
+  const float PI = 3.14159265358979;
+
+  void main() {
+    vec3 n = vWorldNormal;
+    float lat = asin(clamp(n.y, -1.0, 1.0));
+    float lon = atan(n.z, n.x);
+    // Web Mercator clips at ±~85.05113° (mercY = ±1). Skip outside that band.
+    if (lat > 1.4835 || lat < -1.4835) discard;
+    float u = (lon + PI) / (2.0 * PI);
+    float mercY = log(tan(PI / 4.0 + lat / 2.0)) / PI;
+    float v = (1.0 - mercY) / 2.0;
+    vec4 c = texture2D(uTexture, vec2(u, v));
+    // RainViewer's PNGs are antialiased blue-violet for rain — anything truly
+    // transparent (no precip) is alpha 0. We boost mid-range alpha for visibility.
+    if (c.a < 0.06) discard;
+    float a = clamp(c.a * 1.4, 0.0, 1.0) * uOpacity;
+    gl_FragColor = vec4(c.rgb, a);
+  }
+`;
+
+function WeatherRadar({ texture, opacity }: { texture: THREE.Texture; opacity: number }) {
+  const material = useMemo(() => {
+    return new THREE.ShaderMaterial({
+      uniforms: {
+        uTexture: { value: texture },
+        uOpacity: { value: opacity }
+      },
+      vertexShader: RADAR_VERT,
+      fragmentShader: RADAR_FRAG,
+      transparent: true,
+      depthWrite: false,
+      side: THREE.FrontSide,
+      toneMapped: false
+    });
+  }, []);
+  // Update uniforms when props change
+  useEffect(() => { material.uniforms.uTexture.value = texture; material.uniformsNeedUpdate = true; }, [material, texture]);
+  useEffect(() => { material.uniforms.uOpacity.value = opacity; }, [material, opacity]);
+  useEffect(() => () => material.dispose(), [material]);
+  return (
+    <mesh renderOrder={5}>
+      <sphereGeometry args={[1.0015, 96, 64]} />
+      <primitive object={material} attach="material" />
     </mesh>
   );
 }

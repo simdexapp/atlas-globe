@@ -1591,23 +1591,26 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
 
 .atlasImageryStatus {
   position: fixed;
-  top: 78px;
-  left: 60px;
+  top: 84px;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 10;
   display: grid;
   grid-template-columns: 14px auto;
   align-items: center;
-  gap: 8px;
+  gap: var(--s-2);
   min-width: 240px;
-  padding: 8px 14px;
-  border: 1px solid color-mix(in srgb, var(--accent), transparent 60%);
+  padding: var(--s-2) var(--s-4);
+  border: 1px solid var(--border-accent);
   border-radius: 99px;
-  background: rgba(10, 15, 28, 0.85);
+  background: rgba(10, 15, 28, 0.88);
   backdrop-filter: blur(10px);
   color: var(--accent);
   font-family: ui-monospace, monospace;
   font-size: 10.5px;
   font-weight: 700;
+  pointer-events: none;
+  box-shadow: var(--shadow-2);
 }
 
 .atlasImageryStatus > div {
@@ -2057,6 +2060,82 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
 .atlasFlightAltRow input[type="range"] { height: 18px; }
 .atlasFlightAltRow input[type="range"]::-webkit-slider-thumb { width: 12px; height: 12px; margin-top: -4px; }
 
+/* Hover tooltip for aircraft (when not selected) */
+.atlasHoverTip {
+  position: fixed;
+  z-index: 8;
+  display: grid;
+  gap: 1px;
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-2);
+  border: 1px solid var(--border-strong);
+  background: rgba(8, 14, 26, 0.94);
+  backdrop-filter: blur(10px);
+  pointer-events: none;
+  font-size: var(--text-xs);
+  color: var(--gray-10);
+  box-shadow: var(--shadow-2);
+  max-width: 220px;
+}
+.atlasHoverTip strong { color: var(--gray-12); font-size: var(--text-base); font-weight: 800; letter-spacing: 0.04em; }
+.atlasHoverTipSub { color: var(--gray-9); font-size: 10px; }
+
+/* Weather radar control panel */
+.atlasWeatherControls {
+  position: fixed;
+  top: 84px;
+  right: 360px;
+  z-index: 6;
+  display: grid;
+  gap: var(--s-2);
+  padding: var(--s-3);
+  width: 280px;
+  border-radius: var(--r-3);
+  border: 1px solid var(--border);
+  background: rgba(8, 14, 26, 0.86);
+  backdrop-filter: blur(14px);
+  font-size: var(--text-xs);
+  color: var(--gray-10);
+  box-shadow: var(--shadow-2);
+}
+.atlasWeatherHead {
+  display: grid;
+  grid-template-columns: 14px 1fr auto;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--text-sm);
+}
+.atlasWeatherHead svg { color: var(--accent); }
+.atlasWeatherHead > span:first-of-type { color: var(--gray-11); font-weight: 600; }
+.atlasWeatherFrame {
+  font-family: ui-monospace, monospace;
+  font-size: 10.5px;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+}
+.atlasWeatherControls input[type="range"] { width: 100%; }
+.atlasWeatherFooter {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.atlasWeatherFooter label {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex: 1;
+  font-size: 10px;
+  color: var(--gray-9);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.atlasWeatherFooter label input[type="range"] { flex: 1; height: 18px; }
+.atlasWeatherLoading {
+  font-size: 10px;
+  color: var(--accent);
+  font-style: italic;
+}
+
 /* Inline "Switch to VIIRS" fix-it card */
 .atlasFixHint {
   display: grid;
@@ -2080,18 +2159,26 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
 
 .atlasAircraftCard {
   position: fixed;
-  top: 78px;
-  left: 60px;
+  /* Pinned to lower-left so it never collides with the flight-controls panel
+     or the centered imagery-loading pill at the top. */
+  top: auto;
+  bottom: 50px;
+  left: 64px;
   z-index: 7;
-  width: 280px;
-  padding: 12px 14px;
-  border-radius: 12px;
-  border: 1px solid #1a2030;
-  background: linear-gradient(180deg, rgba(14, 20, 34, 0.96) 0%, rgba(8, 13, 24, 0.96) 100%);
+  width: 300px;
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-4);
+  border: 1px solid var(--border);
+  background: var(--surface-elevated);
   backdrop-filter: blur(14px);
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
-  color: #e8eef5;
-  font-size: 12px;
+  box-shadow: var(--shadow-3);
+  color: var(--gray-12);
+  font-size: var(--text-base);
+  animation: slideUp var(--dur-base) var(--ease-out);
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 .atlasAircraftCardHead {
   display: flex;
