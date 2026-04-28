@@ -523,12 +523,12 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 }
 
 .inspectorTabs button {
-  padding: 0 var(--s-2);
-  font-size: var(--text-sm);
-  letter-spacing: 0.04em;
+  padding: 0 var(--s-1);
+  font-size: 11px;
+  letter-spacing: 0.02em;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
+  text-overflow: clip;
   height: 30px;
   border: 0;
   border-radius: var(--r-2);
