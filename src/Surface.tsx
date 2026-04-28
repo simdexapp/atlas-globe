@@ -43,6 +43,10 @@ export type SurfaceEarthquake = {
   mag: number;
   depth: number;
   place: string;
+  // Unix ms when the earthquake occurred. Used to pulse fresh quakes
+  // (less than ~1h old) so the user can spot recent activity at a
+  // glance without having to read magnitudes.
+  timeUnixMs?: number;
 };
 
 export type SurfaceVolcano = {
@@ -1375,26 +1379,38 @@ export default function Surface({
     if (!earthquakes) return;
     for (const q of earthquakes) {
       const colorHex = q.mag >= 5 ? "#ff5a5a" : q.mag >= 3.5 ? "#ffb84d" : "#ffd66b";
-      const size = 6 + Math.max(0, q.mag) * 2.2;        // px
+      const baseSize = 6 + Math.max(0, q.mag) * 2.2;        // px
+      // Pulse fresh quakes (under 60 min old) — pixelSize wobbles
+      // between baseSize and baseSize*1.6 on a 1-Hz sine. Older
+      // quakes use a fixed pixelSize.
+      const ageMs = q.timeUnixMs ? Date.now() - q.timeUnixMs : Infinity;
+      const isFresh = ageMs < 60 * 60 * 1000;
+      const pulseStartMs = Date.now();
+      const sizeProperty: any = isFresh
+        ? new Cesium.CallbackProperty(() => {
+            const t = (Date.now() - pulseStartMs) / 1000;
+            return baseSize * (1 + 0.3 * (0.5 + 0.5 * Math.sin(t * 2)));
+          }, false)
+        : baseSize;
       const entity = viewer.entities.add({
         position: Cesium.Cartesian3.fromDegrees(q.lon, q.lat),
         point: {
-          pixelSize: size,
+          pixelSize: sizeProperty,
           color: Cesium.Color.fromCssColorString(colorHex).withAlpha(0.85),
           outlineColor: Cesium.Color.WHITE,
-          outlineWidth: 1,
+          outlineWidth: isFresh ? 2 : 1,
           heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
         label: {
-          text: `M${q.mag.toFixed(1)}`,
+          text: isFresh ? `🔴 M${q.mag.toFixed(1)}` : `M${q.mag.toFixed(1)}`,
           font: "10px ui-monospace, monospace",
           fillColor: Cesium.Color.fromCssColorString(colorHex),
           outlineColor: Cesium.Color.fromCssColorString("rgba(0,0,0,0.9)"),
           outlineWidth: 3,
           style: Cesium.LabelStyle.FILL_AND_OUTLINE,
           verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-          pixelOffset: new Cesium.Cartesian2(0, -size / 2 - 2),
+          pixelOffset: new Cesium.Cartesian2(0, -baseSize / 2 - 2),
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
           distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 2_000_000),
         },

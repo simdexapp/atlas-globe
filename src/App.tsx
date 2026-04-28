@@ -2085,7 +2085,7 @@ function App() {
               realTimeSun={globe.realTimeSun}
               initialCamera={cameraState}
               eonet={layers.eonet ? visibleEonetEvents.map((e) => ({ id: e.id, title: e.title, lat: e.lat, lon: e.lon, category: e.category, color: categoryColor(e.category) })) : []}
-              earthquakes={layers.earthquakes ? earthquakes.map((q) => ({ id: q.id, lat: q.lat, lon: q.lon, mag: q.mag, depth: q.depth, place: q.place })) : []}
+              earthquakes={layers.earthquakes ? earthquakes.map((q) => ({ id: q.id, lat: q.lat, lon: q.lon, mag: q.mag, depth: q.depth, place: q.place, timeUnixMs: q.time })) : []}
               volcanoes={layers.volcanoes ? FAMOUS_VOLCANOES.map((v) => {
                 const c = volcanoAlerts.get(v.name.toLowerCase());
                 const alertColor = c === "red" ? "#ff3a3a" : c === "orange" ? "#ff8a3a" : c === "yellow" ? "#ffd66b" : c === "green" ? "#7cffb1" : "#ff6a3d";
@@ -2487,6 +2487,19 @@ function App() {
             // Pole quick-views.
             { id: "viewNorthPole", label: "View North Pole", group: "View", icon: Navigation, run: () => setFlyTo((p) => ({ id: p.id + 1, lat: 89.99, lon: 0, altKm: 4500 })) },
             { id: "viewSouthPole", label: "View South Pole", group: "View", icon: Navigation, run: () => setFlyTo((p) => ({ id: p.id + 1, lat: -89.99, lon: 0, altKm: 4500 })) },
+            // Local civil time at the camera center, derived from longitude
+            // alone (mean solar time, not zone time). Useful for "what time
+            // is it where I'm looking right now" without picking a place.
+            { id: "localTime", label: "Show approximate local time at this view", group: "Tools", icon: Compass, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const now = new Date();
+              const utcMs = now.getUTCHours() * 3600_000 + now.getUTCMinutes() * 60_000 + now.getUTCSeconds() * 1000;
+              const localMs = (utcMs + c.lon / 15 * 3600_000 + 86400_000) % 86400_000;
+              const hh = Math.floor(localMs / 3600_000);
+              const mm = Math.floor((localMs % 3600_000) / 60_000);
+              showToast(`Mean solar time at ${formatLat(c.lat)} ${formatLon(c.lon)}: ${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`);
+            }},
             { id: "shareView", label: "Copy share-link to current view", group: "Tools", icon: Bookmark, run: () => {
               const c = cameraStateRef.current;
               if (!c) { showToast("Camera position unknown"); return; }
