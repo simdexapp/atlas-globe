@@ -108,7 +108,9 @@ export default function Surface({
   tiangongPosition,
   hubblePosition,
   storms,
-  auroraKp
+  auroraKp,
+  autoOrbit,
+  aircraftAltitudeBars
 }: {
   token: string;
   onCameraChange: (lat: number, lon: number, altKm: number) => void;
@@ -177,6 +179,14 @@ export default function Surface({
   // (0..9 scale) — radius scales with magnetic activity. null hides
   // both ovals.
   auroraKp?: number | null;
+  // When true, the Cesium camera auto-orbits the globe at the current
+  // altitude. Implemented via scene.preRender to rotate the camera
+  // about the local up axis each frame at ~1°/sec.
+  autoOrbit?: boolean;
+  // Pixel-tall vertical bars from sea-level to each aircraft, so
+  // altitude is visible as a height cue in the 3D scene. Off by
+  // default; cheap-ish (one polyline per aircraft, glow material).
+  aircraftAltitudeBars?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Cesium.Viewer | null>(null);
@@ -189,6 +199,9 @@ export default function Surface({
   const aircraftBillboardIndexRef = useRef<Map<Cesium.Billboard, string>>(new Map());
   // icao24 → Billboard for incremental updates (avoid full BillboardCollection rebuild every snapshot).
   const aircraftBillboardByIcaoRef = useRef<Map<string, Cesium.Billboard>>(new Map());
+  // Map icao24 → vertical polyline entity from sea-level to billboard.
+  // Built only when aircraftAltitudeBars is on.
+  const aircraftAltBarByIcaoRef = useRef<Map<string, Cesium.Entity>>(new Map());
   const aircraftTrailEntityRef = useRef<Cesium.Entity | null>(null);
   const aircraftHistoryEntityRef = useRef<Cesium.Entity | null>(null);
   const aircraftSelectionRingRef = useRef<Cesium.Entity | null>(null);
@@ -1616,10 +1629,14 @@ export default function Surface({
     const byIcao = aircraftBillboardByIcaoRef.current;
     const billboardIndex = aircraftBillboardIndexRef.current;
 
+    const altBars = aircraftAltBarByIcaoRef.current;
+
     if (!aircraft || aircraft.length === 0) {
       billboards.removeAll();
       byIcao.clear();
       billboardIndex.clear();
+      altBars.forEach((e) => viewer.entities.remove(e));
+      altBars.clear();
       return;
     }
 
@@ -1639,6 +1656,16 @@ export default function Surface({
         billboards.remove(bb);
         byIcao.delete(icao);
       }
+      const bar = altBars.get(icao);
+      if (bar) {
+        viewer.entities.remove(bar);
+        altBars.delete(icao);
+      }
+    }
+    // If the bars feature was just turned off, remove all existing ones.
+    if (!aircraftAltitudeBars && altBars.size > 0) {
+      altBars.forEach((e) => viewer.entities.remove(e));
+      altBars.clear();
     }
 
     // Pass 2: create or update.
@@ -1675,8 +1702,35 @@ export default function Surface({
         byIcao.set(a.icao24, bb);
         billboardIndex.set(bb, a.icao24);
       }
+      // Altitude bars: vertical polyline from ground to plane. Only shown
+      // if the prop is on AND the plane is above 200m (ground vehicles
+      // and helicopters at sea level look like noise).
+      if (aircraftAltitudeBars && alt > 200) {
+        const ground = Cesium.Cartesian3.fromDegrees(a.lon, a.lat, 0);
+        const existingBar = altBars.get(a.icao24);
+        const positions = [ground, cartesian];
+        if (existingBar?.polyline) {
+          (existingBar.polyline.positions as any) = positions;
+        } else {
+          const bar = viewer.entities.add({
+            polyline: {
+              positions,
+              width: 1.5,
+              material: Cesium.Color.fromCssColorString("#ffd66b").withAlpha(0.5),
+              clampToGround: false,
+            },
+          });
+          altBars.set(a.icao24, bar);
+        }
+      } else {
+        const existingBar = altBars.get(a.icao24);
+        if (existingBar) {
+          viewer.entities.remove(existingBar);
+          altBars.delete(a.icao24);
+        }
+      }
     }
-  }, [aircraft]);
+  }, [aircraft, aircraftAltitudeBars]);
 
   // ===== Terrain exaggeration =====
   useEffect(() => {
@@ -1695,6 +1749,37 @@ export default function Surface({
     viewer.scene.fog.enabled = fogEnabled !== false;
     viewer.scene.requestRender();
   }, [fogEnabled]);
+
+  // ===== Auto-orbit =====
+  // Continuously rotates the camera around the globe at ~3°/sec while
+  // active. Hooked into Cesium's scene.preRender so it stays in sync
+  // with the render loop. Disables itself cleanly when toggled off.
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    if (!autoOrbit) return;
+    let lastT = performance.now();
+    const tick = () => {
+      const now = performance.now();
+      const dt = (now - lastT) / 1000;
+      lastT = now;
+      // Rotate around the camera's local up vector.
+      viewer.camera.rotateRight(0.05 * dt * Math.PI / 180 * 30);
+      viewer.scene.requestRender();
+    };
+    viewer.scene.preRender.addEventListener(tick);
+    // Force render-on-demand so preRender fires steadily.
+    const rafTick = () => {
+      if (!viewerRef.current) return;
+      viewer.scene.requestRender();
+      raf = window.requestAnimationFrame(rafTick);
+    };
+    let raf = window.requestAnimationFrame(rafTick);
+    return () => {
+      viewer.scene.preRender.removeEventListener(tick);
+      window.cancelAnimationFrame(raf);
+    };
+  }, [autoOrbit]);
 
   // ===== Globe-lighting override =====
   // Mobile auto-disables enableLighting at viewer creation. This effect

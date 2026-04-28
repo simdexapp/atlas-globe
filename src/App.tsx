@@ -427,6 +427,10 @@ function App() {
   // Cesium globe-lighting override. undefined = use auto (off on mobile,
   // on otherwise). User can flip via Cmd+K.
   const [surfaceGlobeLighting, setSurfaceGlobeLighting] = useState<boolean | undefined>(undefined);
+  // Cesium camera auto-orbit. Continuously rotates around the globe.
+  const [surfaceAutoOrbit, setSurfaceAutoOrbit] = useState(false);
+  // Per-aircraft altitude bar overlay (vertical line from ground to billboard).
+  const [surfaceAltBars, setSurfaceAltBars] = useState(false);
   // GeoJSON drag-import state — set by the body-level dragdrop listener.
   const [geoJsonImport, setGeoJsonImport] = useState<any | null>(null);
 
@@ -2136,6 +2140,8 @@ function App() {
               hubblePosition={layers.hubble ? hubblePosition : null}
               storms={layers.storms ? activeStorms.map((s) => ({ id: s.id, name: s.name, classification: s.classification, intensityKph: s.intensityKph, lat: s.lat, lon: s.lon, movementDir: s.movementDir })) : []}
               auroraKp={layers.aurora && spaceWeather ? spaceWeather.kpLatest : null}
+              autoOrbit={surfaceAutoOrbit}
+              aircraftAltitudeBars={surfaceAltBars}
             />
           </Suspense>
         )}
@@ -2442,6 +2448,8 @@ function App() {
             { id: "surfTilt45", label: "Surface camera: oblique (45°)", group: "Imagery", icon: Mountain, run: () => setSurfaceTilt((c) => ({ id: (c?.id ?? 0) + 1, pitchDeg: 45 })) },
             { id: "surfTilt30", label: "Surface camera: low oblique (30°)", group: "Imagery", icon: Mountain, run: () => setSurfaceTilt((c) => ({ id: (c?.id ?? 0) + 1, pitchDeg: 30 })) },
             { id: "surfTiltHorizon", label: "Surface camera: horizon view (10°)", group: "Imagery", icon: Mountain, run: () => setSurfaceTilt((c) => ({ id: (c?.id ?? 0) + 1, pitchDeg: 10 })) },
+            { id: "surfAutoOrbit", label: surfaceAutoOrbit ? "Stop auto-orbit (Surface)" : "Start auto-orbit (Surface)", group: "View", icon: RotateCcw, run: () => setSurfaceAutoOrbit((v) => !v) },
+            { id: "surfAltBars", label: surfaceAltBars ? "Hide aircraft altitude bars" : "Show aircraft altitude bars", group: "Layers", icon: Plane, run: () => setSurfaceAltBars((v) => !v) },
             { id: "exag1", label: "Terrain exaggeration: 1× (real)", group: "Imagery", icon: Mountain, run: () => setSurfaceTerrainExag(1) },
             { id: "exag15", label: "Terrain exaggeration: 1.5×", group: "Imagery", icon: Mountain, run: () => setSurfaceTerrainExag(1.5) },
             { id: "exag2", label: "Terrain exaggeration: 2× (dramatic)", group: "Imagery", icon: Mountain, run: () => setSurfaceTerrainExag(2) },
