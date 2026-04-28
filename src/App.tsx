@@ -345,6 +345,7 @@ function App() {
   const [launches, setLaunches] = useState<RocketLaunch[]>([]);
   const [selectedLaunchId, setSelectedLaunchId] = useState<string | null>(null);
   const [selectedEarthquakeId, setSelectedEarthquakeId] = useState<string | null>(null);
+  const [selectedVolcanoId, setSelectedVolcanoId] = useState<string | null>(null);
 
   const [eonetEvents, setEonetEvents] = useState<EonetEvent[]>([]);
   const [eonetLoading, setEonetLoading] = useState(false);
@@ -1787,6 +1788,8 @@ function App() {
             onSelectLaunch={setSelectedLaunchId}
             selectedEarthquakeId={selectedEarthquakeId}
             onSelectEarthquake={setSelectedEarthquakeId}
+            selectedVolcanoId={selectedVolcanoId}
+            onSelectVolcano={setSelectedVolcanoId}
             auroraTexture={auroraTexture}
             aircraftHistory={aircraftHistoryRef.current}
             volcanoAlerts={volcanoAlerts}
@@ -2198,6 +2201,31 @@ function App() {
               </div>
             ))}
           </div>
+        );
+      })()}
+
+      {selectedVolcanoId && (() => {
+        const v = FAMOUS_VOLCANOES.find((x) => x.id === selectedVolcanoId);
+        if (!v) return null;
+        const alertCode = volcanoAlerts.get(v.name.toLowerCase());
+        const alertLabel = alertCode === "red" ? "WARNING — eruption imminent or in progress"
+                          : alertCode === "orange" ? "WATCH — increased activity"
+                          : alertCode === "yellow" ? "ADVISORY — elevated unrest"
+                          : alertCode === "green" ? "NORMAL — typical background activity"
+                          : "No active USGS alert";
+        const alertColor = alertCode === "red" ? "#ff5a5a"
+                          : alertCode === "orange" ? "#ff8a3a"
+                          : alertCode === "yellow" ? "#ffd66b"
+                          : alertCode === "green" ? "#7cffb1"
+                          : "#5a6b8a";
+        return (
+          <VolcanoCard
+            volcano={v}
+            alertLabel={alertLabel}
+            alertColor={alertColor}
+            onClose={() => setSelectedVolcanoId(null)}
+            onFlyTo={() => setFlyTo((c) => ({ id: c.id + 1, lat: v.lat, lon: v.lon, altKm: 600 }))}
+          />
         );
       })()}
 
@@ -3405,6 +3433,49 @@ function CoordInputModal({ onSubmit, onClose }: { onSubmit: (lat: number, lon: n
   );
 }
 
+function VolcanoCard({ volcano, alertLabel, alertColor, onClose, onFlyTo }: {
+  volcano: { id: string; name: string; lat: number; lon: number };
+  alertLabel: string;
+  alertColor: string;
+  onClose: () => void;
+  onFlyTo: () => void;
+}) {
+  const [wiki, setWiki] = useState<{ title: string; extract: string; pageUrl: string; thumbnail: string | null } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    const ac = new AbortController();
+    setWiki(null);
+    fetchWikiSummary(volcano.name, ac.signal).then((w) => { if (!cancelled && w) setWiki(w); }).catch(() => {});
+    return () => { cancelled = true; ac.abort(); };
+  }, [volcano.name]);
+  return (
+    <div className="atlasEventCard" role="dialog">
+      <div className="atlasEventCardHead">
+        <div className="atlasEventCardTag" style={{ background: alertColor }}>VOLCANO</div>
+        <div className="atlasEventCardTitle">
+          <strong>{volcano.name}</strong>
+          <span style={{ color: alertColor }}>{alertLabel}</span>
+        </div>
+        <button className="atlasIconBtn" onClick={onClose} aria-label="Close"><X size={14} /></button>
+      </div>
+      <div className="atlasEventCardBody">
+        <div><span>Lat</span><b>{formatLat(volcano.lat)}</b></div>
+        <div><span>Lon</span><b>{formatLon(volcano.lon)}</b></div>
+      </div>
+      {wiki?.extract && (
+        <p className="atlasLaunchMission">
+          {wiki.extract.length > 240 ? wiki.extract.slice(0, 237) + "…" : wiki.extract}
+        </p>
+      )}
+      <div className="atlasAircraftCardActions">
+        <button className="atlasBtn" onClick={onFlyTo}>Fly to</button>
+        {wiki && <a className="atlasBtn" href={wiki.pageUrl} target="_blank" rel="noreferrer">Wikipedia ↗</a>}
+        <a className="atlasBtn" href={`https://volcano.si.edu/volcano.cfm?vn=${encodeURIComponent(volcano.name)}`} target="_blank" rel="noreferrer">GVP ↗</a>
+      </div>
+    </div>
+  );
+}
+
 // Live aircraft info card with lazy-loaded enrichment from adsbdb.com.
 // Shows the full picture: operator + manufacturer + model + flight route
 // (origin/destination airports + airline) on top of the live ADS-B telemetry.
@@ -3756,6 +3827,8 @@ function GlobeCanvas({
   onSelectLaunch,
   selectedEarthquakeId,
   onSelectEarthquake,
+  selectedVolcanoId,
+  onSelectVolcano,
   auroraTexture,
   aircraftHistory,
   volcanoAlerts,
@@ -3792,6 +3865,8 @@ function GlobeCanvas({
   onSelectLaunch: (id: string | null) => void;
   selectedEarthquakeId: string | null;
   onSelectEarthquake: (id: string | null) => void;
+  selectedVolcanoId: string | null;
+  onSelectVolcano: (id: string | null) => void;
   auroraTexture: THREE.Texture | null;
   aircraftHistory?: Map<string, Array<{ lat: number; lon: number; alt: number; t: number }>>;
   volcanoAlerts: Map<string, string>;
@@ -3833,7 +3908,7 @@ function GlobeCanvas({
           {layers.cardinals && <Cardinals />}
           {layers.timezones && <TimeZoneBands />}
           {layers.earthquakes && <EarthquakeMarkers data={earthquakes} selectedId={selectedEarthquakeId} onSelect={onSelectEarthquake} />}
-          {layers.volcanoes && <VolcanoMarkers alerts={volcanoAlerts} />}
+          {layers.volcanoes && <VolcanoMarkers alerts={volcanoAlerts} selectedId={selectedVolcanoId} onSelect={onSelectVolcano} />}
           {layers.pinPaths && <PinPaths pins={pins} sunDirection={sunDirection} />}
           {layers.pins && <PinMarkers pins={pins} selectedId={selectedPinId} onSelect={onSelectPin} />}
           {layers.aircraft && aircraft.length > 0 && (
@@ -4833,9 +4908,12 @@ function PinMarker({ pin, selected, onSelect }: { pin: Pin; selected: boolean; o
   );
 }
 
-function VolcanoMarkers({ alerts }: { alerts: Map<string, string> }) {
+function VolcanoMarkers({ alerts, selectedId, onSelect }: {
+  alerts: Map<string, string>;
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
+}) {
   const groupRef = useRef<THREE.Group>(null);
-  // Pulse only the elevated ones — calmer markers for inactive volcanoes.
   useFrame(({ clock }) => {
     if (!groupRef.current) return;
     const t = clock.elapsedTime;
@@ -4847,9 +4925,6 @@ function VolcanoMarkers({ alerts }: { alerts: Map<string, string> }) {
       child.scale.setScalar(1 + Math.max(0, 1 - phase) * amplitude);
     });
   });
-  // USGS color codes (lowercase): green/yellow/orange/red.
-  // Map to display tints — green for normal, yellow advisory, orange watch,
-  // red warning. Inactive (no alert) stays a calmer base orange.
   const tintFor = (vname: string): { color: string; size: number; elevated: boolean } => {
     const c = alerts.get(vname.toLowerCase());
     if (c === "red")    return { color: "#ff3a3a", size: 0.013, elevated: true };
@@ -4863,10 +4938,16 @@ function VolcanoMarkers({ alerts }: { alerts: Map<string, string> }) {
       {FAMOUS_VOLCANOES.map((v) => {
         const pos = latLonToVec3(v.lat, v.lon, 1.004);
         const tint = tintFor(v.name);
+        const isSelected = v.id === selectedId;
         return (
-          <mesh key={v.id} position={pos} userData={{ elevated: tint.elevated }}>
-            <coneGeometry args={[tint.size, tint.size * 2.25, 6]} />
-            <meshBasicMaterial color={tint.color} transparent opacity={0.92} toneMapped={false} />
+          <mesh
+            key={v.id}
+            position={pos}
+            userData={{ elevated: tint.elevated }}
+            onPointerDown={(e: any) => { e.stopPropagation(); onSelect(v.id); }}
+          >
+            <coneGeometry args={[isSelected ? tint.size * 1.4 : tint.size, (isSelected ? tint.size * 1.4 : tint.size) * 2.25, 6]} />
+            <meshBasicMaterial color={tint.color} transparent opacity={isSelected ? 1 : 0.92} toneMapped={false} />
           </mesh>
         );
       })}
