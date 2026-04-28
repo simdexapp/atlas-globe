@@ -303,16 +303,21 @@ const cityBookmarks: Bookmark[] = [
 const initialSearchSuggestions = cityBookmarks.map((c) => c.name);
 
 const KEYBOARD_HINTS = [
+  { keys: "⌘K / Ctrl+K", desc: "Command palette (search every action / layer / setting)" },
+  { keys: "F", desc: "Open place search" },
   { keys: "R", desc: "Reset view" },
-  { keys: "F", desc: "Open search" },
   { keys: "B", desc: "Bookmark current view" },
-  { keys: "L", desc: "Toggle layers panel" },
+  { keys: "L", desc: "Toggle Layers panel" },
   { keys: "T", desc: "Cycle UI theme" },
-  { keys: "H", desc: "Hide / show UI" },
+  { keys: "H", desc: "Hide / show all UI" },
   { keys: "S", desc: "Switch to Surface mode" },
   { keys: "?", desc: "Show shortcuts" },
   { keys: "Drag", desc: "Orbit camera" },
-  { keys: "Scroll", desc: "Zoom in / out" }
+  { keys: "Scroll", desc: "Zoom in / out" },
+  { keys: "Shift / Ctrl + click", desc: "Drop a pin without pin tool" },
+  { keys: "Click an aircraft", desc: "Open flight info card" },
+  { keys: "Click an event", desc: "Open EONET / quake / volcano / launch info" },
+  { keys: "Esc", desc: "Close any open modal / palette" },
 ];
 
 function App() {
