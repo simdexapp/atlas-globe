@@ -1927,6 +1927,12 @@ function App() {
                     : radarManifest.past[Math.min(radarFrameIndex, radarManifest.past.length - 1)].path)
                 : undefined}
               weatherOpacity={radarOpacity}
+              show3DBuildings={true}
+              selectedAircraft={selectedAircraftId && aircraftSnapshot ? (() => {
+                const a = aircraftSnapshot.aircraft.find((x) => x.icao24 === selectedAircraftId);
+                return a ? { icao24: a.icao24, lat: a.lat, lon: a.lon, altitudeM: a.altitudeM, headingDeg: a.headingDeg, velocityMs: a.velocityMs } : null;
+              })() : null}
+              onSelectAircraft={setSelectedAircraftId}
             />
           </Suspense>
         )}

@@ -72,7 +72,10 @@ export default function Surface({
   volcanoes,
   launches,
   weatherTilePath,
-  weatherOpacity
+  weatherOpacity,
+  show3DBuildings,
+  selectedAircraft,
+  onSelectAircraft
 }: {
   token: string;
   onCameraChange: (lat: number, lon: number, altKm: number) => void;
@@ -86,10 +89,14 @@ export default function Surface({
   earthquakes?: SurfaceEarthquake[];
   volcanoes?: SurfaceVolcano[];
   launches?: SurfaceLaunch[];
-  // RainViewer tile path like '/v2/radar/...'. When set, layered as a
-  // Cesium URL template imagery provider.
   weatherTilePath?: string;
   weatherOpacity?: number;
+  show3DBuildings?: boolean;
+  // Selected aircraft (matched by icao24) — when set, renders a 5-min
+  // predicted-path polyline like Atlas does.
+  selectedAircraft?: { icao24: string; lat: number; lon: number; altitudeM: number; headingDeg: number; velocityMs: number } | null;
+  // Click handler for billboards: returns the icao24 of the clicked plane.
+  onSelectAircraft?: (icao24: string | null) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Cesium.Viewer | null>(null);
@@ -99,6 +106,9 @@ export default function Surface({
   const pinEntitiesRef = useRef<Cesium.Entity[]>([]);
   const aircraftBillboardsRef = useRef<Cesium.BillboardCollection | null>(null);
   const aircraftIconRef = useRef<HTMLCanvasElement | null>(null);
+  const aircraftBillboardIndexRef = useRef<Map<Cesium.Billboard, string>>(new Map());
+  const aircraftTrailEntityRef = useRef<Cesium.Entity | null>(null);
+  const buildingsTilesetRef = useRef<Cesium.Cesium3DTileset | null>(null);
   const eonetEntitiesRef = useRef<Cesium.Entity[]>([]);
   const earthquakeEntitiesRef = useRef<Cesium.Entity[]>([]);
   const volcanoEntitiesRef = useRef<Cesium.Entity[]>([]);
@@ -198,6 +208,8 @@ export default function Surface({
       Cesium.Cesium3DTileset.fromIonAssetId(96188)
         .then((tileset) => {
           viewer.scene.primitives.add(tileset);
+          buildingsTilesetRef.current = tileset;
+          tileset.show = show3DBuildings !== false;
         })
         .catch(() => { /* OSM Buildings unavailable on this token tier */ });
     }
@@ -349,6 +361,77 @@ export default function Surface({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tokenToUse]);
+
+  // ===== 3D Buildings toggle =====
+  useEffect(() => {
+    const tileset = buildingsTilesetRef.current;
+    if (!tileset) return;
+    tileset.show = show3DBuildings !== false;
+  }, [show3DBuildings]);
+
+  // ===== Aircraft trail polyline for selected =====
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    if (aircraftTrailEntityRef.current) {
+      viewer.entities.remove(aircraftTrailEntityRef.current);
+      aircraftTrailEntityRef.current = null;
+    }
+    if (!selectedAircraft || selectedAircraft.velocityMs <= 0) return;
+    // Build 5-min predicted great-circle path
+    const segments = 32;
+    const minutesAhead = 5;
+    const distanceM = selectedAircraft.velocityMs * minutesAhead * 60;
+    const distanceRad = distanceM / 6371000;
+    const lat0 = selectedAircraft.lat * Math.PI / 180;
+    const lon0 = selectedAircraft.lon * Math.PI / 180;
+    const heading = (selectedAircraft.headingDeg || 0) * Math.PI / 180;
+    const cartesians: Cesium.Cartesian3[] = [];
+    for (let i = 0; i <= segments; i++) {
+      const t = i / segments;
+      const d = distanceRad * t;
+      const lat2 = Math.asin(
+        Math.sin(lat0) * Math.cos(d) + Math.cos(lat0) * Math.sin(d) * Math.cos(heading)
+      );
+      const lon2 = lon0 + Math.atan2(
+        Math.sin(heading) * Math.sin(d) * Math.cos(lat0),
+        Math.cos(d) - Math.sin(lat0) * Math.sin(lat2)
+      );
+      cartesians.push(Cesium.Cartesian3.fromDegrees(
+        lon2 * 180 / Math.PI,
+        lat2 * 180 / Math.PI,
+        Math.max(0, selectedAircraft.altitudeM)
+      ));
+    }
+    aircraftTrailEntityRef.current = viewer.entities.add({
+      polyline: {
+        positions: cartesians,
+        width: 3,
+        material: new Cesium.PolylineGlowMaterialProperty({
+          color: Cesium.Color.fromCssColorString("#5cb5ff"),
+          glowPower: 0.25,
+        }),
+        clampToGround: false,
+      },
+    });
+  }, [selectedAircraft]);
+
+  // ===== Aircraft click → select =====
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer || !onSelectAircraft) return;
+    const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+    handler.setInputAction((click: Cesium.ScreenSpaceEventHandler.PositionedEvent) => {
+      const picked = viewer.scene.pick(click.position);
+      if (picked && picked.primitive instanceof Cesium.Billboard) {
+        const icao = aircraftBillboardIndexRef.current.get(picked.primitive);
+        if (icao) {
+          onSelectAircraft(icao);
+        }
+      }
+    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    return () => handler.destroy();
+  }, [onSelectAircraft]);
 
   // ===== Real-time-sun toggle: when on, lock the Cesium clock to actual UTC =====
   useEffect(() => {
@@ -578,17 +661,14 @@ export default function Surface({
       return;
     }
     billboards.removeAll();
+    aircraftBillboardIndexRef.current.clear();
     for (const a of aircraft) {
       const alt = Math.max(0, a.altitudeM);
       const altT = Math.min(1, alt / 12000);
       const color = Cesium.Color.fromHsl(0.05 + altT * 0.5, 0.85, 0.6, 1.0);
       const cartesian = Cesium.Cartesian3.fromDegrees(a.lon, a.lat, alt);
-      // rotation: Cesium's billboard rotation is around the screen-space Z
-      // axis. Heading 0 = north = up. Convert from compass heading to
-      // billboard rotation: invert sign because Cesium rotation is CCW from
-      // screen-up.
       const rotationRad = -((a.headingDeg || 0) * Math.PI / 180);
-      billboards.add({
+      const bb = billboards.add({
         position: cartesian,
         image: icon,
         color,
@@ -600,6 +680,7 @@ export default function Surface({
         horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
         sizeInMeters: false,
       });
+      aircraftBillboardIndexRef.current.set(bb, a.icao24);
     }
   }, [aircraft]);
 
