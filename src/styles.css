@@ -2163,6 +2163,32 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
 .atlasLowAltHint strong { color: var(--gray-12); font-size: var(--text-base); }
 .atlasLowAltHint span { color: var(--gray-9); font-size: 10.5px; line-height: 1.35; }
 
+/* NOAA aurora / space-weather pill */
+.atlasAuroraPill {
+  position: fixed;
+  top: 124px;
+  right: 360px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 6px var(--s-3);
+  border-radius: 99px;
+  border: 1px solid var(--border);
+  background: rgba(10, 16, 28, 0.78);
+  backdrop-filter: blur(10px);
+  font-size: var(--text-xs);
+  color: var(--gray-10);
+  pointer-events: none;
+  box-shadow: var(--shadow-1);
+}
+.atlasAuroraPill svg { color: #84ffe0; }
+.atlasAuroraPill b { color: var(--gray-12); font-weight: 800; font-variant-numeric: tabular-nums; }
+.atlasAuroraPill[data-severity="active"]   { border-color: color-mix(in srgb, #ffd66b, transparent 60%); }
+.atlasAuroraPill[data-severity="active"] b { color: #ffd66b; }
+.atlasAuroraPill[data-severity="storm"]    { border-color: color-mix(in srgb, #ff5a7a, transparent 50%); background: color-mix(in srgb, #ff5a7a, transparent 88%); }
+.atlasAuroraPill[data-severity="storm"] b  { color: #ff7a8a; }
+
 /* NASA EONET natural events */
 .atlasEonetPill {
   position: fixed;

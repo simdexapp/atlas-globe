@@ -47,6 +47,7 @@ import { fetchAllAircraft, altitudeColor, altitudeFt, knotsFromMs, fetchAircraft
 import { dateRange, shiftDate, loadTimelapseFrames, disposeFrames, type TimelapseFrame } from "./timelapse";
 import { fetchRadarManifest, composeRadarFrame, frameLabel, type RadarManifest, type RadarFrame } from "./weather";
 import { fetchEonetEvents, categoryColor, categoryIconLabel, type EonetEvent } from "./eonet";
+import { fetchSpaceWeather, fetchAuroraSnapshot, auroraIntensityToRGBA, kpScale, type SpaceWeather, type AuroraSnapshot } from "./space";
 
 const SurfaceMode = lazy(() => import("./Surface"));
 
@@ -104,6 +105,7 @@ type LayerVisibility = {
   aircraft: boolean;
   weather: boolean;
   eonet: boolean;
+  aurora: boolean;
 };
 
 type GlobeSettings = {
@@ -160,7 +162,7 @@ type PersistedState = {
   pins?: Pin[];
 };
 
-const STORAGE_KEY = "atlas-globe-state-v8";
+const STORAGE_KEY = "atlas-globe-state-v9";
 const EARTH_RADIUS_KM = 6371;
 const MIN_DISTANCE = 1.0008;        // ~5 km above surface (texture-pixelated, but real zoom)
 const MAX_DISTANCE = 12;            // far view from space
@@ -191,7 +193,8 @@ const defaultLayers: LayerVisibility = {
   compass: true,
   aircraft: false,
   weather: false,
-  eonet: false
+  eonet: false,
+  aurora: false
 };
 
 const FAMOUS_VOLCANOES: { id: string; name: string; lat: number; lon: number }[] = [
@@ -306,6 +309,12 @@ function App() {
   const [aircraftCategory, setAircraftCategory] = useState<"all" | "commercial" | "private" | "military" | "heli">("all");
   const [hoveredAircraftId, setHoveredAircraftId] = useState<string | null>(null);
   const [hoverPos, setHoverPos] = useState<{ x: number; y: number } | null>(null);
+
+  // auroraSnapshot's grid is only used inside the texture-build effect; we
+  // hold it in a ref to avoid a state-only-set-never-read TS warning.
+  const [, setAuroraSnapshot] = useState<AuroraSnapshot | null>(null);
+  const [spaceWeather, setSpaceWeather] = useState<SpaceWeather | null>(null);
+  const [auroraTexture, setAuroraTexture] = useState<THREE.CanvasTexture | null>(null);
 
   const [eonetEvents, setEonetEvents] = useState<EonetEvent[]>([]);
   const [eonetLoading, setEonetLoading] = useState(false);
@@ -515,6 +524,83 @@ function App() {
       window.clearInterval(handle);
     };
   }, [layers.aircraft]);
+
+  // NOAA SWPC space weather (Kp index + solar wind) — refresh every 5 min
+  // when aurora layer or any space-weather UI is on. Always fetched if aurora
+  // is on so the pill shows the current geomagnetic state.
+  useEffect(() => {
+    if (!layers.aurora) {
+      setSpaceWeather(null);
+      return;
+    }
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const sw = await fetchSpaceWeather();
+        if (!cancelled) setSpaceWeather(sw);
+      } catch { /* silent */ }
+    };
+    tick();
+    const handle = window.setInterval(tick, 5 * 60 * 1000);
+    return () => { cancelled = true; window.clearInterval(handle); };
+  }, [layers.aurora]);
+
+  // OVATION aurora forecast — refresh every 10 min, compose into a 720x361
+  // equirect canvas with NOAA's lon=0..359 indexing remapped so canvas-left
+  // matches lon=-180 (the convention our Earth texture uses).
+  useEffect(() => {
+    if (!layers.aurora) {
+      setAuroraSnapshot(null);
+      setAuroraTexture((prev) => { prev?.dispose(); return null; });
+      return;
+    }
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const snap = await fetchAuroraSnapshot();
+        if (cancelled) return;
+        setAuroraSnapshot(snap);
+        // Build canvas: canvas-left = lon=-180.
+        const W = snap.width;
+        const H = snap.height;
+        const cv = document.createElement("canvas");
+        cv.width = W;
+        cv.height = H;
+        const ctx = cv.getContext("2d");
+        if (!ctx) return;
+        const img = ctx.createImageData(W, H);
+        for (let y = 0; y < H; y++) {
+          for (let xRaw = 0; xRaw < W; xRaw++) {
+            const v = snap.grid[y * W + xRaw];
+            const [r, g, b, a] = auroraIntensityToRGBA(v);
+            // Shift x by 180 so canvas-left (xCanvas=0) corresponds to
+            // NOAA's lon=180 (which is the antimeridian in -180..180 terms).
+            // Then UV.x=0 on the sphere shows lon=-180 — matching the Earth texture.
+            const xCanvas = (xRaw + W / 2) % W;
+            // Canvas y=0 is top = north, but NOAA data has lat=-90 at y=0.
+            // Flip vertically.
+            const yCanvas = H - 1 - y;
+            const idx = (yCanvas * W + xCanvas) * 4;
+            img.data[idx] = r;
+            img.data[idx + 1] = g;
+            img.data[idx + 2] = b;
+            img.data[idx + 3] = a;
+          }
+        }
+        ctx.putImageData(img, 0, 0);
+        const tex = new THREE.CanvasTexture(cv);
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.flipY = true;
+        tex.minFilter = THREE.LinearFilter;
+        tex.magFilter = THREE.LinearFilter;
+        tex.needsUpdate = true;
+        setAuroraTexture((prev) => { prev?.dispose(); return tex; });
+      } catch { /* silent */ }
+    };
+    tick();
+    const handle = window.setInterval(tick, 10 * 60 * 1000);
+    return () => { cancelled = true; window.clearInterval(handle); };
+  }, [layers.aurora]);
 
   // NASA EONET — global natural events (wildfires, severe storms, volcanoes,
   // sea ice, dust/haze, drought, snow, temp extremes, water-color anomalies,
@@ -1589,6 +1675,7 @@ function App() {
             eonetEvents={eonetEvents}
             selectedEonetId={selectedEonetId}
             onSelectEonet={setSelectedEonetId}
+            auroraTexture={auroraTexture}
             onAircraftHover={(id, p) => { setHoveredAircraftId(id); setHoverPos(p); }}
             pins={pins}
             earthquakes={earthquakes}
@@ -1833,6 +1920,7 @@ function App() {
             { id: "layerAircraft", label: layers.aircraft ? "Hide aircraft" : "Show live aircraft", group: "Layers", icon: Plane, run: () => toggleLayer("aircraft") },
             { id: "layerWeather", label: layers.weather ? "Hide weather radar" : "Show live weather radar", group: "Layers", icon: Cloud, run: () => toggleLayer("weather") },
             { id: "layerEonet", label: layers.eonet ? "Hide natural-events overlay" : "Show natural events (NASA EONET)", group: "Layers", icon: Sparkles, run: () => toggleLayer("eonet") },
+            { id: "layerAurora", label: layers.aurora ? "Hide aurora forecast" : "Show aurora forecast (NOAA OVATION)", group: "Layers", icon: Sparkles, run: () => toggleLayer("aurora") },
             { id: "layerClouds", label: layers.clouds ? "Hide clouds" : "Show clouds", group: "Layers", icon: Cloud, run: () => toggleLayer("clouds") },
             { id: "layerNight", label: layers.nightLights ? "Hide city lights" : "Show city lights", group: "Layers", icon: SunIcon, run: () => toggleLayer("nightLights") },
             { id: "layerAtm", label: layers.atmosphere ? "Hide atmosphere" : "Show atmosphere", group: "Layers", icon: Sparkles, run: () => toggleLayer("atmosphere") },
@@ -1905,6 +1993,20 @@ function App() {
             {(a.registration || a.type) && (
               <span className="atlasHoverTipSub">{a.registration} {a.type}</span>
             )}
+          </div>
+        );
+      })()}
+
+      {layers.aurora && spaceWeather && (() => {
+        const { kpLatest, swSpeedKmS, swDensityCm3 } = spaceWeather;
+        const sev = kpScale(kpLatest);
+        return (
+          <div className="atlasAuroraPill" role="status" data-severity={sev.severity}>
+            <Sparkles size={11} />
+            <span>
+              <b>Kp {kpLatest.toFixed(1)}</b>
+              <span className="atlasFlightMeta"> · {sev.label} · solar wind {Math.round(swSpeedKmS)} km/s · {swDensityCm3.toFixed(1)}/cc</span>
+            </span>
           </div>
         );
       })()}
@@ -2201,6 +2303,7 @@ function LayersPanel({ layers, onToggle, bordersLoading }: { layers: LayerVisibi
     { key: "aircraft", label: "Aircraft — live (every plane)", icon: Plane },
     { key: "weather", label: "Weather radar — live precipitation (RainViewer)", icon: Cloud },
     { key: "eonet", label: "Natural events — fires/storms/volcanoes (NASA EONET)", icon: Sparkles },
+    { key: "aurora", label: "Aurora forecast (NOAA OVATION)", icon: Sparkles },
     { key: "iss", label: "ISS — live position", icon: Telescope },
     { key: "tiangong", label: "Tiangong CSS — live position", icon: Telescope },
     { key: "hubble", label: "Hubble — live position", icon: Telescope },
@@ -3352,6 +3455,7 @@ function GlobeCanvas({
   eonetEvents,
   selectedEonetId,
   onSelectEonet,
+  auroraTexture,
   onAircraftHover,
   pins,
   earthquakes,
@@ -3380,6 +3484,7 @@ function GlobeCanvas({
   eonetEvents: EonetEvent[];
   selectedEonetId: string | null;
   onSelectEonet: (id: string | null) => void;
+  auroraTexture: THREE.Texture | null;
   onAircraftHover: (id: string | null, screen: { x: number; y: number } | null) => void;
   pins: Pin[];
   earthquakes: Earthquake[];
@@ -3429,6 +3534,9 @@ function GlobeCanvas({
           )}
           {layers.eonet && eonetEvents.length > 0 && (
             <EonetMarkers events={eonetEvents} selectedId={selectedEonetId} onSelect={onSelectEonet} />
+          )}
+          {layers.aurora && auroraTexture && (
+            <AuroraOverlay texture={auroraTexture} />
           )}
           {layers.terminator && <TerminatorRing sunDirection={sunDirection} />}
           {layers.subsolar && <SubsolarPoint sunDirection={sunDirection} />}
@@ -4554,6 +4662,50 @@ function WeatherRadar({ texture, opacity }: { texture: THREE.Texture; opacity: n
   return (
     <mesh renderOrder={5}>
       <sphereGeometry args={[1.005, 96, 64]} />
+      <primitive object={material} attach="material" />
+    </mesh>
+  );
+}
+
+// Aurora overlay sphere: an equirect-textured shell at radius 1.018 (above
+// clouds at 1.012). Uses the same model-space vUv lookup as the Earth shader
+// with the same flipped-x convention so it lines up with the world.
+const AURORA_VERT = `
+  varying vec2 vUv;
+  void main() {
+    vUv = uv;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+const AURORA_FRAG = `
+  precision mediump float;
+  uniform sampler2D uAurora;
+  varying vec2 vUv;
+  void main() {
+    // Match the Earth shader's u-flip so aurora intensity at lon=L lines up
+    // with the continent the texture renders at lon=L.
+    vec2 uv = vec2(1.0 - vUv.x, vUv.y);
+    vec4 c = texture2D(uAurora, uv);
+    if (c.a < 0.01) discard;
+    gl_FragColor = vec4(c.rgb, c.a);
+  }
+`;
+function AuroraOverlay({ texture }: { texture: THREE.Texture }) {
+  const material = useMemo(() => new THREE.ShaderMaterial({
+    uniforms: { uAurora: { value: texture } },
+    vertexShader: AURORA_VERT,
+    fragmentShader: AURORA_FRAG,
+    transparent: true,
+    depthWrite: false,
+    side: THREE.FrontSide,
+    blending: THREE.AdditiveBlending,
+    toneMapped: false
+  }), []);
+  useEffect(() => { material.uniforms.uAurora.value = texture; material.uniformsNeedUpdate = true; }, [material, texture]);
+  useEffect(() => () => material.dispose(), [material]);
+  return (
+    <mesh renderOrder={6}>
+      <sphereGeometry args={[1.018, 96, 64]} />
       <primitive object={material} attach="material" />
     </mesh>
   );
