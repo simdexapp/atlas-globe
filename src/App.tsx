@@ -275,6 +275,7 @@ function App() {
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("globe");
   const [hideUi, setHideUi] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [uiTheme, setUiTheme] = useState<"dark" | "light">("dark");
@@ -1336,11 +1337,18 @@ function App() {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
+      // Cmd/Ctrl+K opens command palette even from inside inputs
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setCommandPaletteOpen((v) => !v);
+        return;
+      }
       if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
       if (event.metaKey || event.ctrlKey) return;
 
       switch (event.key.toLowerCase()) {
         case "escape":
+          if (commandPaletteOpen) setCommandPaletteOpen(false);
           if (showSearch) setShowSearch(false);
           if (showShortcuts) setShowShortcuts(false);
           if (uiHiddenRef.current) setHideUi(false);
@@ -1449,10 +1457,10 @@ function App() {
         </div>
 
         <div className="searchTrigger">
-          <button type="button" onClick={() => setShowSearch(true)}>
+          <button type="button" onClick={() => setCommandPaletteOpen(true)}>
             <Search size={14} />
-            <span>Search any place…</span>
-            <kbd>F</kbd>
+            <span>Search places, layers, settings…</span>
+            <kbd>⌘K</kbd>
           </button>
         </div>
 
@@ -1613,6 +1621,51 @@ function App() {
           history={searchHistory}
           onSelect={(b) => { flyToBookmark(b); setShowSearch(false); }}
           onClose={() => setShowSearch(false)}
+        />
+      )}
+
+      {commandPaletteOpen && (
+        <CommandPalette
+          onClose={() => setCommandPaletteOpen(false)}
+          items={[
+            // Tools
+            { id: "search", label: "Search a place…", group: "Tools", icon: Search, hint: "F", run: () => setShowSearch(true) },
+            { id: "shortcuts", label: "Show keyboard shortcuts", group: "Tools", icon: Wand2, hint: "?", run: () => setShowShortcuts(true) },
+            { id: "embed", label: "Embed snippet", group: "Tools", icon: Share2, run: () => setShowEmbed(true) },
+            { id: "timelapse", label: "Open time-lapse studio", group: "Tools", icon: Film, run: () => setTimelapseOpen(true) },
+            // View
+            { id: "reset", label: "Reset view", group: "View", icon: Crosshair, hint: "R", run: () => resetView() },
+            { id: "toggleHide", label: hideUi ? "Show UI" : "Hide UI", group: "View", icon: Eye, hint: "H", run: () => setHideUi((v) => !v) },
+            { id: "toggleFps", label: showFps ? "Hide FPS overlay" : "Show FPS overlay", group: "View", icon: Telescope, run: () => setShowFps((v) => !v) },
+            { id: "togglePin", label: pinTool ? "Exit pin tool" : "Pin tool", group: "View", icon: BookmarkPlus, run: () => setPinTool((v) => !v) },
+            { id: "myLoc", label: "Fly to my location", group: "View", icon: Navigation, run: () => flyToMyLocation() },
+            // Layers
+            { id: "layerAircraft", label: layers.aircraft ? "Hide aircraft" : "Show live aircraft", group: "Layers", icon: Plane, run: () => toggleLayer("aircraft") },
+            { id: "layerClouds", label: layers.clouds ? "Hide clouds" : "Show clouds", group: "Layers", icon: Cloud, run: () => toggleLayer("clouds") },
+            { id: "layerNight", label: layers.nightLights ? "Hide city lights" : "Show city lights", group: "Layers", icon: SunIcon, run: () => toggleLayer("nightLights") },
+            { id: "layerAtm", label: layers.atmosphere ? "Hide atmosphere" : "Show atmosphere", group: "Layers", icon: Sparkles, run: () => toggleLayer("atmosphere") },
+            { id: "layerStars", label: layers.stars ? "Hide stars" : "Show stars", group: "Layers", icon: Sparkles, run: () => toggleLayer("stars") },
+            { id: "layerBorders", label: layers.borders ? "Hide country borders" : "Show country borders", group: "Layers", icon: Compass, run: () => toggleLayer("borders") },
+            { id: "layerEarthquakes", label: layers.earthquakes ? "Hide earthquakes" : "Show earthquakes (24h)", group: "Layers", icon: Sparkles, run: () => toggleLayer("earthquakes") },
+            { id: "layerVolcanoes", label: layers.volcanoes ? "Hide volcanoes" : "Show notable volcanoes", group: "Layers", icon: Mountain, run: () => toggleLayer("volcanoes") },
+            { id: "layerISS", label: layers.iss ? "Hide ISS" : "Show ISS (live)", group: "Layers", icon: Telescope, run: () => toggleLayer("iss") },
+            { id: "layerHubble", label: layers.hubble ? "Hide Hubble" : "Show Hubble (live)", group: "Layers", icon: Telescope, run: () => toggleLayer("hubble") },
+            { id: "layerGraticule", label: layers.graticule ? "Hide graticule" : "Show lat/lon graticule", group: "Layers", icon: Compass, run: () => toggleLayer("graticule") },
+            { id: "layerPinPaths", label: layers.pinPaths ? "Hide pin paths" : "Show great-circle pin paths", group: "Layers", icon: Compass, run: () => toggleLayer("pinPaths") },
+            // Imagery
+            { id: "imgBundled", label: "Imagery: Bundled (offline)", group: "Imagery", icon: Sparkles, run: () => updateImagery({ source: "bundled" }) },
+            { id: "imgViirs", label: "Imagery: NASA Live VIIRS true-color", group: "Imagery", icon: Sparkles, run: () => updateImagery({ source: "live", layerId: "viirsTrueColor" }) },
+            { id: "imgModis", label: "Imagery: NASA Live MODIS Terra", group: "Imagery", icon: Sparkles, run: () => updateImagery({ source: "live", layerId: "modisTrueColor" }) },
+            { id: "imgFires", label: "Imagery: MODIS active fires overlay", group: "Imagery", icon: Sparkles, run: () => updateImagery({ source: "live", layerId: "modisFires" }) },
+            { id: "imgSnow", label: "Imagery: MODIS snow cover", group: "Imagery", icon: Sparkles, run: () => updateImagery({ source: "live", layerId: "modisSnowCover" }) },
+            { id: "imgSeaIce", label: "Imagery: AMSR2 sea-ice concentration", group: "Imagery", icon: Sparkles, run: () => updateImagery({ source: "live", layerId: "seaIce" }) },
+            // Help
+            { id: "openTab", label: "Inspector → Globe", group: "Inspector", icon: Globe2, run: () => setInspectorTab("globe") },
+            { id: "openLayers", label: "Inspector → Layers", group: "Inspector", icon: Layers, hint: "L", run: () => setInspectorTab("layers") },
+            { id: "openImagery", label: "Inspector → Imagery", group: "Inspector", icon: Sparkles, run: () => setInspectorTab("imagery") },
+            { id: "openBookmarks", label: "Inspector → Saved", group: "Inspector", icon: Bookmark, run: () => setInspectorTab("bookmarks") },
+            { id: "openData", label: "Inspector → Data", group: "Inspector", icon: Layers, run: () => setInspectorTab("data") },
+          ]}
         />
       )}
 
@@ -2423,6 +2476,124 @@ function FpsOverlay() {
     return () => cancelAnimationFrame(raf);
   }, []);
   return <div className="atlasFps">{fps} fps</div>;
+}
+
+type CommandItem = {
+  id: string;
+  label: string;
+  group: string;          // "Layers" | "View" | "Imagery" | "Tools" | "Help"
+  hint?: string;          // shown on the right (e.g. shortcut, current state)
+  icon: IconComponent;
+  run: () => void;
+};
+
+function CommandPalette({
+  items,
+  onClose
+}: {
+  items: CommandItem[];
+  onClose: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [activeIndex, setActiveIndex] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return items;
+    return items.filter((it) =>
+      it.label.toLowerCase().includes(q) ||
+      it.group.toLowerCase().includes(q) ||
+      (it.hint || "").toLowerCase().includes(q)
+    );
+  }, [items, query]);
+
+  // Reset active index when filter changes
+  useEffect(() => { setActiveIndex(0); }, [query]);
+
+  // Group filtered items by `group` while preserving original order
+  const grouped = useMemo(() => {
+    const map = new Map<string, CommandItem[]>();
+    for (const it of filtered) {
+      if (!map.has(it.group)) map.set(it.group, []);
+      map.get(it.group)!.push(it);
+    }
+    return Array.from(map.entries());
+  }, [filtered]);
+
+  const handleKey = (e: React.KeyboardEvent) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveIndex((i) => Math.min(filtered.length - 1, i + 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveIndex((i) => Math.max(0, i - 1));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const it = filtered[activeIndex];
+      if (it) { it.run(); onClose(); }
+    }
+  };
+
+  // Compute global linear index for highlighting
+  let runningIndex = 0;
+  return (
+    <div className="atlasModalShade" onClick={onClose} role="dialog" aria-modal="true">
+      <div className="atlasCmdPalette" onClick={(e) => e.stopPropagation()}>
+        <div className="atlasCmdHead">
+          <Search size={16} />
+          <input
+            ref={inputRef}
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={handleKey}
+            placeholder="Type a command, layer, or setting…"
+            aria-label="Command palette"
+          />
+          <kbd>ESC</kbd>
+        </div>
+        <div className="atlasCmdBody">
+          {filtered.length === 0 ? (
+            <div className="atlasCmdEmpty">No matches for "{query}"</div>
+          ) : (
+            grouped.map(([group, list]) => (
+              <div key={group} className="atlasCmdGroup">
+                <div className="atlasCmdGroupTitle">{group}</div>
+                {list.map((it) => {
+                  const idx = runningIndex++;
+                  const isActive = idx === activeIndex;
+                  const Icon = it.icon;
+                  return (
+                    <button
+                      key={it.id}
+                      type="button"
+                      className={isActive ? "atlasCmdItem active" : "atlasCmdItem"}
+                      onMouseEnter={() => setActiveIndex(idx)}
+                      onClick={() => { it.run(); onClose(); }}
+                    >
+                      <Icon size={14} />
+                      <span>{it.label}</span>
+                      {it.hint && <kbd>{it.hint}</kbd>}
+                    </button>
+                  );
+                })}
+              </div>
+            ))
+          )}
+        </div>
+        <div className="atlasCmdFoot">
+          <span><kbd>↑↓</kbd> navigate</span>
+          <span><kbd>↵</kbd> select</span>
+          <span><kbd>ESC</kbd> close</span>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function SearchModal({
