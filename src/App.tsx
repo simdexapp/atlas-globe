@@ -321,6 +321,16 @@ function App() {
   const [hoveredAircraftId, setHoveredAircraftId] = useState<string | null>(null);
   const [hoverPos, setHoverPos] = useState<{ x: number; y: number } | null>(null);
 
+  // Measure tool: when on, the next two clicks set point A and point B,
+  // and we render the great-circle distance + bearing between them.
+  const [measureMode, setMeasureMode] = useState(false);
+  const [measurePoints, setMeasurePoints] = useState<Array<{ lat: number; lon: number }>>([]);
+
+  // When on, automatically transition Atlas → Surface at low altitudes and
+  // Surface → Atlas at high ones, so the user gets the right engine for the
+  // zoom level without thinking about modes.
+  const [autoModeSwitch, setAutoModeSwitch] = useState(false);
+
   // Per-aircraft history: last 12 polled positions (~2.4 minutes) so the
   // selected plane can render a fading trail behind it. Stored in a ref so
   // we don't re-render every poll. We bump aircraftHistoryTick once per
@@ -1149,6 +1159,22 @@ function App() {
 
   // Click-to-drop-pin (with reverse geocoding)
   const onGlobeClick = useCallback((lat: number, lon: number) => {
+    // Measure-mode short-circuit: don't drop a pin, just record the point
+    // and fire a toast with the running result.
+    if (measureMode) {
+      setMeasurePoints((prev) => {
+        const next = prev.length >= 2 ? [{ lat, lon }] : [...prev, { lat, lon }];
+        if (next.length === 2) {
+          const d = haversineKm(next[0].lat, next[0].lon, next[1].lat, next[1].lon);
+          const b = bearingDeg(next[0].lat, next[0].lon, next[1].lat, next[1].lon);
+          showToast(`${d.toLocaleString(undefined, { maximumFractionDigits: 0 })} km · bearing ${b.toFixed(0)}°`);
+        } else {
+          showToast(`Measure: point A at ${formatLat(lat)} ${formatLon(lon)}. Click again for B.`);
+        }
+        return next;
+      });
+      return;
+    }
     const id = `pin-${Date.now()}`;
     const color = PIN_COLORS[Math.floor(Math.random() * PIN_COLORS.length)];
     const pin: Pin = {
@@ -1180,7 +1206,7 @@ function App() {
         }
       } catch {/* ignore */}
     })();
-  }, [pins.length, showToast]);
+  }, [pins.length, showToast, measureMode]);
 
   const updatePin = useCallback((id: string, patch: Partial<Pin>) => {
     setPins((prev) => prev.map((p) => p.id === id ? { ...p, ...patch } : p));
@@ -1455,6 +1481,18 @@ function App() {
     })();
     return () => { cancelled = true; };
   }, [layers.borders, borders, showToast]);
+
+  // Auto-mode-switch: Atlas → Surface when zoom is too high for Atlas's
+  // single texture sphere to look good; Surface → Atlas when pulled back to
+  // orbital view (Atlas atmospheric shading is more cinematic from far away).
+  useEffect(() => {
+    if (!autoModeSwitch) return;
+    if (mode === "atlas" && cameraState.altKm > 0 && cameraState.altKm < 600) {
+      switchToSurface();
+    } else if (mode === "surface" && cameraState.altKm > 6000) {
+      switchToAtlas();
+    }
+  }, [autoModeSwitch, mode, cameraState.altKm, switchToSurface, switchToAtlas]);
 
   // Real-time sun position
   useEffect(() => {
@@ -1830,6 +1868,7 @@ function App() {
               pins={pins.map((p) => ({ id: p.id, lat: p.lat, lon: p.lon, label: p.label, color: p.color }))}
               aircraft={layers.aircraft ? filteredAircraft.map((a) => ({ icao24: a.icao24, callsign: a.callsign, lat: a.lat, lon: a.lon, altitudeM: a.altitudeM, headingDeg: a.headingDeg })) : []}
               realTimeSun={globe.realTimeSun}
+              initialCamera={cameraState}
             />
           </Suspense>
         )}
@@ -2054,6 +2093,8 @@ function App() {
             { id: "toggleHide", label: hideUi ? "Show UI" : "Hide UI", group: "View", icon: Eye, hint: "H", run: () => setHideUi((v) => !v) },
             { id: "toggleFps", label: showFps ? "Hide FPS overlay" : "Show FPS overlay", group: "View", icon: Telescope, run: () => setShowFps((v) => !v) },
             { id: "togglePin", label: pinTool ? "Exit pin tool" : "Pin tool", group: "View", icon: BookmarkPlus, run: () => setPinTool((v) => !v) },
+            { id: "toggleMeasure", label: measureMode ? "Exit measure tool" : "Measure distance (click 2 points)", group: "View", icon: Compass, run: () => { setMeasureMode((v) => !v); setMeasurePoints([]); } },
+            { id: "toggleAutoMode", label: autoModeSwitch ? "Disable auto Atlas/Surface switching" : "Enable auto Atlas/Surface switching", group: "View", icon: Mountain, run: () => setAutoModeSwitch((v) => !v) },
             { id: "myLoc", label: "Fly to my location", group: "View", icon: Navigation, run: () => flyToMyLocation() },
             { id: "randomPlace", label: "Fly to a random place on Earth", group: "View", icon: Sparkles, run: () => {
               // Pick a uniformly distributed point on the sphere (using inverse CDF on lat
@@ -2349,6 +2390,20 @@ function App() {
           </div>
         );
       })()}
+
+      {measureMode && (
+        <div className="atlasMeasurePill" role="status">
+          <Compass size={11} />
+          {measurePoints.length === 0 && <span>Measure: click point A on the globe</span>}
+          {measurePoints.length === 1 && <span>Measure: A set at {formatLat(measurePoints[0].lat)} {formatLon(measurePoints[0].lon)}. Click point B.</span>}
+          {measurePoints.length === 2 && (() => {
+            const d = haversineKm(measurePoints[0].lat, measurePoints[0].lon, measurePoints[1].lat, measurePoints[1].lon);
+            const b = bearingDeg(measurePoints[0].lat, measurePoints[0].lon, measurePoints[1].lat, measurePoints[1].lon);
+            return <span><b>{d.toLocaleString(undefined, { maximumFractionDigits: 0 })} km</b> · bearing {b.toFixed(0)}° · click again to reset</span>;
+          })()}
+          <button type="button" className="atlasIconBtn" onClick={() => { setMeasureMode(false); setMeasurePoints([]); }} aria-label="Exit measure"><X size={11} /></button>
+        </div>
+      )}
 
       {layers.aurora && spaceWeather && (() => {
         const { kpLatest, swSpeedKmS, swDensityCm3 } = spaceWeather;
@@ -5534,9 +5589,10 @@ function GlobeControls({
 
     if (controlsRef.current) controlsRef.current.update(delta);
 
-    // Emit camera state ~10/sec
+    // Emit camera state ~5/sec — half the React renders for the same
+    // visible smoothness in the status bar / mini-map / sun-info widget.
     const now = performance.now();
-    if (now - lastEmitRef.current > 100) {
+    if (now - lastEmitRef.current > 200) {
       lastEmitRef.current = now;
       const pos = camera.position;
       const distance = pos.length();

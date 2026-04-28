@@ -2373,6 +2373,33 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
   font-variant-numeric: tabular-nums;
 }
 
+/* Measure tool pill */
+.atlasMeasurePill {
+  position: fixed;
+  top: 124px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 6px 10px 6px var(--s-3);
+  border-radius: 99px;
+  border: 1px solid color-mix(in srgb, var(--warm), transparent 50%);
+  background: color-mix(in srgb, var(--warm), transparent 88%);
+  backdrop-filter: blur(10px);
+  font-size: var(--text-xs);
+  color: var(--gray-12);
+  box-shadow: var(--shadow-2);
+  pointer-events: auto;
+}
+.atlasMeasurePill svg { color: var(--warm); }
+.atlasMeasurePill b {
+  color: var(--warm);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
 /* NOAA aurora / space-weather pill */
 .atlasAuroraPill {
   position: fixed;

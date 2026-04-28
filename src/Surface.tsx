@@ -28,7 +28,8 @@ export default function Surface({
   flyTo,
   pins,
   aircraft,
-  realTimeSun
+  realTimeSun,
+  initialCamera
 }: {
   token: string;
   onCameraChange: (lat: number, lon: number, altKm: number) => void;
@@ -37,6 +38,9 @@ export default function Surface({
   pins?: SurfacePin[];
   aircraft?: SurfaceAircraft[];
   realTimeSun?: boolean;
+  // Lat/lon/altKm to position the Cesium camera on first mount, so the
+  // Atlas → Surface handoff doesn't jump to a different part of the globe.
+  initialCamera?: { lat: number; lon: number; altKm: number };
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Cesium.Viewer | null>(null);
@@ -131,6 +135,15 @@ export default function Surface({
           viewer.scene.primitives.add(tileset);
         })
         .catch(() => { /* OSM Buildings unavailable on this token tier */ });
+    }
+
+    // Initial camera position: if Atlas handed us coordinates, fly there
+    // immediately so the mode switch doesn't feel like a hard cut.
+    if (initialCamera) {
+      viewer.camera.setView({
+        destination: Cesium.Cartesian3.fromDegrees(initialCamera.lon, initialCamera.lat, Math.max(500, initialCamera.altKm * 1000)),
+        orientation: { heading: 0, pitch: -Cesium.Math.PI_OVER_TWO, roll: 0 },
+      });
     }
 
     viewerRef.current = viewer;
