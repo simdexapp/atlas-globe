@@ -4034,9 +4034,14 @@ function AircraftLayer({
   // Shared plane silhouette texture (allocated once)
   const planeTex = useMemo(() => createPlaneSilhouetteTexture(), []);
 
-  // Custom material with per-instance color + camera-distance scaling
+  // Custom material with per-instance color + camera-distance scaling.
+  // USE_INSTANCING_COLOR define forces three.js to inject `attribute vec3
+  // instanceColor` on shader compile — without it, ShaderMaterial doesn't
+  // auto-inject (unlike built-in materials), and the first compile fails
+  // with "undeclared identifier" before setColorAt triggers a recompile.
   const triMaterial = useMemo(() => {
     return new THREE.ShaderMaterial({
+      defines: { USE_INSTANCING_COLOR: "" },
       uniforms: {
         uPxScale: { value: 0.012 },          // ~3x bigger than the old triangle since the silhouette has detail
         uPlaneTex: { value: planeTex }
