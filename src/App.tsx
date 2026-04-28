@@ -10,8 +10,6 @@ import {
 import type { CSSProperties, ComponentType } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, Stars, useTexture } from "@react-three/drei";
-import { EffectComposer, Bloom, ToneMapping, Vignette } from "@react-three/postprocessing";
-import { BlendFunction, KernelSize, ToneMappingMode } from "postprocessing";
 import {
   Bookmark,
   BookmarkPlus,
@@ -3246,17 +3244,6 @@ function GlobeCanvas({
         {layers.tiangong && tiangongPosition && <TiangongMarker lat={tiangongPosition.lat} lon={tiangongPosition.lon} />}
         {layers.hubble && hubblePosition && <HubbleMarker lat={hubblePosition.lat} lon={hubblePosition.lon} />}
         <GlobeControls flyTo={flyTo} onCameraChange={onCameraChange} autoOrbit={orbiting && !paused} />
-        <EffectComposer multisampling={2} enableNormalPass={false}>
-          <Bloom
-            intensity={0.55}
-            luminanceThreshold={0.7}
-            luminanceSmoothing={0.4}
-            kernelSize={KernelSize.LARGE}
-            mipmapBlur
-          />
-          <Vignette eskil={false} offset={0.18} darkness={0.6} blendFunction={BlendFunction.NORMAL} />
-          <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
-        </EffectComposer>
       </Suspense>
     </Canvas>
   );
