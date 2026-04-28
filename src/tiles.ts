@@ -113,6 +113,10 @@ export function todayUTC(): string {
 }
 
 export type TileLoadProgress = (loaded: number, total: number) => void;
+// Optional intermediate-canvas callback: invoked on each progressive flush so
+// the consumer can build a texture immediately and refresh it as more tiles
+// arrive. Saves the user from staring at the bundled fallback for ~10s.
+export type TilePartialFlush = (canvas: HTMLCanvasElement, loaded: number, total: number) => void;
 
 export async function loadGibsComposite(
   layer: GibsLayer,
@@ -120,7 +124,8 @@ export async function loadGibsComposite(
   zoom: number,
   signal?: AbortSignal,
   onProgress?: TileLoadProgress,
-  fallbackBackground?: HTMLImageElement | HTMLCanvasElement
+  fallbackBackground?: HTMLImageElement | HTMLCanvasElement,
+  onPartial?: TilePartialFlush
 ): Promise<HTMLCanvasElement> {
   const tilesY = Math.pow(2, zoom);
   const tilesX = tilesY * 2; // EPSG:4326 is 2:1 (lon range 360, lat range 180)
@@ -179,6 +184,12 @@ export async function loadGibsComposite(
       }
       loaded += 1;
       onProgress?.(loaded, total);
+      // Progressive flush at ~25%, 50%, 75% so the user sees something fast.
+      // The threshold ladder is index-based, not floats — avoids spam from
+      // floating-point comparisons while still firing at clean checkpoints.
+      if (onPartial && (loaded === Math.floor(total * 0.25) || loaded === Math.floor(total * 0.5) || loaded === Math.floor(total * 0.75))) {
+        onPartial(canvas, loaded, total);
+      }
     }
   }
 

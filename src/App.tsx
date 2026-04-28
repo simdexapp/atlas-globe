@@ -1001,14 +1001,28 @@ function App() {
         ]);
         if (controller.signal.aborted) return;
 
-        // Day
+        // Day — show progressive previews at 25/50/75% so the user sees the
+        // continents fill in as tiles arrive instead of staring at the bundled
+        // fallback for the whole load. Each setDayTexture call disposes the
+        // previous one, so earlier progressive textures don't leak.
         const dayCanvas = await loadGibsComposite(
           dayLayer,
           imagery.date,
           imagery.zoom,
           controller.signal,
           (loaded, total) => setImageryProgress(loaded / (total * 2)),
-          dayFallback ?? undefined
+          dayFallback ?? undefined,
+          (canvas) => {
+            if (controller.signal.aborted) return;
+            const t = new THREE.CanvasTexture(canvas);
+            t.colorSpace = THREE.SRGBColorSpace;
+            t.anisotropy = 8;
+            t.wrapS = THREE.RepeatWrapping;
+            t.wrapT = THREE.ClampToEdgeWrapping;
+            t.flipY = true;
+            t.needsUpdate = true;
+            setDayTexture((prev) => { prev?.dispose(); return t; });
+          }
         );
         if (controller.signal.aborted) return;
         const newDay = new THREE.CanvasTexture(dayCanvas);
@@ -1991,14 +2005,14 @@ function App() {
       {/* Atlas-mode texture-wrapped sphere can't compete with Cesium's quadtree
           streaming at ground level. Below 200km altitude we surface a hint to
           switch into Surface mode for proper Google-Earth-style detail. */}
-      {mode === "atlas" && cameraState.altKm < 200 && cameraState.altKm > 0 && (
+      {mode === "atlas" && cameraState.altKm < 800 && cameraState.altKm > 0 && (
         <div className="atlasLowAltHint" role="note">
           <Mountain size={13} />
           <div>
-            <strong>Want ground-level detail?</strong>
-            <span>Atlas mode uses a single textured sphere. Surface mode streams hi-res tiles like Google Earth.</span>
+            <strong>Zoom past LEO altitude?</strong>
+            <span>Surface mode streams quadtree LOD tiles like Google Earth — true city-level detail. Atlas can't match that with a single texture.</span>
           </div>
-          <button type="button" className="atlasPrimaryBtn small" onClick={() => setMode("surface")}>Switch to Surface</button>
+          <button type="button" className="atlasPrimaryBtn small" onClick={() => switchToSurface()}>Switch to Surface</button>
           <button type="button" className="atlasIconBtn" onClick={() => setFlyTo((c) => ({ id: c.id + 1, lat: cameraState.lat, lon: cameraState.lon, altKm: 1500 }))} title="Pull back" aria-label="Pull back">
             <X size={12} />
           </button>
