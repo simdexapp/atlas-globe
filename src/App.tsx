@@ -5439,9 +5439,12 @@ function Earth({
     );
   }
 
+  // 128² is overkill at globe view — drop to 64² on mobile (still smooth at
+  // closer zoom, saves ~32k vertices and a meaningful chunk of fillrate).
+  const earthSegs = IS_LOW_END ? 64 : 128;
   return (
     <mesh ref={ref} onPointerDown={handlePointerDown}>
-      <sphereGeometry args={[1, 128, 128]} />
+      <sphereGeometry args={[1, earthSegs, earthSegs]} />
       <shaderMaterial
         ref={matRef}
         vertexShader={EARTH_VERTEX}
@@ -5919,9 +5922,10 @@ function Atmosphere({ intensity, sunDirection }: { intensity: number; sunDirecti
                            fresnel * uIntensity * (0.4 + brightness * 0.7));
     }
   `;
+  const segs = IS_LOW_END ? 32 : 64;
   return (
     <mesh scale={1.07}>
-      <sphereGeometry args={[1, 64, 64]} />
+      <sphereGeometry args={[1, segs, segs]} />
       <shaderMaterial
         ref={ref}
         vertexShader={vertexShader}
