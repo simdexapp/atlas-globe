@@ -4211,7 +4211,9 @@ const RADAR_FRAG = `
   void main() {
     vec3 n = vWorldNormal;
     float lat = asin(clamp(n.y, -1.0, 1.0));
-    float lon = atan(n.z, n.x);
+    // Negate z to match latLonToVec3's negated-lon convention — keeps mercator
+    // tiles aligned with the continents the user sees on the Earth texture.
+    float lon = atan(-n.z, n.x);
     // Web Mercator clips at ±~85.05113° (mercY = ±1). Skip outside that band.
     if (lat > 1.4835 || lat < -1.4835) discard;
     float u = (lon + PI) / (2.0 * PI);
@@ -4414,7 +4416,7 @@ function GlobeControls({
       const distance = pos.length();
       const altKm = distanceToAltKm(distance);
       const lat = THREE.MathUtils.radToDeg(Math.asin(pos.y / distance));
-      const lon = THREE.MathUtils.radToDeg(Math.atan2(pos.z, pos.x));
+      const lon = -THREE.MathUtils.radToDeg(Math.atan2(pos.z, pos.x));
       onCameraChange(lat, lon, altKm);
 
       // Adaptive rotate speed: slow down as we get close to surface
@@ -4452,8 +4454,17 @@ function altKmToDistance(altKm: number) {
 }
 
 function latLonToVec3(lat: number, lon: number, distance: number) {
+  // The Earth equirectangular textures (Blue Marble, GIBS daily, VIIRS, etc.)
+  // use the standard convention: canvas-left = lon=-180°, canvas-right = +180°.
+  // three.js's default sphereGeometry maps that texture so its +Z axis lands
+  // at lon=-90°, not +90°. To make every marker layer (borders, pins, aircraft,
+  // satellites, volcanoes, earthquakes, weather radar) line up with the visible
+  // continent positions, we negate the longitude in the 3D mapping so:
+  //   lat=0, lon=0   → +X
+  //   lat=0, lon=+90 → -Z   (matches Earth-texture's +90° meridian)
+  //   lat=0, lon=-90 → +Z   (matches Earth-texture's -90° meridian)
   const phi = THREE.MathUtils.degToRad(90 - lat);
-  const theta = THREE.MathUtils.degToRad(lon);
+  const theta = THREE.MathUtils.degToRad(-lon);
   return new THREE.Vector3(
     distance * Math.sin(phi) * Math.cos(theta),
     distance * Math.cos(phi),
@@ -4544,9 +4555,11 @@ function solarPositionNow(): { az: number; el: number } {
 }
 
 function pointToLatLon(point: THREE.Vector3): { lat: number; lon: number } {
+  // Inverse of latLonToVec3 — keeps the negation consistent so that
+  // pointToLatLon(latLonToVec3(lat, lon, r)) ≈ (lat, lon).
   const r = point.length();
   const lat = THREE.MathUtils.radToDeg(Math.asin(point.y / r));
-  const lon = THREE.MathUtils.radToDeg(Math.atan2(point.z, point.x));
+  const lon = -THREE.MathUtils.radToDeg(Math.atan2(point.z, point.x));
   return { lat, lon };
 }
 
