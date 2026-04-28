@@ -318,6 +318,7 @@ function App() {
   const [hideUi, setHideUi] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [showAbout, setShowAbout] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [uiTheme, setUiTheme] = useState<"dark" | "light">("dark");
@@ -2120,6 +2121,7 @@ function App() {
             { id: "search", label: "Search a place…", group: "Tools", icon: Search, hint: "F", run: () => setShowSearch(true) },
             { id: "shortcuts", label: "Show keyboard shortcuts", group: "Tools", icon: Wand2, hint: "?", run: () => setShowShortcuts(true) },
             { id: "embed", label: "Embed snippet", group: "Tools", icon: Share2, run: () => setShowEmbed(true) },
+            { id: "about", label: "About / data sources", group: "Tools", icon: Sparkles, run: () => setShowAbout(true) },
             { id: "timelapse", label: "Open time-lapse studio", group: "Tools", icon: Film, run: () => setTimelapseOpen(true) },
             // View
             { id: "reset", label: "Reset view", group: "View", icon: Crosshair, hint: "R", run: () => resetView() },
@@ -2130,6 +2132,8 @@ function App() {
             { id: "toggleAutoMode", label: autoModeSwitch ? "Disable auto Atlas/Surface switching" : "Enable auto Atlas/Surface switching", group: "View", icon: Mountain, run: () => setAutoModeSwitch((v) => !v) },
             { id: "dayNightCycle", label: globe.timeAnim ? "Stop day/night cycle" : "Start day/night cycle (24h time-lapse)", group: "View", icon: SunIcon, run: () => updateGlobe({ timeAnim: !globe.timeAnim }) },
             { id: "togglePause", label: paused ? "Resume animation" : "Pause animation", group: "View", icon: paused ? Play : Pause, run: () => setPaused((p) => !p) },
+            { id: "tour", label: tourPlaying ? "Stop bookmark tour" : "Start bookmark tour (cycle through pins)", group: "View", icon: Play, run: () => tourPlaying ? stopPinTour() : startPinTour() },
+            { id: "saveBookmark", label: "Bookmark current view", group: "View", icon: BookmarkPlus, hint: "B", run: () => saveCurrentBookmark() },
             { id: "myLoc", label: "Fly to my location", group: "View", icon: Navigation, run: () => flyToMyLocation() },
             { id: "randomPlace", label: "Fly to a random place on Earth", group: "View", icon: Sparkles, run: () => {
               // Pick a uniformly distributed point on the sphere (using inverse CDF on lat
@@ -2195,6 +2199,44 @@ function App() {
       {showShortcuts && <ShortcutsModal onClose={() => setShowShortcuts(false)} />}
 
       {showEmbed && <EmbedModal onClose={() => setShowEmbed(false)} />}
+
+      {showAbout && (
+        <div className="atlasModalShade" onClick={() => setShowAbout(false)} role="dialog" aria-modal="true">
+          <div className="atlasShortcutsModal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640 }}>
+            <div className="atlasModalHead">
+              <strong>Atlas — open data 3D globe</strong>
+              <button type="button" className="atlasIconBtn" onClick={() => setShowAbout(false)} aria-label="Close"><X size={14} /></button>
+            </div>
+            <p className="atlasHint" style={{ marginTop: 0 }}>
+              Atlas combines a custom three.js renderer (orbital "Atlas" mode) with a
+              Cesium-backed quadtree-streamed view ("Surface" mode) to give you both
+              cinematic full-globe shading from space and ground-level photo-realistic
+              detail when you zoom in. Every layer uses live, free, public data.
+            </p>
+            <h3 style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.1em", color: "var(--gray-10)", textTransform: "uppercase", marginTop: 18, marginBottom: 8 }}>Data sources</h3>
+            <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 6, fontSize: 12, color: "var(--gray-11)" }}>
+              <li><strong>NASA GIBS</strong> — daily satellite imagery (MODIS Terra, VIIRS SNPP, Black Marble, snow cover, fires, sea ice)</li>
+              <li><strong>NASA EONET</strong> — global natural events (wildfires, severe storms, volcanoes, sea ice, drought, dust/haze, snow, floods, landslides, manmade emissions)</li>
+              <li><strong>NASA NeoWS</strong> — near-Earth asteroid feed</li>
+              <li><strong>NOAA SWPC</strong> — Kp index, solar wind, OVATION aurora forecast</li>
+              <li><strong>USGS</strong> — last-24h earthquakes; elevated-volcano alert codes</li>
+              <li><strong>airplanes.live</strong> — global ADS-B aircraft positions (~7000 live)</li>
+              <li><strong>adsbdb.com</strong> — aircraft database (manufacturer, owner, type) + flight routes</li>
+              <li><strong>RainViewer</strong> — global precipitation radar mosaic, 2h history</li>
+              <li><strong>The Space Devs / Launch Library 2</strong> — upcoming rocket launches</li>
+              <li><strong>Cesium ion</strong> — World Imagery (Bing Aerial), World Terrain, OSM Buildings</li>
+              <li><strong>OpenStreetMap Nominatim</strong> — place geocoding</li>
+              <li><strong>Wikipedia REST</strong> — pin / volcano summaries</li>
+              <li><strong>wheretheiss.at</strong> — ISS / Tiangong / Hubble live positions</li>
+              <li><strong>world-atlas (Natural Earth)</strong> — country borders TopoJSON</li>
+            </ul>
+            <p className="atlasHint" style={{ marginTop: 18, fontSize: 10.5 }}>
+              All data is fetched directly from these public APIs from your browser; no
+              proxy server. Tile imagery is composited client-side. Free and open.
+            </p>
+          </div>
+        </div>
+      )}
 
       {showCoordInput && <CoordInputModal onSubmit={onCoordSubmit} onClose={() => setShowCoordInput(false)} />}
 
