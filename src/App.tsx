@@ -114,6 +114,7 @@ type LayerVisibility = {
   timeClock: boolean;
   dayInfo: boolean;
   launches: boolean;
+  worldDigest: boolean;
 };
 
 type GlobeSettings = {
@@ -206,7 +207,8 @@ const defaultLayers: LayerVisibility = {
   neoWatch: false,
   timeClock: false,
   dayInfo: false,
-  launches: false
+  launches: false,
+  worldDigest: false
 };
 
 const FAMOUS_VOLCANOES: { id: string; name: string; lat: number; lon: number }[] = [
@@ -2168,6 +2170,7 @@ function App() {
             { id: "widgetNeo", label: layers.neoWatch ? "Hide asteroid watch" : "Show asteroid watch (NASA NeoWS)", group: "Widgets", icon: Telescope, run: () => toggleLayer("neoWatch") },
             { id: "widgetClock", label: layers.timeClock ? "Hide world-clock widget" : "Show world-clock widget", group: "Widgets", icon: Compass, run: () => toggleLayer("timeClock") },
             { id: "widgetDayInfo", label: layers.dayInfo ? "Hide sunrise/sunset widget" : "Show sunrise/sunset for camera location", group: "Widgets", icon: SunIcon, run: () => toggleLayer("dayInfo") },
+            { id: "widgetDigest", label: layers.worldDigest ? "Hide world-digest widget" : "Show 'what's happening on Earth' digest", group: "Widgets", icon: Sparkles, run: () => toggleLayer("worldDigest") },
             { id: "layerClouds", label: layers.clouds ? "Hide clouds" : "Show clouds", group: "Layers", icon: Cloud, run: () => toggleLayer("clouds") },
             { id: "layerNight", label: layers.nightLights ? "Hide city lights" : "Show city lights", group: "Layers", icon: SunIcon, run: () => toggleLayer("nightLights") },
             { id: "layerAtm", label: layers.atmosphere ? "Hide atmosphere" : "Show atmosphere", group: "Layers", icon: Sparkles, run: () => toggleLayer("atmosphere") },
@@ -2338,6 +2341,72 @@ function App() {
               <div><span>NOON</span><strong>{fmtUTC(times.solarNoon)} UTC</strong></div>
               <div><span>SUNSET</span><strong>{fmtUTC(times.sunset)} UTC</strong></div>
               <div><span>DAY</span><strong>{Math.floor(dayLengthH)}h {Math.round((dayLengthH % 1) * 60)}m</strong></div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {layers.worldDigest && (() => {
+        // One-stop dashboard. Pulls from: aircraft snapshot, EONET events,
+        // space weather, next rocket launch. Each data source is loaded
+        // independently — the digest just reads whichever are populated.
+        const aircraftCount = aircraftSnapshot?.aircraft.length;
+        const eonetCount = eonetEvents.length;
+        const kp = spaceWeather?.kpLatest;
+        const sw = spaceWeather?.swSpeedKmS;
+        const nextLaunch = launches.find((l) => l.netUnixMs > Date.now());
+        // Subsolar point right now: lat = decl, lon = -(utcHours-12)*15
+        const now = new Date();
+        const utcHours = now.getUTCHours() + now.getUTCMinutes() / 60;
+        const decl = 23.45 * Math.sin((360 / 365) * (Math.floor((now.getTime() - Date.UTC(now.getUTCFullYear(), 0, 0)) / 86400000) - 81) * Math.PI / 180);
+        const subsolarLat = decl;
+        const subsolarLon = -((utcHours - 12) * 15);
+        return (
+          <div className="atlasDigestWidget" role="status">
+            <div className="atlasDigestHead">
+              <Sparkles size={12} />
+              <strong>Right now on Earth</strong>
+              <span>{now.toUTCString().slice(17, 22)} UTC</span>
+            </div>
+            <div className="atlasDigestGrid">
+              {aircraftCount !== undefined && (
+                <div>
+                  <span>Aircraft</span>
+                  <strong>{aircraftCount.toLocaleString()}</strong>
+                  <em>tracked globally</em>
+                </div>
+              )}
+              <div>
+                <span>EONET events</span>
+                <strong>{eonetCount > 0 ? eonetCount.toLocaleString() : "—"}</strong>
+                <em>open in last 30d</em>
+              </div>
+              {kp !== undefined && (
+                <div>
+                  <span>Geomagnetic Kp</span>
+                  <strong>{kp.toFixed(1)}</strong>
+                  <em>{kpScale(kp).label.toLowerCase()}</em>
+                </div>
+              )}
+              {sw !== undefined && sw > 0 && (
+                <div>
+                  <span>Solar wind</span>
+                  <strong>{Math.round(sw)} km/s</strong>
+                  <em>protons</em>
+                </div>
+              )}
+              {nextLaunch && (
+                <div>
+                  <span>Next launch</span>
+                  <strong>{timeUntilLaunch(nextLaunch.netUnixMs)}</strong>
+                  <em>{nextLaunch.rocket}</em>
+                </div>
+              )}
+              <div>
+                <span>Subsolar point</span>
+                <strong>{formatLat(subsolarLat)}</strong>
+                <em>{formatLon(subsolarLon)}</em>
+              </div>
             </div>
           </div>
         );

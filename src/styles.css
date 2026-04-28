@@ -2337,6 +2337,63 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
   color: var(--accent);
 }
 
+/* "Right now on Earth" digest widget */
+.atlasDigestWidget {
+  position: fixed;
+  top: 130px;
+  left: 64px;
+  z-index: 5;
+  width: 320px;
+  padding: var(--s-3);
+  border-radius: var(--r-3);
+  border: 1px solid var(--border);
+  background: rgba(8, 14, 26, 0.86);
+  backdrop-filter: blur(14px);
+  box-shadow: var(--shadow-2);
+  color: var(--gray-10);
+  font-size: var(--text-xs);
+}
+.atlasDigestHead {
+  display: grid;
+  grid-template-columns: 14px 1fr auto;
+  align-items: center;
+  gap: var(--s-2);
+  margin-bottom: var(--s-2);
+  padding-bottom: var(--s-2);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.atlasDigestHead svg { color: var(--accent); }
+.atlasDigestHead strong { font-size: var(--text-sm); color: var(--gray-12); }
+.atlasDigestHead span { font-size: 10.5px; color: var(--gray-9); font-family: ui-monospace, monospace; }
+
+.atlasDigestGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-2) var(--s-3);
+}
+.atlasDigestGrid > div {
+  display: grid;
+  gap: 1px;
+}
+.atlasDigestGrid span {
+  font-size: 9.5px;
+  color: var(--gray-9);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.atlasDigestGrid strong {
+  font-family: ui-monospace, monospace;
+  font-size: 14px;
+  color: var(--gray-12);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.atlasDigestGrid em {
+  font-size: 10px;
+  color: var(--gray-9);
+  font-style: normal;
+}
+
 /* World-clock widget */
 .atlasClockWidget {
   position: fixed;
