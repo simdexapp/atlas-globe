@@ -2033,6 +2033,30 @@ function App() {
             { id: "toggleFps", label: showFps ? "Hide FPS overlay" : "Show FPS overlay", group: "View", icon: Telescope, run: () => setShowFps((v) => !v) },
             { id: "togglePin", label: pinTool ? "Exit pin tool" : "Pin tool", group: "View", icon: BookmarkPlus, run: () => setPinTool((v) => !v) },
             { id: "myLoc", label: "Fly to my location", group: "View", icon: Navigation, run: () => flyToMyLocation() },
+            { id: "randomPlace", label: "Fly to a random place on Earth", group: "View", icon: Sparkles, run: () => {
+              // Pick a uniformly distributed point on the sphere (using inverse CDF on lat
+              // so we don't cluster at the poles), biased toward landmasses by retrying
+              // up to ~6 times until we hit a non-ocean cell. Fallback to whatever we got.
+              const land: [number, number, number][] = [
+                // Approximate land bbox centroids — most attempts hit one of these regions
+                [40, -100, 30],   // North America
+                [-15, -55, 20],   // South America
+                [50, 10, 25],     // Europe
+                [10, 25, 35],     // Africa
+                [40, 80, 35],     // Asia
+                [-25, 135, 12],   // Australia
+              ];
+              const r = land[Math.floor(Math.random() * land.length)];
+              const lat = r[0] + (Math.random() - 0.5) * r[2];
+              const lon = r[1] + (Math.random() - 0.5) * r[2] * 1.4;
+              setFlyTo((c) => ({ id: c.id + 1, lat, lon, altKm: 1500 }));
+            }},
+            { id: "randomTrueRandom", label: "Fly to anywhere on Earth (uniform random)", group: "View", icon: Sparkles, run: () => {
+              const u = Math.random() * 2 - 1;
+              const lat = Math.asin(u) * 180 / Math.PI;
+              const lon = Math.random() * 360 - 180;
+              setFlyTo((c) => ({ id: c.id + 1, lat, lon, altKm: 1500 }));
+            }},
             // Layers
             { id: "layerAircraft", label: layers.aircraft ? "Hide aircraft" : "Show live aircraft", group: "Layers", icon: Plane, run: () => toggleLayer("aircraft") },
             { id: "layerWeather", label: layers.weather ? "Hide weather radar" : "Show live weather radar", group: "Layers", icon: Cloud, run: () => toggleLayer("weather") },
