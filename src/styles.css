@@ -1969,22 +1969,114 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
 
 .atlasFlightPill {
   position: fixed;
-  top: 78px;
-  left: 60px;
+  top: 88px;
+  left: 64px;
   z-index: 5;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
+  gap: var(--s-2);
+  padding: 6px var(--s-3);
   border-radius: 99px;
-  border: 1px solid rgba(92, 181, 255, 0.25);
+  border: 1px solid var(--border-accent);
   background: rgba(10, 16, 28, 0.78);
   backdrop-filter: blur(10px);
-  font-size: 11px;
-  color: #b8c2d2;
+  font-size: var(--text-xs);
+  color: var(--gray-10);
   pointer-events: none;
 }
-.atlasFlightPill svg { color: #5cb5ff; }
+.atlasFlightPill svg { color: var(--accent); }
+
+/* New flight controls block */
+.atlasFlightControls {
+  position: fixed;
+  top: 84px;
+  left: 64px;
+  z-index: 6;
+  display: grid;
+  gap: var(--s-2);
+  padding: var(--s-3);
+  border-radius: var(--r-3);
+  border: 1px solid var(--border);
+  background: rgba(8, 14, 26, 0.86);
+  backdrop-filter: blur(14px);
+  font-size: var(--text-xs);
+  color: var(--gray-10);
+  box-shadow: var(--shadow-2);
+  width: 320px;
+  max-width: calc(100vw - 380px);
+}
+.atlasFlightPillInline {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--text-sm);
+  color: var(--gray-11);
+}
+.atlasFlightPillInline svg { color: var(--accent); }
+.atlasFlightPillInline b { color: var(--gray-12); font-weight: 800; font-variant-numeric: tabular-nums; }
+.atlasFlightTotal { color: var(--gray-9); }
+.atlasFlightMeta { color: var(--gray-9); font-family: ui-monospace, monospace; font-size: 10.5px; letter-spacing: 0.02em; }
+.atlasFlightFilters { display: grid; gap: var(--s-2); }
+.atlasFlightChips {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--gray-2);
+  border-radius: var(--r-2);
+  border: 1px solid var(--border-subtle);
+}
+.atlasFlightChips button {
+  flex: 1;
+  height: 24px;
+  padding: 0 var(--s-2);
+  border: 0;
+  border-radius: var(--r-1);
+  background: transparent;
+  color: var(--gray-9);
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.atlasFlightChips button:hover { color: var(--gray-12); background: var(--gray-3); }
+.atlasFlightChips button.active {
+  background: color-mix(in srgb, var(--accent), transparent 78%);
+  color: var(--accent);
+  box-shadow: 0 0 0 1px var(--border-accent) inset;
+}
+.atlasFlightAlt {
+  display: grid;
+  gap: var(--s-1);
+  font-size: 10.5px;
+  color: var(--gray-9);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+.atlasFlightAltRow { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-2); }
+.atlasFlightAltRow input[type="range"] { height: 18px; }
+.atlasFlightAltRow input[type="range"]::-webkit-slider-thumb { width: 12px; height: 12px; margin-top: -4px; }
+
+/* Inline "Switch to VIIRS" fix-it card */
+.atlasFixHint {
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  align-items: start;
+  gap: var(--s-2) var(--s-3);
+  padding: var(--s-3);
+  border: 1px solid color-mix(in srgb, var(--warm), transparent 60%);
+  border-radius: var(--r-3);
+  background: color-mix(in srgb, var(--warm), transparent 90%);
+  margin-top: var(--s-2);
+}
+.atlasFixHint > svg { color: var(--warm); margin-top: 2px; }
+.atlasFixHint > div { display: grid; gap: 2px; min-width: 0; }
+.atlasFixHint strong { color: var(--gray-12); font-size: var(--text-base); }
+.atlasFixHint span { color: var(--gray-10); font-size: 10.5px; }
+.atlasFixHint button {
+  grid-column: 1 / -1;
+  margin-top: var(--s-2);
+}
 
 .atlasAircraftCard {
   position: fixed;

@@ -292,6 +292,40 @@ function App() {
   const [aircraftSnapshot, setAircraftSnapshot] = useState<FlightSnapshot | null>(null);
   const [aircraftLoading, setAircraftLoading] = useState(false);
   const [aircraftError, setAircraftError] = useState<string | null>(null);
+  const [aircraftMinAltFt, setAircraftMinAltFt] = useState(0);
+  const [aircraftMaxAltFt, setAircraftMaxAltFt] = useState(50000);
+  const [aircraftCategory, setAircraftCategory] = useState<"all" | "commercial" | "private" | "military" | "heli">("all");
+
+  const filteredAircraft = useMemo(() => {
+    const list = aircraftSnapshot?.aircraft ?? [];
+    if (list.length === 0) return list;
+    const minM = aircraftMinAltFt * 0.3048;
+    const maxM = aircraftMaxAltFt * 0.3048;
+    return list.filter((a) => {
+      if (a.altitudeM < minM || a.altitudeM > maxM) return false;
+      if (aircraftCategory === "all") return true;
+      // ADS-B category codes:
+      //   A1-A3 = light/medium/heavy commercial fixed-wing
+      //   A4-A5 = high-vortex/large transport
+      //   A7 = rotorcraft (helicopter)
+      //   B0-B7 = balloon/glider/UAV/etc (private)
+      //   C0-C7 = surface/emergency vehicles (filter out)
+      //   military: prefer registration prefix or callsign hints (RCH/PAT/etc), but the
+      //   feed sets dbFlags: 1 for military — we pass that through as `category` only
+      //   when it's the ADS-B category. So heuristic: callsign starts with known mil prefixes.
+      const cat = a.category || "";
+      const callsignPrefix = a.callsign.slice(0, 3).toUpperCase();
+      const milPrefixes = ["RCH", "PAT", "REA", "SAM", "MAGMA", "VENOM", "DUKE", "EAGL", "ARMY", "NAVY", "USAF"];
+      const isMilByCallsign = milPrefixes.some((p) => callsignPrefix.startsWith(p.slice(0, 3)));
+      switch (aircraftCategory) {
+        case "commercial": return /^A[1-5]/.test(cat);
+        case "heli":       return cat === "A7";
+        case "military":   return isMilByCallsign;
+        case "private":    return /^A[0-3]/.test(cat) || /^B/.test(cat);
+        default:           return true;
+      }
+    });
+  }, [aircraftSnapshot, aircraftMinAltFt, aircraftMaxAltFt, aircraftCategory]);
   const [selectedAircraftId, setSelectedAircraftId] = useState<string | null>(null);
   const [timelapseOpen, setTimelapseOpen] = useState(false);
   const [timelapseFrames, setTimelapseFrames] = useState<TimelapseFrame[]>([]);
@@ -1415,7 +1449,7 @@ function App() {
             issPosition={issPosition}
             tiangongPosition={tiangongPosition}
             hubblePosition={hubblePosition}
-            aircraft={aircraftSnapshot?.aircraft ?? []}
+            aircraft={filteredAircraft}
             selectedAircraftId={selectedAircraftId}
             pins={pins}
             earthquakes={earthquakes}
@@ -1704,15 +1738,58 @@ function App() {
       )}
 
       {layers.aircraft && (
-        <div className="atlasFlightPill" role="status">
-          <Plane size={11} />
-          {aircraftError ? (
-            <span>Flights: {aircraftError}</span>
-          ) : aircraftSnapshot ? (
-            <span>{aircraftSnapshot.aircraft.length.toLocaleString()} aircraft tracked · {Math.round((Date.now() - aircraftSnapshot.fetchedAt) / 1000)}s ago · {aircraftSnapshot.source}</span>
-          ) : (
-            <span>{aircraftLoading ? "Polling OpenSky…" : "Flights idle"}</span>
-          )}
+        <div className="atlasFlightControls" role="status">
+          <div className="atlasFlightPillInline">
+            <Plane size={11} />
+            {aircraftError ? (
+              <span>Flights: {aircraftError}</span>
+            ) : aircraftSnapshot ? (
+              <span>
+                <b>{filteredAircraft.length.toLocaleString()}</b>
+                {filteredAircraft.length !== aircraftSnapshot.aircraft.length && (
+                  <span className="atlasFlightTotal"> / {aircraftSnapshot.aircraft.length.toLocaleString()}</span>
+                )}
+                <span className="atlasFlightMeta"> · {Math.round((Date.now() - aircraftSnapshot.fetchedAt) / 1000)}s · {aircraftSnapshot.source}</span>
+              </span>
+            ) : (
+              <span>{aircraftLoading ? "Polling…" : "Flights idle"}</span>
+            )}
+          </div>
+          <div className="atlasFlightFilters">
+            <div className="atlasFlightChips">
+              {(["all", "commercial", "private", "military", "heli"] as const).map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  className={aircraftCategory === c ? "active" : ""}
+                  onClick={() => setAircraftCategory(c)}
+                >{c}</button>
+              ))}
+            </div>
+            <label className="atlasFlightAlt">
+              <span>Alt {aircraftMinAltFt.toLocaleString()}–{aircraftMaxAltFt.toLocaleString()} ft</span>
+              <div className="atlasFlightAltRow">
+                <input
+                  type="range" min={0} max={50000} step={1000}
+                  value={aircraftMinAltFt}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value, 10);
+                    setAircraftMinAltFt(v);
+                    if (v > aircraftMaxAltFt) setAircraftMaxAltFt(v);
+                  }}
+                />
+                <input
+                  type="range" min={0} max={50000} step={1000}
+                  value={aircraftMaxAltFt}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value, 10);
+                    setAircraftMaxAltFt(v);
+                    if (v < aircraftMinAltFt) setAircraftMinAltFt(v);
+                  }}
+                />
+              </div>
+            </label>
+          </div>
         </div>
       )}
 
@@ -1950,7 +2027,17 @@ function ImageryPanel({ imagery, onUpdate, onReset, loading, progress }: { image
             <p className="atlasHint" style={{ fontSize: 10.5, opacity: 0.75 }}>(Custom-URL fetching is read as informational here; the GIBS pipeline is what's actively fetched. Switch to "NASA live" or "Bundled" for the rendered Earth.)</p>
           </>
         )}
-        <button type="button" className="atlasPrimaryBtn small" style={{ background: "transparent", color: "#ff8a8a", marginTop: 8 }} onClick={onReset}>
+        {imagery.source === "live" && imagery.layerId === "modisTrueColor" && (
+          <div className="atlasFixHint">
+            <Sparkles size={11} />
+            <div>
+              <strong>Seeing diagonal swath gaps?</strong>
+              <span>MODIS Terra has visible orbit gaps. VIIRS is recommended.</span>
+            </div>
+            <button type="button" className="atlasPrimaryBtn small" onClick={() => onUpdate({ layerId: "viirsTrueColor" })}>Switch to VIIRS</button>
+          </div>
+        )}
+        <button type="button" className="atlasBtn small" style={{ marginTop: 8, color: "var(--danger)", borderColor: "color-mix(in srgb, var(--danger), transparent 60%)" }} onClick={onReset}>
           Reset all settings to defaults
         </button>
       </PanelSection>
@@ -3463,8 +3550,78 @@ function AircraftLayer({
         frustumCulled={false}
         renderOrder={21}
       />
+      {selectedAircraft && <AircraftTrail aircraft={selectedAircraft} />}
     </>
   );
+}
+
+// Predicted-path trail for the selected aircraft: extend a great-circle line
+// 5 minutes ahead based on its current heading + ground speed. Renders as a
+// fading polyline that smoothly anchors to the plane's altitude shell.
+function AircraftTrail({ aircraft }: { aircraft: Aircraft }) {
+  const { positions, colors } = useMemo(() => {
+    const segments = 32;
+    const minutesAhead = 5;
+    const distanceM = aircraft.velocityMs * minutesAhead * 60;
+    const distanceRad = distanceM / 1000 / EARTH_RADIUS_KM;
+    const lat0 = aircraft.lat * Math.PI / 180;
+    const lon0 = aircraft.lon * Math.PI / 180;
+    const heading = (aircraft.headingDeg || 0) * Math.PI / 180;
+    const altKm = Math.max(0, aircraft.altitudeM / 1000);
+    const radius = 1 + altKm / EARTH_RADIUS_KM + 0.005;
+
+    const pos = new Float32Array((segments + 1) * 3);
+    const col = new Float32Array((segments + 1) * 3);
+    for (let i = 0; i <= segments; i++) {
+      const t = i / segments;
+      const d = distanceRad * t;
+      // Forward great-circle stepping by initial bearing
+      const lat2 = Math.asin(
+        Math.sin(lat0) * Math.cos(d) + Math.cos(lat0) * Math.sin(d) * Math.cos(heading)
+      );
+      const lon2 = lon0 + Math.atan2(
+        Math.sin(heading) * Math.sin(d) * Math.cos(lat0),
+        Math.cos(d) - Math.sin(lat0) * Math.sin(lat2)
+      );
+      const phi = Math.PI / 2 - lat2;
+      const theta = lon2;
+      pos[i * 3 + 0] = radius * Math.sin(phi) * Math.cos(theta);
+      pos[i * 3 + 1] = radius * Math.cos(phi);
+      pos[i * 3 + 2] = radius * Math.sin(phi) * Math.sin(theta);
+      // Fade from accent at start to transparent at tip
+      const alpha = 1 - t;
+      col[i * 3 + 0] = 0.36 * alpha;
+      col[i * 3 + 1] = 0.71 * alpha;
+      col[i * 3 + 2] = 1.0 * alpha;
+    }
+    return { positions: pos, colors: col };
+  }, [aircraft.lat, aircraft.lon, aircraft.headingDeg, aircraft.velocityMs, aircraft.altitudeM]);
+
+  const trailObject = useMemo(() => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    g.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    const m = new THREE.LineBasicMaterial({
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.9,
+      depthWrite: false,
+      linewidth: 2
+    });
+    const obj = new THREE.Line(g, m);
+    obj.renderOrder = 22;
+    return obj;
+  }, [positions, colors]);
+
+  useEffect(() => {
+    return () => {
+      trailObject.geometry.dispose();
+      (trailObject.material as THREE.Material).dispose();
+    };
+  }, [trailObject]);
+
+  if (aircraft.velocityMs <= 0) return null;
+  return <primitive object={trailObject} />;
 }
 
 function computeAircraftMatrix(
