@@ -77,7 +77,9 @@ export default function Surface({
   selectedAircraft,
   onSelectAircraft,
   imageryStyle,
-  tiltCommand
+  tiltCommand,
+  terrainExaggeration,
+  fogEnabled
 }: {
   token: string;
   onCameraChange: (lat: number, lon: number, altKm: number) => void;
@@ -99,9 +101,12 @@ export default function Surface({
   // Base imagery: 'bing' = Bing Aerial (Cesium ion asset 2),
   // 'esri' = ESRI World Imagery (asset 3812), 'osm' = OpenStreetMap.
   imageryStyle?: "bing" | "esri" | "osm";
-  // Camera tilt command — when id changes, the Surface viewer re-points to
-  // the current lat/lon/alt with the requested pitch (in degrees, 90 = top-down).
   tiltCommand?: { id: number; pitchDeg: number } | null;
+  // Multiplies real terrain heights — 1 is normal, 2 doubles vertical
+  // relief (mountains look twice as tall), 0.5 flattens.
+  terrainExaggeration?: number;
+  // Toggles Cesium's built-in atmospheric fog (gives distance haze).
+  fogEnabled?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Cesium.Viewer | null>(null);
@@ -747,6 +752,24 @@ export default function Surface({
       aircraftBillboardIndexRef.current.set(bb, a.icao24);
     }
   }, [aircraft]);
+
+  // ===== Terrain exaggeration =====
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    if (typeof terrainExaggeration === "number") {
+      (viewer.scene.globe as any).terrainExaggeration = terrainExaggeration;
+      viewer.scene.requestRender();
+    }
+  }, [terrainExaggeration]);
+
+  // ===== Fog toggle =====
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    viewer.scene.fog.enabled = fogEnabled !== false;
+    viewer.scene.requestRender();
+  }, [fogEnabled]);
 
   // ===== Tilt command: re-orient camera at current position =====
   const lastTiltIdRef = useRef(0);

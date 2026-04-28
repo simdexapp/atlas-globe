@@ -365,6 +365,8 @@ function App() {
   const [autoModeSwitch, setAutoModeSwitch] = useState(false);
   const [surfaceImagery, setSurfaceImagery] = useState<"bing" | "esri" | "osm">("bing");
   const [surfaceTilt, setSurfaceTilt] = useState<{ id: number; pitchDeg: number } | null>(null);
+  const [surfaceTerrainExag, setSurfaceTerrainExag] = useState(1);
+  const [surfaceFog, setSurfaceFog] = useState(true);
 
   // Per-aircraft history: last 12 polled positions (~2.4 minutes) so the
   // selected plane can render a fading trail behind it. Stored in a ref so
@@ -1934,6 +1936,8 @@ function App() {
               show3DBuildings={layers.buildings3D !== false}
               imageryStyle={surfaceImagery}
               tiltCommand={surfaceTilt}
+              terrainExaggeration={surfaceTerrainExag}
+              fogEnabled={surfaceFog}
               selectedAircraft={selectedAircraftId && aircraftSnapshot ? (() => {
                 const a = aircraftSnapshot.aircraft.find((x) => x.icao24 === selectedAircraftId);
                 return a ? { icao24: a.icao24, lat: a.lat, lon: a.lon, altitudeM: a.altitudeM, headingDeg: a.headingDeg, velocityMs: a.velocityMs } : null;
@@ -2238,6 +2242,11 @@ function App() {
             { id: "surfTiltTop", label: "Surface camera: top-down (90°)", group: "Imagery", icon: Mountain, run: () => setSurfaceTilt((c) => ({ id: (c?.id ?? 0) + 1, pitchDeg: 90 })) },
             { id: "surfTilt45", label: "Surface camera: oblique (45°)", group: "Imagery", icon: Mountain, run: () => setSurfaceTilt((c) => ({ id: (c?.id ?? 0) + 1, pitchDeg: 45 })) },
             { id: "surfTilt30", label: "Surface camera: low oblique (30°)", group: "Imagery", icon: Mountain, run: () => setSurfaceTilt((c) => ({ id: (c?.id ?? 0) + 1, pitchDeg: 30 })) },
+            { id: "exag1", label: "Terrain exaggeration: 1× (real)", group: "Imagery", icon: Mountain, run: () => setSurfaceTerrainExag(1) },
+            { id: "exag15", label: "Terrain exaggeration: 1.5×", group: "Imagery", icon: Mountain, run: () => setSurfaceTerrainExag(1.5) },
+            { id: "exag2", label: "Terrain exaggeration: 2× (dramatic)", group: "Imagery", icon: Mountain, run: () => setSurfaceTerrainExag(2) },
+            { id: "exag3", label: "Terrain exaggeration: 3× (extreme)", group: "Imagery", icon: Mountain, run: () => setSurfaceTerrainExag(3) },
+            { id: "toggleFog", label: surfaceFog ? "Hide atmospheric fog" : "Show atmospheric fog", group: "Imagery", icon: Cloud, run: () => setSurfaceFog((v) => !v) },
             { id: "imgViirs", label: "Imagery: NASA Live VIIRS true-color", group: "Imagery", icon: Sparkles, run: () => updateImagery({ source: "live", layerId: "viirsTrueColor" }) },
             { id: "imgModis", label: "Imagery: NASA Live MODIS Terra", group: "Imagery", icon: Sparkles, run: () => updateImagery({ source: "live", layerId: "modisTrueColor" }) },
             { id: "imgFires", label: "Imagery: MODIS active fires overlay", group: "Imagery", icon: Sparkles, run: () => updateImagery({ source: "live", layerId: "modisFires" }) },
