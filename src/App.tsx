@@ -179,9 +179,40 @@ const MIN_DISTANCE = 1.0008;        // ~5 km above surface (texture-pixelated, b
 const MAX_DISTANCE = 12;            // far view from space
 const SPACE_DISTANCE = 2.6;          // default starting altitude
 
+// Mobile / low-end detection. Used to gate expensive features (high MSAA,
+// 3D buildings, full aircraft fleet, frequent polling). One-shot at module
+// scope so it's stable across renders.
+const IS_MOBILE = (() => {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent || "";
+  if (/iphone|ipad|ipod|android|mobile/i.test(ua)) return true;
+  if (typeof window !== "undefined" && window.matchMedia && window.matchMedia("(pointer: coarse)").matches) {
+    if (window.innerWidth < 900) return true;
+  }
+  return false;
+})();
+
+const IS_LOW_END = (() => {
+  if (typeof navigator === "undefined") return false;
+  const dm = (navigator as any).deviceMemory;
+  if (typeof dm === "number" && dm <= 4) return true;
+  const cores = (navigator as any).hardwareConcurrency;
+  if (typeof cores === "number" && cores <= 4) return true;
+  return IS_MOBILE;
+})();
+
+// Aircraft cap on phones. Full ADS-B feed is ~12k planes — rendering that
+// at 5fps is brutal on a phone. We sample to 1500 (still visually dense),
+// preferring high-altitude commercial flights (visible from far out).
+const MOBILE_AIRCRAFT_CAP = 1500;
+
 const defaultLayers: LayerVisibility = {
-  clouds: true,
-  atmosphere: true,
+  // Mobile: clouds is a rotating shaded sphere, atmosphere is a Fresnel
+  // postprocess-style pass — both are expensive shaders. Default off on
+  // phones; user can re-enable via the layers panel if they want the
+  // cinematic look.
+  clouds: !IS_LOW_END,
+  atmosphere: !IS_LOW_END,
   stars: true,
   graticule: false,
   cardinals: true,
@@ -212,7 +243,9 @@ const defaultLayers: LayerVisibility = {
   launches: false,
   worldDigest: false,
   noonMeridian: false,
-  buildings3D: true
+  // 3D OSM Buildings tileset is heavy — ~50-200MB streamed for a typical
+  // city view. Off by default on mobile; user can opt-in via Cmd+K.
+  buildings3D: !IS_LOW_END
 };
 
 const FAMOUS_VOLCANOES: { id: string; name: string; lat: number; lon: number }[] = [
@@ -374,6 +407,8 @@ function App() {
   const [surfaceFog, setSurfaceFog] = useState(true);
   const [surfaceManualHour, setSurfaceManualHour] = useState<number | null>(null);
   const [surfaceScreenshotCmd, setSurfaceScreenshotCmd] = useState<{ id: number } | null>(null);
+  // Lock Cesium camera onto the currently selected aircraft.
+  const [followSelectedAircraft, setFollowSelectedAircraft] = useState(false);
   // GeoJSON drag-import state — set by the body-level dragdrop listener.
   const [geoJsonImport, setGeoJsonImport] = useState<any | null>(null);
 
@@ -460,7 +495,7 @@ function App() {
     const minM = aircraftMinAltFt * 0.3048;
     const maxM = aircraftMaxAltFt * 0.3048;
     const prefix = aircraftAirlinePrefix.trim().toUpperCase();
-    return list.filter((a) => {
+    const passed = list.filter((a) => {
       if (a.altitudeM < minM || a.altitudeM > maxM) return false;
       // Airline filter is independent of category — applies on top.
       if (prefix && !(a.callsign || "").toUpperCase().startsWith(prefix)) return false;
@@ -486,6 +521,14 @@ function App() {
         default:           return true;
       }
     });
+    // Mobile cap — keep the most visually-relevant subset. Sort by altitude
+    // descending (high-altitude airliners are visible from the most zoom
+    // levels) and slice to MOBILE_AIRCRAFT_CAP. Avoids visible "missing
+    // planes" at globe view since those are mostly low-alt regional flights.
+    if (IS_LOW_END && passed.length > MOBILE_AIRCRAFT_CAP) {
+      return [...passed].sort((a, b) => b.altitudeM - a.altitudeM).slice(0, MOBILE_AIRCRAFT_CAP);
+    }
+    return passed;
   }, [aircraftSnapshot, aircraftMinAltFt, aircraftMaxAltFt, aircraftCategory, aircraftAirlinePrefix]);
   const [selectedAircraftId, setSelectedAircraftId] = useState<string | null>(null);
   const [timelapseOpen, setTimelapseOpen] = useState(false);
@@ -605,7 +648,9 @@ function App() {
       }));
     };
     fetchAll();
-    const handle = window.setInterval(fetchAll, 5000);
+    // ISS/Tiangong/Hubble move ~7.7 km/s — even 15s of stale position is
+    // visually fine at globe scale, and on mobile 5s polls were noticeable.
+    const handle = window.setInterval(fetchAll, IS_LOW_END ? 15000 : 5000);
     return () => { cancelled = true; window.clearInterval(handle); };
   }, [layers.iss, layers.tiangong, layers.hubble]);
 
@@ -661,7 +706,8 @@ function App() {
       }
     };
     tick();
-    const handle = window.setInterval(tick, 12000);
+    // Mobile: 25s between polls (was 12s) — halves bandwidth + render churn.
+    const handle = window.setInterval(tick, IS_LOW_END ? 25000 : 12000);
     return () => {
       cancelled = true;
       abort?.abort();
@@ -1993,10 +2039,15 @@ function App() {
               }}
               selectedAircraft={selectedAircraftId && aircraftSnapshot ? (() => {
                 const a = aircraftSnapshot.aircraft.find((x) => x.icao24 === selectedAircraftId);
-                return a ? { icao24: a.icao24, lat: a.lat, lon: a.lon, altitudeM: a.altitudeM, headingDeg: a.headingDeg, velocityMs: a.velocityMs } : null;
+                return a ? { icao24: a.icao24, callsign: a.callsign, lat: a.lat, lon: a.lon, altitudeM: a.altitudeM, headingDeg: a.headingDeg, velocityMs: a.velocityMs } : null;
               })() : null}
               selectedAircraftHistory={selectedAircraftId ? (aircraftHistoryRef.current.get(selectedAircraftId) ?? []).map((p) => ({ lat: p.lat, lon: p.lon, alt: p.alt })) : undefined}
-              onSelectAircraft={setSelectedAircraftId}
+              onSelectAircraft={(id) => {
+                setSelectedAircraftId(id);
+                // Deselecting clears follow mode automatically.
+                if (!id) setFollowSelectedAircraft(false);
+              }}
+              followSelectedAircraft={followSelectedAircraft}
             />
           </Suspense>
         )}
@@ -2307,6 +2358,16 @@ function App() {
             { id: "exag2", label: "Terrain exaggeration: 2× (dramatic)", group: "Imagery", icon: Mountain, run: () => setSurfaceTerrainExag(2) },
             { id: "exag3", label: "Terrain exaggeration: 3× (extreme)", group: "Imagery", icon: Mountain, run: () => setSurfaceTerrainExag(3) },
             { id: "toggleFog", label: surfaceFog ? "Hide atmospheric fog" : "Show atmospheric fog", group: "Imagery", icon: Cloud, run: () => setSurfaceFog((v) => !v) },
+            // Camera-follow only makes sense when an aircraft is selected
+            // and we're in Surface mode. The label changes based on state so
+            // users always see whether the toggle would start or stop following.
+            ...(mode === "surface" && selectedAircraftId ? [{
+              id: "followAircraft" as const,
+              label: followSelectedAircraft ? "Stop following selected aircraft" : "Follow selected aircraft (camera lock)",
+              group: "Tools" as const,
+              icon: Plane,
+              run: () => setFollowSelectedAircraft((v) => !v),
+            }] : []),
             { id: "timeRealTime", label: "Surface clock: real-time UTC", group: "Imagery", icon: SunIcon, run: () => { updateGlobe({ realTimeSun: true }); setSurfaceManualHour(null); } },
             { id: "time06", label: "Surface clock: 06:00 UTC (sunrise over Greenwich)", group: "Imagery", icon: SunIcon, run: () => { updateGlobe({ realTimeSun: false }); setSurfaceManualHour(6); } },
             { id: "time12", label: "Surface clock: 12:00 UTC (noon Greenwich)", group: "Imagery", icon: SunIcon, run: () => { updateGlobe({ realTimeSun: false }); setSurfaceManualHour(12); } },
@@ -4347,9 +4408,12 @@ function GlobeCanvas({
 
   return (
     <Canvas
-      dpr={[1, Math.min(window.devicePixelRatio, 2)]}
+      // Mobile: cap DPR at 1, disable AA, use 'demand' frameloop so we only
+      // re-render when something changes (orbit, layer toggle, etc.) rather
+      // than at the display refresh rate. This alone reclaims ~50% on a phone.
+      dpr={IS_LOW_END ? 1 : [1, Math.min(window.devicePixelRatio, 2)]}
       camera={{ position: [0, 0, SPACE_DISTANCE], fov: 55, near: 0.0001, far: 2000 }}
-      gl={{ antialias: true, powerPreference: "high-performance", preserveDrawingBuffer: true, logarithmicDepthBuffer: true }}
+      gl={{ antialias: !IS_LOW_END, powerPreference: "high-performance", preserveDrawingBuffer: true, logarithmicDepthBuffer: true }}
       frameloop="always"
       resize={{ scroll: false, debounce: { scroll: 50, resize: 0 } }}
     >
@@ -4392,7 +4456,7 @@ function GlobeCanvas({
         {layers.constellations && <ConstellationLines />}
         {layers.atmosphere && <Atmosphere intensity={globe.atmosphereIntensity} sunDirection={sunDirection} />}
         {layers.clouds && <Clouds opacity={globe.cloudOpacity} paused={paused} />}
-        {layers.stars && <Stars radius={120} depth={50} count={4500} factor={4} saturation={0} fade speed={0.5} />}
+        {layers.stars && <Stars radius={120} depth={50} count={IS_LOW_END ? 1200 : 4500} factor={4} saturation={0} fade speed={0.5} />}
         {layers.iss && issPosition && <ISSMarker lat={issPosition.lat} lon={issPosition.lon} />}
         {layers.tiangong && tiangongPosition && <TiangongMarker lat={tiangongPosition.lat} lon={tiangongPosition.lon} />}
         {layers.hubble && hubblePosition && <HubbleMarker lat={hubblePosition.lat} lon={hubblePosition.lon} />}

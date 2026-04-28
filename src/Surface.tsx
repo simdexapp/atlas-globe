@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import * as Cesium from "cesium";
 import "cesium/Build/Cesium/Widgets/widgets.css";
 import { MAJOR_CITIES } from "./cities";
+import { COUNTRY_CENTROIDS } from "./countries";
 
 type FlyToTarget = { id: number; lat: number; lon: number; altKm: number };
 
@@ -85,7 +86,8 @@ export default function Surface({
   screenshotCommand,
   onScreenshot,
   measurePoints,
-  geoJson
+  geoJson,
+  followSelectedAircraft
 }: {
   token: string;
   onCameraChange: (lat: number, lon: number, altKm: number) => void;
@@ -102,7 +104,7 @@ export default function Surface({
   weatherTilePath?: string;
   weatherOpacity?: number;
   show3DBuildings?: boolean;
-  selectedAircraft?: { icao24: string; lat: number; lon: number; altitudeM: number; headingDeg: number; velocityMs: number } | null;
+  selectedAircraft?: { icao24: string; callsign?: string; lat: number; lon: number; altitudeM: number; headingDeg: number; velocityMs: number } | null;
   // Past polled positions of the selected aircraft (oldest → newest).
   selectedAircraftHistory?: Array<{ lat: number; lon: number; alt: number }>;
   onSelectAircraft?: (icao24: string | null) => void;
@@ -128,6 +130,9 @@ export default function Surface({
   measurePoints?: Array<{ lat: number; lon: number }>;
   // GeoJSON FeatureCollection to render as Cesium entities (drag-drop import).
   geoJson?: any;
+  // When true and selectedAircraft is set, the camera locks-on to the plane
+  // (Cesium tracked-entity mode). Click "Stop following" or deselect to free.
+  followSelectedAircraft?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Cesium.Viewer | null>(null);
@@ -138,9 +143,14 @@ export default function Surface({
   const aircraftBillboardsRef = useRef<Cesium.BillboardCollection | null>(null);
   const aircraftIconRef = useRef<HTMLCanvasElement | null>(null);
   const aircraftBillboardIndexRef = useRef<Map<Cesium.Billboard, string>>(new Map());
+  // icao24 → Billboard for incremental updates (avoid full BillboardCollection rebuild every snapshot).
+  const aircraftBillboardByIcaoRef = useRef<Map<string, Cesium.Billboard>>(new Map());
   const aircraftTrailEntityRef = useRef<Cesium.Entity | null>(null);
   const aircraftHistoryEntityRef = useRef<Cesium.Entity | null>(null);
   const aircraftSelectionRingRef = useRef<Cesium.Entity | null>(null);
+  const aircraftFollowEntityRef = useRef<Cesium.Entity | null>(null);
+  const aircraftCallsignLabelRef = useRef<Cesium.Entity | null>(null);
+  const countryLabelsRef = useRef<Cesium.Entity[]>([]);
   const buildingsTilesetRef = useRef<Cesium.Cesium3DTileset | null>(null);
   const measureEntitiesRef = useRef<Cesium.Entity[]>([]);
   const geoJsonDataSourceRef = useRef<Cesium.GeoJsonDataSource | null>(null);
@@ -178,25 +188,37 @@ export default function Surface({
       baseLayer: false,
     } as any);
 
-    // ===== Quality settings =====
-    // High-DPI rendering at native pixel ratio (caps at 2 for perf on phones).
-    viewer.resolutionScale = Math.min(window.devicePixelRatio || 1, 2);
+    // ===== Mobile detection — degrade quality automatically =====
+    // Phones (small touch screens, low-RAM, no real GPU) need lower MSAA,
+    // no HDR, lower resolutionScale, and a more lenient SSE so the GPU
+    // isn't asked to render a million sub-pixel terrain triangles.
+    const ua = navigator.userAgent || "";
+    const isMobile = /iphone|ipad|ipod|android/i.test(ua) || (window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
+    const lowMem = (navigator as any).deviceMemory && (navigator as any).deviceMemory <= 4;
+    const isLow = isMobile || lowMem;
+
+    // ===== Quality settings (mobile-aware) =====
+    // resolutionScale: native pixel ratio on desktop, capped at 1.0 on phones
+    // (rendering at 3× DPR on a phone tanks framerate).
+    viewer.resolutionScale = isLow ? 1.0 : Math.min(window.devicePixelRatio || 1, 2);
     // FXAA on the main render — reduces "pixel-crawl" on terrain edges.
-    (viewer.scene as any).postProcessStages.fxaa.enabled = true;
+    // Skip FXAA on low devices (postprocess pass costs ~3-5ms/frame on phones).
+    (viewer.scene as any).postProcessStages.fxaa.enabled = !isLow;
     // 4× MSAA where supported. Cesium >= 1.96 supports msaaSamples on Scene.
+    // Disabled on mobile — MSAA forces a big GPU framebuffer alloc.
     if ("msaaSamples" in viewer.scene) {
-      (viewer.scene as any).msaaSamples = 4;
+      (viewer.scene as any).msaaSamples = isLow ? 1 : 4;
     }
-    // HDR tone-mapping — gives sun-glint and atmosphere a more cinematic ramp.
+    // HDR tone-mapping — desktop only. On mobile it's wasted GPU.
     if ("highDynamicRange" in viewer.scene) {
-      (viewer.scene as any).highDynamicRange = true;
+      (viewer.scene as any).highDynamicRange = !isLow;
     }
-    viewer.scene.globe.maximumScreenSpaceError = 1.5;       // sharper terrain (default is 2)
+    // SSE: lower number = sharper terrain but more triangles. Bump up on mobile.
+    viewer.scene.globe.maximumScreenSpaceError = isLow ? 3.0 : 1.5;
     // ===== Perf optimizations =====
     // Bigger terrain-tile cache so panning a recently-viewed area doesn't
-    // re-fetch (default is 100; bump to 1000 for smoother zoom-out then
-    // zoom-back-in cycles).
-    viewer.scene.globe.tileCacheSize = 1000;
+    // re-fetch. Smaller on mobile to keep RAM in check.
+    viewer.scene.globe.tileCacheSize = isLow ? 200 : 1000;
     // Skip tile rendering when the view hasn't changed — saves GPU cycles
     // when the camera is idle. Already on by viewer config, but reaffirm.
     viewer.scene.requestRenderMode = true;
@@ -281,6 +303,34 @@ export default function Surface({
           distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, farKm * 1000),
         },
       });
+    }
+
+    // ===== country centroid labels =====
+    // Tier 1 (huge nations) show from very far out (orbital view).
+    // Tier 2 nations only appear once camera < ~6000km altitude.
+    // All country labels fade out as you zoom *into* a country, so cities
+    // take over without visual clutter.
+    for (const country of COUNTRY_CENTROIDS) {
+      const farKm = country.tier === 1 ? 25_000 : 6_000;
+      const nearKm = 350;            // fade out below ~350km altitude
+      const entity = viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(country.lon, country.lat, 0),
+        label: {
+          text: country.name.toUpperCase(),
+          font: country.tier === 1 ? "700 14px Inter, sans-serif" : "600 11px Inter, sans-serif",
+          fillColor: Cesium.Color.fromCssColorString(country.tier === 1 ? "rgba(245, 220, 180, 0.95)" : "rgba(220, 220, 235, 0.85)"),
+          outlineColor: Cesium.Color.fromCssColorString("rgba(0,0,0,0.95)"),
+          outlineWidth: 4,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          verticalOrigin: Cesium.VerticalOrigin.CENTER,
+          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(nearKm * 1000, farKm * 1000),
+          translucencyByDistance: new Cesium.NearFarScalar(nearKm * 1000, 0.0, (nearKm + 600) * 1000, 1.0),
+        },
+      });
+      countryLabelsRef.current.push(entity);
     }
 
     // ===== aircraft billboards =====
@@ -368,6 +418,12 @@ export default function Surface({
       earthquakeEntitiesRef.current.forEach((e) => viewer.entities.remove(e));
       volcanoEntitiesRef.current.forEach((e) => viewer.entities.remove(e));
       launchEntitiesRef.current.forEach((e) => viewer.entities.remove(e));
+      countryLabelsRef.current.forEach((e) => viewer.entities.remove(e));
+      countryLabelsRef.current = [];
+      if (aircraftCallsignLabelRef.current) viewer.entities.remove(aircraftCallsignLabelRef.current);
+      aircraftCallsignLabelRef.current = null;
+      if (aircraftFollowEntityRef.current) viewer.entities.remove(aircraftFollowEntityRef.current);
+      aircraftFollowEntityRef.current = null;
       pinEntitiesRef.current = [];
       eonetEntitiesRef.current = [];
       earthquakeEntitiesRef.current = [];
@@ -571,6 +627,95 @@ export default function Surface({
       }
     };
   }, [selectedAircraft]);
+
+  // ===== Selected-aircraft callsign label (DOM-overlay style billboard label) =====
+  // Floats just above the billboard with the callsign and altitude. Uses an
+  // entity label clamped to the aircraft's altitude (not the ground), so it
+  // tracks the plane as it moves. Updated on every selectedAircraft change
+  // — a position CallbackProperty would be smoother but the prop already
+  // refreshes ~every poll cycle so a static position is fine for now.
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    if (aircraftCallsignLabelRef.current) {
+      viewer.entities.remove(aircraftCallsignLabelRef.current);
+      aircraftCallsignLabelRef.current = null;
+    }
+    if (!selectedAircraft) return;
+    const callsign = (selectedAircraft.callsign || selectedAircraft.icao24).trim().toUpperCase();
+    const altFt = Math.round(selectedAircraft.altitudeM / 0.3048).toLocaleString();
+    aircraftCallsignLabelRef.current = viewer.entities.add({
+      position: Cesium.Cartesian3.fromDegrees(
+        selectedAircraft.lon,
+        selectedAircraft.lat,
+        Math.max(0, selectedAircraft.altitudeM)
+      ),
+      label: {
+        text: `${callsign}\n${altFt} ft`,
+        font: "600 11px Inter, sans-serif",
+        fillColor: Cesium.Color.fromCssColorString("#5cb5ff"),
+        outlineColor: Cesium.Color.fromCssColorString("rgba(0,0,0,0.92)"),
+        outlineWidth: 4,
+        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+        verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+        horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+        pixelOffset: new Cesium.Cartesian2(0, -28),
+        showBackground: true,
+        backgroundColor: Cesium.Color.fromCssColorString("rgba(8, 14, 26, 0.92)"),
+        backgroundPadding: new Cesium.Cartesian2(8, 4),
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      },
+    });
+  }, [selectedAircraft]);
+
+  // ===== Camera-follow selected aircraft =====
+  // Creates a phantom entity whose position is wired to a CallbackProperty
+  // that returns the latest selectedAircraft cartesian. Cesium's tracked-
+  // entity machinery then keeps the camera locked-on as the prop updates.
+  // This avoids manually nudging the camera each frame and gives the proper
+  // "Google Earth follow" feel — orbit / zoom still work around the plane.
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+
+    // Tear down any prior follow setup.
+    const tearDown = () => {
+      viewer.trackedEntity = undefined;
+      if (aircraftFollowEntityRef.current) {
+        viewer.entities.remove(aircraftFollowEntityRef.current);
+        aircraftFollowEntityRef.current = null;
+      }
+    };
+
+    if (!followSelectedAircraft || !selectedAircraft) {
+      tearDown();
+      return;
+    }
+
+    // The CallbackProperty resolves at every tick — we re-read the *latest*
+    // value of selectedAircraft via a ref-style closure. Since we re-run this
+    // effect when selectedAircraft changes, the closure stays current enough
+    // for sub-second tracking. Position resolves to lat/lon/alt-meters.
+    const positionCallback = new Cesium.CallbackProperty(() => {
+      // selectedAircraft is captured at effect-creation time. The aircraft
+      // prop polls every few seconds → effect re-fires → fresh closure.
+      return Cesium.Cartesian3.fromDegrees(
+        selectedAircraft.lon,
+        selectedAircraft.lat,
+        Math.max(0, selectedAircraft.altitudeM)
+      );
+    }, false);
+
+    const entity = viewer.entities.add({
+      // Use a small invisible point so trackedEntity has a valid bounding sphere.
+      position: positionCallback as any,
+      point: { pixelSize: 1, color: Cesium.Color.TRANSPARENT },
+    });
+    aircraftFollowEntityRef.current = entity;
+    viewer.trackedEntity = entity;
+
+    return tearDown;
+  }, [followSelectedAircraft, selectedAircraft]);
 
   // ===== Aircraft past-history polyline (selected) =====
   useEffect(() => {
@@ -940,37 +1085,73 @@ export default function Surface({
     weatherImageryLayerRef.current = layer;
   }, [weatherTilePath, weatherOpacity]);
 
-  // ===== Aircraft sync (heading-aware billboard glyphs) =====
+  // ===== Aircraft sync (incremental — diff by icao24) =====
+  // Allocating 12k Cartesians + recreating 12k billboards every poll cycle
+  // (~5s) was the single largest cost on mobile. Now we keep billboards
+  // alive across snapshots and only mutate position/rotation in-place,
+  // adding/removing only the diff. Saves a ton of GC pressure.
   useEffect(() => {
     const viewer = viewerRef.current;
     const billboards = aircraftBillboardsRef.current;
     const icon = aircraftIconRef.current;
     if (!viewer || !billboards || !icon) return;
-    if (!aircraft) {
+    const byIcao = aircraftBillboardByIcaoRef.current;
+    const billboardIndex = aircraftBillboardIndexRef.current;
+
+    if (!aircraft || aircraft.length === 0) {
       billboards.removeAll();
+      byIcao.clear();
+      billboardIndex.clear();
       return;
     }
-    billboards.removeAll();
-    aircraftBillboardIndexRef.current.clear();
+
+    // Build set of new icaos for fast removal pass.
+    const newIcaos = new Set<string>();
+    for (const a of aircraft) newIcaos.add(a.icao24);
+
+    // Pass 1: remove billboards that have left the dataset.
+    const toRemove: string[] = [];
+    byIcao.forEach((_bb, icao) => {
+      if (!newIcaos.has(icao)) toRemove.push(icao);
+    });
+    for (const icao of toRemove) {
+      const bb = byIcao.get(icao);
+      if (bb) {
+        billboardIndex.delete(bb);
+        billboards.remove(bb);
+        byIcao.delete(icao);
+      }
+    }
+
+    // Pass 2: create or update.
     for (const a of aircraft) {
       const alt = Math.max(0, a.altitudeM);
       const altT = Math.min(1, alt / 12000);
       const color = Cesium.Color.fromHsl(0.05 + altT * 0.5, 0.85, 0.6, 1.0);
       const cartesian = Cesium.Cartesian3.fromDegrees(a.lon, a.lat, alt);
       const rotationRad = -((a.headingDeg || 0) * Math.PI / 180);
-      const bb = billboards.add({
-        position: cartesian,
-        image: icon,
-        color,
-        rotation: rotationRad,
-        alignedAxis: Cesium.Cartesian3.UNIT_Z,
-        scaleByDistance: new Cesium.NearFarScalar(1.0e3, 0.5, 5.0e6, 0.18),
-        translucencyByDistance: new Cesium.NearFarScalar(5.0e5, 1.0, 1.0e7, 0.4),
-        verticalOrigin: Cesium.VerticalOrigin.CENTER,
-        horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-        sizeInMeters: false,
-      });
-      aircraftBillboardIndexRef.current.set(bb, a.icao24);
+      const existing = byIcao.get(a.icao24);
+      if (existing) {
+        // Cheap mutation — just nudge position/rotation/color.
+        existing.position = cartesian;
+        existing.rotation = rotationRad;
+        existing.color = color;
+      } else {
+        const bb = billboards.add({
+          position: cartesian,
+          image: icon,
+          color,
+          rotation: rotationRad,
+          alignedAxis: Cesium.Cartesian3.UNIT_Z,
+          scaleByDistance: new Cesium.NearFarScalar(1.0e3, 0.5, 5.0e6, 0.18),
+          translucencyByDistance: new Cesium.NearFarScalar(5.0e5, 1.0, 1.0e7, 0.4),
+          verticalOrigin: Cesium.VerticalOrigin.CENTER,
+          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+          sizeInMeters: false,
+        });
+        byIcao.set(a.icao24, bb);
+        billboardIndex.set(bb, a.icao24);
+      }
     }
   }, [aircraft]);
 
