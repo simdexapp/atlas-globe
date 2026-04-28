@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import * as Cesium from "cesium";
 import "cesium/Build/Cesium/Widgets/widgets.css";
+import { MAJOR_CITIES } from "./cities";
 
 type FlyToTarget = { id: number; lat: number; lon: number; altKm: number };
 
@@ -147,6 +148,42 @@ export default function Surface({
     }
 
     viewerRef.current = viewer;
+
+    // ===== city labels (Cesium label entities for major metros) =====
+    // Each label has a distance-display condition keyed to population so
+    // megacities (>15M) show from far out and smaller ones only when zoomed.
+    for (const c of MAJOR_CITIES) {
+      // Population-based visibility — bigger cities visible from farther.
+      // Tokyo/Delhi (37M, 33M): visible from 8000km+. Madrid/Toronto (~5M): need ~1500km.
+      const popRatio = c.population / 1_000_000;        // millions
+      const farKm = Math.min(8000, 800 + popRatio * 150);  // 800-8000km range
+      viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(c.lon, c.lat, 0),
+        label: {
+          text: c.name,
+          font: "11px Inter, sans-serif",
+          fillColor: Cesium.Color.WHITE,
+          outlineColor: Cesium.Color.fromCssColorString("rgba(0,0,0,0.85)"),
+          outlineWidth: 3,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          pixelOffset: new Cesium.Cartesian2(0, -10),
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, farKm * 1000),
+          translucencyByDistance: new Cesium.NearFarScalar(50_000, 1.0, farKm * 1000, 0.0),
+        },
+        point: {
+          pixelSize: 4,
+          color: Cesium.Color.fromCssColorString("rgba(255, 230, 130, 0.85)"),
+          outlineColor: Cesium.Color.WHITE,
+          outlineWidth: 1,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, farKm * 1000),
+        },
+      });
+    }
 
     // ===== aircraft point-primitive collection (efficient bulk render) =====
     aircraftPointsRef.current = new Cesium.PointPrimitiveCollection();
