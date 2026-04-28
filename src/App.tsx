@@ -1958,6 +1958,7 @@ function App() {
                 const a = aircraftSnapshot.aircraft.find((x) => x.icao24 === selectedAircraftId);
                 return a ? { icao24: a.icao24, lat: a.lat, lon: a.lon, altitudeM: a.altitudeM, headingDeg: a.headingDeg, velocityMs: a.velocityMs } : null;
               })() : null}
+              selectedAircraftHistory={selectedAircraftId ? (aircraftHistoryRef.current.get(selectedAircraftId) ?? []).map((p) => ({ lat: p.lat, lon: p.lon, alt: p.alt })) : undefined}
               onSelectAircraft={setSelectedAircraftId}
             />
           </Suspense>

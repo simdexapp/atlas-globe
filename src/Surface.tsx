@@ -75,6 +75,7 @@ export default function Surface({
   weatherOpacity,
   show3DBuildings,
   selectedAircraft,
+  selectedAircraftHistory,
   onSelectAircraft,
   imageryStyle,
   tiltCommand,
@@ -100,6 +101,8 @@ export default function Surface({
   weatherOpacity?: number;
   show3DBuildings?: boolean;
   selectedAircraft?: { icao24: string; lat: number; lon: number; altitudeM: number; headingDeg: number; velocityMs: number } | null;
+  // Past polled positions of the selected aircraft (oldest → newest).
+  selectedAircraftHistory?: Array<{ lat: number; lon: number; alt: number }>;
   onSelectAircraft?: (icao24: string | null) => void;
   // Base imagery: 'bing' = Bing Aerial (Cesium ion asset 2),
   // 'esri' = ESRI World Imagery (asset 3812), 'osm' = OpenStreetMap.
@@ -130,6 +133,7 @@ export default function Surface({
   const aircraftIconRef = useRef<HTMLCanvasElement | null>(null);
   const aircraftBillboardIndexRef = useRef<Map<Cesium.Billboard, string>>(new Map());
   const aircraftTrailEntityRef = useRef<Cesium.Entity | null>(null);
+  const aircraftHistoryEntityRef = useRef<Cesium.Entity | null>(null);
   const buildingsTilesetRef = useRef<Cesium.Cesium3DTileset | null>(null);
   const eonetEntitiesRef = useRef<Cesium.Entity[]>([]);
   const earthquakeEntitiesRef = useRef<Cesium.Entity[]>([]);
@@ -361,6 +365,10 @@ export default function Surface({
       volcanoEntitiesRef.current = [];
       launchEntitiesRef.current = [];
       aircraftBillboardsRef.current?.removeAll();
+      if (aircraftHistoryEntityRef.current) viewer.entities.remove(aircraftHistoryEntityRef.current);
+      if (aircraftTrailEntityRef.current) viewer.entities.remove(aircraftTrailEntityRef.current);
+      aircraftHistoryEntityRef.current = null;
+      aircraftTrailEntityRef.current = null;
       if (weatherImageryLayerRef.current) {
         viewer.imageryLayers.remove(weatherImageryLayerRef.current, true);
         weatherImageryLayerRef.current = null;
@@ -415,6 +423,32 @@ export default function Surface({
     if (!tileset) return;
     tileset.show = show3DBuildings !== false;
   }, [show3DBuildings]);
+
+  // ===== Aircraft past-history polyline (selected) =====
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    if (aircraftHistoryEntityRef.current) {
+      viewer.entities.remove(aircraftHistoryEntityRef.current);
+      aircraftHistoryEntityRef.current = null;
+    }
+    if (!selectedAircraft || !selectedAircraftHistory || selectedAircraftHistory.length < 2) return;
+    const cartesians: Cesium.Cartesian3[] = [];
+    for (const p of selectedAircraftHistory) {
+      cartesians.push(Cesium.Cartesian3.fromDegrees(p.lon, p.lat, Math.max(0, p.alt)));
+    }
+    // Append the current aircraft position as the final point so the history
+    // joins seamlessly with the predicted-future polyline.
+    cartesians.push(Cesium.Cartesian3.fromDegrees(selectedAircraft.lon, selectedAircraft.lat, Math.max(0, selectedAircraft.altitudeM)));
+    aircraftHistoryEntityRef.current = viewer.entities.add({
+      polyline: {
+        positions: cartesians,
+        width: 2,
+        material: Cesium.Color.fromCssColorString("#5cb5ff").withAlpha(0.55),
+        clampToGround: false,
+      },
+    });
+  }, [selectedAircraft, selectedAircraftHistory]);
 
   // ===== Aircraft trail polyline for selected =====
   useEffect(() => {
