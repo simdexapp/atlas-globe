@@ -3532,7 +3532,9 @@ function HubbleMarker({ lat, lon }: { lat: number; lon: number }) {
 // The triangle's screen-space size stays roughly constant regardless of camera distance,
 // so planes look like crisp 6-8px chevrons whether you're at 12000km or 100km altitude.
 const AIRCRAFT_VERT = `
-  attribute vec3 instanceColor;
+  // NB: three.js auto-injects \`attribute vec3 instanceColor\` for InstancedMesh
+  // when mesh.instanceColor is set (USE_INSTANCING_COLOR define). Redeclaring
+  // it here triggers a 'redefinition' shader-compile error → broken render.
   varying vec3 vColor;
   varying float vFade;
   uniform float uPxScale;
