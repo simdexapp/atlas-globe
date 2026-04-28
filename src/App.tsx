@@ -51,6 +51,7 @@ import { fetchSpaceWeather, fetchAuroraSnapshot, auroraIntensityToRGBA, kpScale,
 import { fetchNeoToday, type NearEarthObject } from "./nearEarthObjects";
 import { fetchUpcomingLaunches, timeUntilLaunch, type RocketLaunch } from "./launches";
 import { fetchWikiSummary } from "./wiki";
+import { MAJOR_CITIES } from "./cities";
 
 const SurfaceMode = lazy(() => import("./Surface"));
 
@@ -262,17 +263,35 @@ const defaultImagery: Imagery = {
   source: "bundled"
 };
 
+// Bookmark seed list: top 52 major metropolitan areas (auto-built from
+// MAJOR_CITIES) plus a handful of natural-wonder bookmarks. Stable IDs are
+// derived from the city name so user-imported state from older versions
+// continues to work.
 const cityBookmarks: Bookmark[] = [
-  { id: "tokyo", name: "Tokyo", lat: 35.6762, lon: 139.6503, altKm: 1500, savedAt: 0 },
-  { id: "newyork", name: "New York", lat: 40.7128, lon: -74.006, altKm: 1500, savedAt: 0 },
-  { id: "london", name: "London", lat: 51.5074, lon: -0.1278, altKm: 1500, savedAt: 0 },
-  { id: "sydney", name: "Sydney", lat: -33.8688, lon: 151.2093, altKm: 1500, savedAt: 0 },
-  { id: "rio", name: "Rio de Janeiro", lat: -22.9068, lon: -43.1729, altKm: 1500, savedAt: 0 },
-  { id: "capetown", name: "Cape Town", lat: -33.9249, lon: 18.4241, altKm: 1500, savedAt: 0 },
-  { id: "dubai", name: "Dubai", lat: 25.2048, lon: 55.2708, altKm: 1500, savedAt: 0 },
+  ...MAJOR_CITIES.map((c) => ({
+    id: c.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+    name: c.name,
+    lat: c.lat,
+    lon: c.lon,
+    altKm: 1500,
+    savedAt: 0,
+  })),
+  // Hand-curated natural-wonder bookmarks
+  { id: "everest", name: "Mt. Everest", lat: 27.9881, lon: 86.925, altKm: 80, savedAt: 0 },
+  { id: "grand-canyon", name: "Grand Canyon", lat: 36.0544, lon: -112.1401, altKm: 60, savedAt: 0 },
+  { id: "kilimanjaro", name: "Mt. Kilimanjaro", lat: -3.0674, lon: 37.3556, altKm: 60, savedAt: 0 },
+  { id: "uluru", name: "Uluru", lat: -25.3444, lon: 131.0369, altKm: 30, savedAt: 0 },
+  { id: "niagara", name: "Niagara Falls", lat: 43.0962, lon: -79.0377, altKm: 25, savedAt: 0 },
+  { id: "amazon", name: "Amazon Basin", lat: -3.4653, lon: -62.2159, altKm: 1500, savedAt: 0 },
+  { id: "sahara", name: "Sahara Desert", lat: 23.4162, lon: 25.6628, altKm: 2000, savedAt: 0 },
+  { id: "great-barrier-reef", name: "Great Barrier Reef", lat: -18.2871, lon: 147.6992, altKm: 600, savedAt: 0 },
+  { id: "gobi", name: "Gobi Desert", lat: 42.7951, lon: 105.0324, altKm: 1500, savedAt: 0 },
+  { id: "andes", name: "Andes Range", lat: -32.6532, lon: -70.0109, altKm: 800, savedAt: 0 },
+  { id: "north-pole", name: "North Pole", lat: 89.99, lon: 0, altKm: 800, savedAt: 0 },
+  { id: "south-pole", name: "South Pole", lat: -89.99, lon: 0, altKm: 800, savedAt: 0 },
+  { id: "antimeridian", name: "Antimeridian (Pacific)", lat: 0, lon: 180, altKm: 5000, savedAt: 0 },
   { id: "san-francisco", name: "San Francisco", lat: 37.7749, lon: -122.4194, altKm: 1500, savedAt: 0 },
-  { id: "everest", name: "Mt. Everest", lat: 27.9881, lon: 86.925, altKm: 800, savedAt: 0 },
-  { id: "nile", name: "Nile Delta", lat: 30.8025, lon: 26.8206, altKm: 2200, savedAt: 0 }
+  { id: "nile", name: "Nile Delta", lat: 30.8025, lon: 26.8206, altKm: 2200, savedAt: 0 },
 ];
 
 const initialSearchSuggestions = cityBookmarks.map((c) => c.name);
