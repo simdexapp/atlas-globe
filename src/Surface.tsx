@@ -97,8 +97,8 @@ export default function Surface({
   // Pin entities and aircraft point-primitives so we can update them
   // efficiently without re-creating the world on every prop change.
   const pinEntitiesRef = useRef<Cesium.Entity[]>([]);
-  const aircraftPointsRef = useRef<Cesium.PointPrimitiveCollection | null>(null);
-  const aircraftIndexRef = useRef<Map<string, number>>(new Map());
+  const aircraftBillboardsRef = useRef<Cesium.BillboardCollection | null>(null);
+  const aircraftIconRef = useRef<HTMLCanvasElement | null>(null);
   const eonetEntitiesRef = useRef<Cesium.Entity[]>([]);
   const earthquakeEntitiesRef = useRef<Cesium.Entity[]>([]);
   const volcanoEntitiesRef = useRef<Cesium.Entity[]>([]);
@@ -249,9 +249,56 @@ export default function Surface({
       });
     }
 
-    // ===== aircraft point-primitive collection (efficient bulk render) =====
-    aircraftPointsRef.current = new Cesium.PointPrimitiveCollection();
-    viewer.scene.primitives.add(aircraftPointsRef.current);
+    // ===== aircraft billboards =====
+    // Build a top-down airliner silhouette canvas once, share across all
+    // billboards. Rotation per-instance comes from each aircraft's heading.
+    const SIZE = 64;
+    const c = document.createElement("canvas");
+    c.width = SIZE;
+    c.height = SIZE;
+    const ctx2 = c.getContext("2d");
+    if (ctx2) {
+      ctx2.fillStyle = "#ffffff";
+      ctx2.shadowColor = "rgba(0,0,0,0.7)";
+      ctx2.shadowBlur = 3;
+      const cx = SIZE / 2;
+      const cy = SIZE / 2;
+      // Fuselage
+      ctx2.beginPath();
+      ctx2.ellipse(cx, cy, 3.5, 24, 0, 0, Math.PI * 2);
+      ctx2.fill();
+      // Main wings (swept)
+      ctx2.beginPath();
+      ctx2.moveTo(cx - 26, cy + 7);
+      ctx2.lineTo(cx - 2.5, cy - 2);
+      ctx2.lineTo(cx + 2.5, cy - 2);
+      ctx2.lineTo(cx + 26, cy + 7);
+      ctx2.lineTo(cx + 3, cy + 6);
+      ctx2.lineTo(cx - 3, cy + 6);
+      ctx2.closePath();
+      ctx2.fill();
+      // Tail stabilizers
+      ctx2.beginPath();
+      ctx2.moveTo(cx - 11, cy + 19);
+      ctx2.lineTo(cx - 2, cy + 15);
+      ctx2.lineTo(cx + 2, cy + 15);
+      ctx2.lineTo(cx + 11, cy + 19);
+      ctx2.lineTo(cx + 2, cy + 21);
+      ctx2.lineTo(cx - 2, cy + 21);
+      ctx2.closePath();
+      ctx2.fill();
+      // Nose taper
+      ctx2.beginPath();
+      ctx2.moveTo(cx - 3, cy - 18);
+      ctx2.lineTo(cx, cy - 25);
+      ctx2.lineTo(cx + 3, cy - 18);
+      ctx2.closePath();
+      ctx2.fill();
+    }
+    aircraftIconRef.current = c;
+
+    aircraftBillboardsRef.current = new Cesium.BillboardCollection({ scene: viewer.scene });
+    viewer.scene.primitives.add(aircraftBillboardsRef.current);
 
     // ===== camera-change emit (status bar lat/lon/alt) =====
     const removeListener = viewer.camera.changed.addEventListener(() => {
@@ -292,7 +339,7 @@ export default function Surface({
       earthquakeEntitiesRef.current = [];
       volcanoEntitiesRef.current = [];
       launchEntitiesRef.current = [];
-      aircraftPointsRef.current?.removeAll();
+      aircraftBillboardsRef.current?.removeAll();
       if (weatherImageryLayerRef.current) {
         viewer.imageryLayers.remove(weatherImageryLayerRef.current, true);
         weatherImageryLayerRef.current = null;
@@ -520,43 +567,39 @@ export default function Surface({
     weatherImageryLayerRef.current = layer;
   }, [weatherTilePath, weatherOpacity]);
 
-  // ===== Aircraft sync (efficient point-primitive update) =====
+  // ===== Aircraft sync (heading-aware billboard glyphs) =====
   useEffect(() => {
     const viewer = viewerRef.current;
-    const points = aircraftPointsRef.current;
-    if (!viewer || !points) return;
+    const billboards = aircraftBillboardsRef.current;
+    const icon = aircraftIconRef.current;
+    if (!viewer || !billboards || !icon) return;
     if (!aircraft) {
-      points.removeAll();
-      aircraftIndexRef.current.clear();
+      billboards.removeAll();
       return;
     }
-
-    // Diff approach: keep a Map<icao24, primitiveIndex> and update positions
-    // in place when aircraft are still in the snapshot, add new ones, and
-    // remove ones that have left the feed. Rebuilding the whole collection
-    // every poll is O(n) anyway, so we just do that for simplicity.
-    points.removeAll();
-    aircraftIndexRef.current.clear();
+    billboards.removeAll();
     for (const a of aircraft) {
-      // Color by altitude — orange near ground, cyan in stratosphere.
       const alt = Math.max(0, a.altitudeM);
-      const altT = Math.min(1, alt / 12000);  // 12km = typical commercial cruise
-      const color = Cesium.Color.fromHsl(
-        0.05 + altT * 0.5,    // hue: 0.05 = orange → 0.55 = cyan
-        0.85,
-        0.55,
-        0.95
-      );
+      const altT = Math.min(1, alt / 12000);
+      const color = Cesium.Color.fromHsl(0.05 + altT * 0.5, 0.85, 0.6, 1.0);
       const cartesian = Cesium.Cartesian3.fromDegrees(a.lon, a.lat, alt);
-      const primitive = points.add({
+      // rotation: Cesium's billboard rotation is around the screen-space Z
+      // axis. Heading 0 = north = up. Convert from compass heading to
+      // billboard rotation: invert sign because Cesium rotation is CCW from
+      // screen-up.
+      const rotationRad = -((a.headingDeg || 0) * Math.PI / 180);
+      billboards.add({
         position: cartesian,
-        pixelSize: 6,
+        image: icon,
         color,
-        outlineWidth: 0,
-        scaleByDistance: new Cesium.NearFarScalar(1.0e3, 2.5, 5.0e6, 0.5),
-        translucencyByDistance: new Cesium.NearFarScalar(5.0e5, 1.0, 8.0e6, 0.4),
+        rotation: rotationRad,
+        alignedAxis: Cesium.Cartesian3.UNIT_Z,
+        scaleByDistance: new Cesium.NearFarScalar(1.0e3, 0.5, 5.0e6, 0.18),
+        translucencyByDistance: new Cesium.NearFarScalar(5.0e5, 1.0, 1.0e7, 0.4),
+        verticalOrigin: Cesium.VerticalOrigin.CENTER,
+        horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+        sizeInMeters: false,
       });
-      void primitive;
     }
   }, [aircraft]);
 

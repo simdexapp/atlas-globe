@@ -314,7 +314,11 @@ const KEYBOARD_HINTS = [
 ];
 
 function App() {
-  const [mode, setMode] = useState<Mode>("atlas");
+  // Surface (Cesium) is the default now — better data visualization at every
+  // zoom, photo-realistic ground imagery, 3D buildings, real terrain.
+  // First-run users land in Surface; can switch to Atlas via the mode strip
+  // for the cinematic shader globe.
+  const [mode, setMode] = useState<Mode>("surface");
   const [layers, setLayers] = useState<LayerVisibility>(defaultLayers);
   const [globe, setGlobe] = useState<GlobeSettings>(defaultGlobe);
   const [bookmarks, setBookmarks] = useState<Bookmark[]>(cityBookmarks);
