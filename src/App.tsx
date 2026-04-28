@@ -2057,6 +2057,13 @@ function App() {
         </div>
         <ScaleBar altKm={cameraState.altKm} />
         <div className="footerExtra">
+          {/* Earth's geometric horizon distance: sqrt(2Rh + h²) at altitude h.
+              Useful at low altitudes where you might wonder how far you can see. */}
+          {cameraState.altKm > 0 && cameraState.altKm < 5000 && (() => {
+            const h = cameraState.altKm;
+            const horizonKm = Math.sqrt(2 * EARTH_RADIUS_KM * h + h * h);
+            return <span title="Geometric horizon distance — how far you'd see from this altitude on a smooth Earth">↻ {Math.round(horizonKm).toLocaleString()} km horizon</span>;
+          })()}
           <span>Zoom L{Math.max(1, Math.min(18, Math.round(18 - Math.log2(Math.max(1, cameraState.altKm / 50)))))}</span>
           <button type="button" className="footerLink" onClick={() => setShowShortcuts(true)}>?</button>
         </div>
