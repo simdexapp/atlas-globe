@@ -97,7 +97,9 @@ export const GIBS_LAYERS: Record<string, GibsLayer> = {
   }
 };
 
-export const DEFAULT_GIBS_DAY = "modisTrueColor";
+// Default to Blue Marble: gap-free, gorgeous, classic. MODIS Terra is opt-in
+// because it has visible satellite-swath gaps in the data.
+export const DEFAULT_GIBS_DAY = "blueMarble";
 export const DEFAULT_GIBS_NIGHT = "blackMarble";
 
 const TILE_SIZE = 256;

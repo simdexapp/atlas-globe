@@ -1571,22 +1571,50 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
   .modeStrip,
   .searchTrigger { display: none; }
   .topActions .atlasIconBtn:nth-child(n+5) { display: none; }
-  .globeLayer { left: 0; bottom: 282px; }
+  /* Bottom layout (top to bottom): rail (40px), inspector (220px) — NO bottom footer */
+  .globeLayer { left: 0; bottom: 260px; }
   .atlasRail {
     top: auto;
     right: 0;
-    bottom: 250px;
+    bottom: 220px;
     flex-direction: row;
     width: auto;
-    height: auto;
+    height: 40px;
     display: grid;
-    grid-template-columns: repeat(8, 1fr);
+    grid-template-columns: repeat(10, 1fr);
+    padding: 4px 6px;
+    gap: 4px;
     border-top: 1px solid #1a2030;
     border-right: 0;
   }
-  .atlasRailBtn { width: 100%; height: 32px; }
+  .atlasRailBtn { width: 100%; height: 100%; min-height: 0; }
   .viewportStatus { left: 0; }
-  .atlasInspector { left: 0; }
-  .atlasFooter { font-size: 9.5px; }
-  .footerExtra { display: none; }
+  .atlasInspector {
+    left: 0;
+    bottom: 0;
+    height: 220px;
+    border-top: 1px solid #1a2030;
+  }
+  /* Footer's coords duplicate viewportStatus at this size — hide it */
+  .atlasFooter { display: none; }
+  /* Compass + mini-map use too much space at this width */
+  .atlasCompass { display: none; }
+  /* The progress pill should not overlap content */
+  .atlasImageryStatus {
+    top: 70px;
+    left: 8px;
+    right: 8px;
+    min-width: 0;
+    width: auto;
+  }
+  .atlasSurfaceHint { display: none; }
+  /* Pin info card at right would clip — full-width bottom-of-globe */
+  .atlasPinCard {
+    top: auto;
+    right: 8px;
+    left: 8px;
+    bottom: 270px;
+    width: auto;
+    max-width: none;
+  }
 }
