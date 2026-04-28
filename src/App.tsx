@@ -158,7 +158,7 @@ type PersistedState = {
   pins?: Pin[];
 };
 
-const STORAGE_KEY = "atlas-globe-state-v6";
+const STORAGE_KEY = "atlas-globe-state-v7";
 const EARTH_RADIUS_KM = 6371;
 const MIN_DISTANCE = 1.0008;        // ~5 km above surface (texture-pixelated, but real zoom)
 const MAX_DISTANCE = 12;            // far view from space
@@ -219,7 +219,7 @@ const FAMOUS_VOLCANOES: { id: string; name: string; lat: number; lon: number }[]
 ];
 
 const defaultGlobe: GlobeSettings = {
-  rotationSpeed: 0.05,
+  rotationSpeed: 0,
   cloudOpacity: 0.55,
   atmosphereIntensity: 0.85,
   sunAzimuth: 0.18,
@@ -290,7 +290,7 @@ function App() {
   const [toast, setToast] = useState<{ id: number; text: string } | null>(null);
   const [showFps, setShowFps] = useState(false);
   const [paused, setPaused] = useState(false);
-  const [orbiting, setOrbiting] = useState(true);
+  const [orbiting, setOrbiting] = useState(false);
   const [cesiumToken, setCesiumToken] = useState<string>("");
   const [issPosition, setIssPosition] = useState<{ lat: number; lon: number } | null>(null);
   const [tiangongPosition, setTiangongPosition] = useState<{ lat: number; lon: number } | null>(null);
@@ -4247,7 +4247,7 @@ function WeatherRadar({ texture, opacity }: { texture: THREE.Texture; opacity: n
   useEffect(() => () => material.dispose(), [material]);
   return (
     <mesh renderOrder={5}>
-      <sphereGeometry args={[1.0015, 96, 64]} />
+      <sphereGeometry args={[1.005, 96, 64]} />
       <primitive object={material} attach="material" />
     </mesh>
   );
