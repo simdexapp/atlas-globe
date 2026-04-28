@@ -3620,7 +3620,7 @@ function GlobeCanvas({
         {layers.sun && <SunMesh azimuth={globe.sunAzimuth} elevation={globe.sunElevation} />}
         {layers.moon && <MoonMesh />}
         {layers.constellations && <ConstellationLines />}
-        {layers.atmosphere && <Atmosphere intensity={globe.atmosphereIntensity} />}
+        {layers.atmosphere && <Atmosphere intensity={globe.atmosphereIntensity} sunDirection={sunDirection} />}
         {layers.clouds && <Clouds opacity={globe.cloudOpacity} paused={paused} />}
         {layers.stars && <Stars radius={120} depth={50} count={4500} factor={4} saturation={0} fade speed={0.5} />}
         {layers.iss && issPosition && <ISSMarker lat={issPosition.lat} lon={issPosition.lon} />}
@@ -4334,19 +4334,37 @@ const EARTH_FRAGMENT = `
     vec3 nightColor = texture2D(uNightMap, vUv).rgb;
     float spec = texture2D(uSpecularMap, vUv).r;
 
-    // Water specular highlight (fake — adds shimmer to oceans on day side)
     vec3 viewDir = normalize(cameraPosition - vWorldPosition);
-    vec3 H = normalize(L + viewDir);
-    float specHighlight = pow(max(0.0, dot(N, H)), 64.0) * spec * diffuse * 0.6;
+    float fresnel = pow(1.0 - max(0.0, dot(N, viewDir)), 3.5);
 
-    vec3 lit = dayColor * (0.06 + diffuse * 1.08) + vec3(specHighlight);
+    // Water specular: anisotropic ocean shimmer + sun-glint hot-spot.
+    vec3 H = normalize(L + viewDir);
+    float specBroad  = pow(max(0.0, dot(N, H)),  18.0) * spec * diffuse * 0.20;
+    float specSharp  = pow(max(0.0, dot(N, H)), 220.0) * spec * diffuse * 1.40;
+    vec3  specColor  = vec3(1.0, 0.95, 0.82);
+    vec3  specHighlight = (specBroad + specSharp) * specColor;
+
+    // Slight contrast/saturation lift on the day side — the GIBS/BlueMarble
+    // sources are pretty desaturated; this gives oceans more depth without
+    // looking artificial.
+    vec3 dayLuma = vec3(dot(dayColor, vec3(0.299, 0.587, 0.114)));
+    vec3 daySaturated = mix(dayLuma, dayColor, 1.18);
+    vec3 lit = daySaturated * (0.06 + diffuse * 1.10) + specHighlight;
+
+    // Night: stronger near terminator, fades smoothly toward deep night where
+    // the city lights are most visible.
     vec3 night = nightColor * uNightStrength * (1.0 - terminator);
+
     vec3 color = mix(night, lit, terminator);
 
-    // Atmospheric tint near terminator
+    // Twilight: warm orange ramp at the day/night edge — sky-color science.
     float twilight = 1.0 - abs(ndotl);
     twilight = pow(twilight, 5.0);
-    color += vec3(0.10, 0.07, 0.03) * twilight * 0.7;
+    color += vec3(0.16, 0.09, 0.04) * twilight * 0.85;
+
+    // Atmospheric scatter on the disc rim (Rayleigh-ish blue-cyan): subtle
+    // limb tint that gets bluer toward the edges, especially on the day side.
+    color += vec3(0.32, 0.55, 0.95) * fresnel * (0.18 + 0.55 * diffuse);
 
     gl_FragColor = vec4(color * uExposure, 1.0);
   }
@@ -4787,36 +4805,57 @@ function AuroraOverlay({ texture }: { texture: THREE.Texture }) {
   );
 }
 
-function Atmosphere({ intensity }: { intensity: number }) {
+function Atmosphere({ intensity, sunDirection }: { intensity: number; sunDirection?: THREE.Vector3 }) {
   const ref = useRef<THREE.ShaderMaterial>(null);
   useFrame(() => {
     if (ref.current) {
       ref.current.uniforms.uIntensity.value = intensity;
+      if (sunDirection) ref.current.uniforms.uSunDirection.value.copy(sunDirection);
     }
   });
   const uniforms = useMemo(() => ({
     uIntensity: { value: intensity },
-    uColor: { value: new THREE.Color("#5cb5ff") }
-  }), [intensity]);
+    uColor: { value: new THREE.Color("#5cb5ff") },
+    uColorWarm: { value: new THREE.Color("#ffa66b") },
+    uSunDirection: { value: sunDirection?.clone() ?? new THREE.Vector3(1, 0, 0) }
+  }), []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Two-tone Rayleigh-style fresnel: cool blue front-lit, warm orange near
+  // the terminator, fades out on the night-facing limb. Looks far more like
+  // the real Earth-from-orbit atmosphere than a flat fresnel.
   const vertexShader = `
-    varying vec3 vNormal;
+    varying vec3 vWorldNormal;
+    varying vec3 vViewDir;
     void main() {
-      vNormal = normalize(normalMatrix * normal);
-      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      vWorldNormal = normalize(mat3(modelMatrix) * normal);
+      vec4 wp = modelMatrix * vec4(position, 1.0);
+      vViewDir = normalize(cameraPosition - wp.xyz);
+      gl_Position = projectionMatrix * viewMatrix * wp;
     }
   `;
   const fragmentShader = `
     uniform float uIntensity;
     uniform vec3 uColor;
-    varying vec3 vNormal;
+    uniform vec3 uColorWarm;
+    uniform vec3 uSunDirection;
+    varying vec3 vWorldNormal;
+    varying vec3 vViewDir;
     void main() {
-      float fresnel = pow(1.0 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 3.5);
-      gl_FragColor = vec4(uColor * fresnel * uIntensity * 1.5, fresnel * uIntensity);
+      float rim = 1.0 - max(0.0, dot(vWorldNormal, vViewDir));
+      float fresnel = pow(rim, 3.5);
+      // Sun proximity: limb pixels facing the sun get a warm tint, those
+      // facing away fade into space.
+      float sunDot = dot(normalize(uSunDirection), vWorldNormal);
+      float warmth = smoothstep(-0.2, 0.6, sunDot);
+      vec3  tint = mix(uColorWarm, uColor, warmth);
+      // Brightness ramp: bright on the day-facing rim, dim on the night side.
+      float brightness = smoothstep(-0.4, 0.5, sunDot);
+      gl_FragColor = vec4(tint * fresnel * uIntensity * (0.6 + brightness * 1.6),
+                           fresnel * uIntensity * (0.4 + brightness * 0.7));
     }
   `;
   return (
     <mesh scale={1.07}>
-      <sphereGeometry args={[1, 48, 48]} />
+      <sphereGeometry args={[1, 64, 64]} />
       <shaderMaterial
         ref={ref}
         vertexShader={vertexShader}
