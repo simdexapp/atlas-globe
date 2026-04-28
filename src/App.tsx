@@ -10,6 +10,8 @@ import {
 import type { CSSProperties, ComponentType } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, Stars, useTexture } from "@react-three/drei";
+import { EffectComposer, Bloom, ToneMapping, Vignette } from "@react-three/postprocessing";
+import { BlendFunction, KernelSize, ToneMappingMode } from "postprocessing";
 import {
   Bookmark,
   BookmarkPlus,
@@ -236,7 +238,10 @@ const defaultImagery: Imagery = {
   layerId: DEFAULT_GIBS_DAY,
   nightLayerId: DEFAULT_GIBS_NIGHT,
   date: todayUTC(),
-  zoom: 2,
+  // zoom=3 = 128 tiles, ~4MB total, sharp enough for moderate fly-to.
+  // For ground-level detail (<200km altitude), the UI nudges the user to
+  // Surface mode (Cesium) which has proper streaming LOD.
+  zoom: 3,
   // Bundled by default = instant beautiful Earth, no loading bar, no swath gaps.
   // Users opt into NASA live imagery via the Imagery panel when they want today's data.
   source: "bundled"
@@ -1713,6 +1718,23 @@ function App() {
         <button type="button" className="restoreUi" onClick={() => setHideUi(false)} title="Show UI (H or Esc)">
           <Eye size={13} /> Show UI
         </button>
+      )}
+
+      {/* Atlas-mode texture-wrapped sphere can't compete with Cesium's quadtree
+          streaming at ground level. Below 200km altitude we surface a hint to
+          switch into Surface mode for proper Google-Earth-style detail. */}
+      {mode === "atlas" && cameraState.altKm < 200 && cameraState.altKm > 0 && (
+        <div className="atlasLowAltHint" role="note">
+          <Mountain size={13} />
+          <div>
+            <strong>Want ground-level detail?</strong>
+            <span>Atlas mode uses a single textured sphere. Surface mode streams hi-res tiles like Google Earth.</span>
+          </div>
+          <button type="button" className="atlasPrimaryBtn small" onClick={() => setMode("surface")}>Switch to Surface</button>
+          <button type="button" className="atlasIconBtn" onClick={() => setFlyTo((c) => ({ id: c.id + 1, lat: cameraState.lat, lon: cameraState.lon, altKm: 1500 }))} title="Pull back" aria-label="Pull back">
+            <X size={12} />
+          </button>
+        </div>
       )}
 
       {showSearch && (
@@ -3224,6 +3246,17 @@ function GlobeCanvas({
         {layers.tiangong && tiangongPosition && <TiangongMarker lat={tiangongPosition.lat} lon={tiangongPosition.lon} />}
         {layers.hubble && hubblePosition && <HubbleMarker lat={hubblePosition.lat} lon={hubblePosition.lon} />}
         <GlobeControls flyTo={flyTo} onCameraChange={onCameraChange} autoOrbit={orbiting && !paused} />
+        <EffectComposer multisampling={2} enableNormalPass={false}>
+          <Bloom
+            intensity={0.55}
+            luminanceThreshold={0.7}
+            luminanceSmoothing={0.4}
+            kernelSize={KernelSize.LARGE}
+            mipmapBlur
+          />
+          <Vignette eskil={false} offset={0.18} darkness={0.6} blendFunction={BlendFunction.NORMAL} />
+          <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
+        </EffectComposer>
       </Suspense>
     </Canvas>
   );

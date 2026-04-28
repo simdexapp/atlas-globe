@@ -155,8 +155,10 @@ export async function loadGibsComposite(
     }
   }
 
-  // Limit concurrency to avoid hammering
-  const CONCURRENCY = 8;
+  // Concurrency tuned for snappy zoom=3 loads (~128 tiles).
+  // 16 parallel keeps it well under typical 6/8 per-domain browser caps but
+  // GIBS uses sharded subdomains via WMTS so it scales fine.
+  const CONCURRENCY = 16;
 
   async function worker() {
     while (queue.length > 0) {
@@ -223,7 +225,7 @@ function loadImage(url: string, signal?: AbortSignal): Promise<HTMLImageElement>
       img.src = "";
       signal?.removeEventListener?.("abort", onAbort);
       reject(new Error(`Timeout: ${url}`));
-    }, 8000);
+    }, 5000);
     img.src = url;
   });
 }
