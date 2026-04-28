@@ -48,6 +48,7 @@ import { dateRange, shiftDate, loadTimelapseFrames, disposeFrames, type Timelaps
 import { fetchRadarManifest, composeRadarFrame, frameLabel, type RadarManifest, type RadarFrame } from "./weather";
 import { fetchEonetEvents, categoryColor, categoryIconLabel, type EonetEvent } from "./eonet";
 import { fetchSpaceWeather, fetchAuroraSnapshot, auroraIntensityToRGBA, kpScale, type SpaceWeather, type AuroraSnapshot } from "./space";
+import { fetchNeoToday, type NearEarthObject } from "./nearEarthObjects";
 
 const SurfaceMode = lazy(() => import("./Surface"));
 
@@ -106,6 +107,8 @@ type LayerVisibility = {
   weather: boolean;
   eonet: boolean;
   aurora: boolean;
+  neoWatch: boolean;
+  timeClock: boolean;
 };
 
 type GlobeSettings = {
@@ -162,7 +165,7 @@ type PersistedState = {
   pins?: Pin[];
 };
 
-const STORAGE_KEY = "atlas-globe-state-v9";
+const STORAGE_KEY = "atlas-globe-state-v10";
 const EARTH_RADIUS_KM = 6371;
 const MIN_DISTANCE = 1.0008;        // ~5 km above surface (texture-pixelated, but real zoom)
 const MAX_DISTANCE = 12;            // far view from space
@@ -194,7 +197,9 @@ const defaultLayers: LayerVisibility = {
   aircraft: false,
   weather: false,
   eonet: false,
-  aurora: false
+  aurora: false,
+  neoWatch: false,
+  timeClock: false
 };
 
 const FAMOUS_VOLCANOES: { id: string; name: string; lat: number; lon: number }[] = [
@@ -315,6 +320,11 @@ function App() {
   const [, setAuroraSnapshot] = useState<AuroraSnapshot | null>(null);
   const [spaceWeather, setSpaceWeather] = useState<SpaceWeather | null>(null);
   const [auroraTexture, setAuroraTexture] = useState<THREE.CanvasTexture | null>(null);
+
+  const [neoToday, setNeoToday] = useState<NearEarthObject[]>([]);
+  // Tick once per second so the timezone clock displays update; only used
+  // when timeClock layer is on.
+  const [, setClockTick] = useState(0);
 
   const [eonetEvents, setEonetEvents] = useState<EonetEvent[]>([]);
   const [eonetLoading, setEonetLoading] = useState(false);
@@ -524,6 +534,21 @@ function App() {
       window.clearInterval(handle);
     };
   }, [layers.aircraft]);
+
+  // NEO (asteroid) feed when widget is on; cached 60 min in module-scope
+  useEffect(() => {
+    if (!layers.neoWatch) return;
+    let cancelled = false;
+    fetchNeoToday().then((d) => { if (!cancelled) setNeoToday(d); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [layers.neoWatch]);
+
+  // 1Hz tick for the timezone clock
+  useEffect(() => {
+    if (!layers.timeClock) return;
+    const handle = window.setInterval(() => setClockTick((t) => t + 1), 1000);
+    return () => window.clearInterval(handle);
+  }, [layers.timeClock]);
 
   // NOAA SWPC space weather (Kp index + solar wind) — refresh every 5 min
   // when aurora layer or any space-weather UI is on. Always fetched if aurora
@@ -1921,6 +1946,8 @@ function App() {
             { id: "layerWeather", label: layers.weather ? "Hide weather radar" : "Show live weather radar", group: "Layers", icon: Cloud, run: () => toggleLayer("weather") },
             { id: "layerEonet", label: layers.eonet ? "Hide natural-events overlay" : "Show natural events (NASA EONET)", group: "Layers", icon: Sparkles, run: () => toggleLayer("eonet") },
             { id: "layerAurora", label: layers.aurora ? "Hide aurora forecast" : "Show aurora forecast (NOAA OVATION)", group: "Layers", icon: Sparkles, run: () => toggleLayer("aurora") },
+            { id: "widgetNeo", label: layers.neoWatch ? "Hide asteroid watch" : "Show asteroid watch (NASA NeoWS)", group: "Widgets", icon: Telescope, run: () => toggleLayer("neoWatch") },
+            { id: "widgetClock", label: layers.timeClock ? "Hide world-clock widget" : "Show world-clock widget", group: "Widgets", icon: Compass, run: () => toggleLayer("timeClock") },
             { id: "layerClouds", label: layers.clouds ? "Hide clouds" : "Show clouds", group: "Layers", icon: Cloud, run: () => toggleLayer("clouds") },
             { id: "layerNight", label: layers.nightLights ? "Hide city lights" : "Show city lights", group: "Layers", icon: SunIcon, run: () => toggleLayer("nightLights") },
             { id: "layerAtm", label: layers.atmosphere ? "Hide atmosphere" : "Show atmosphere", group: "Layers", icon: Sparkles, run: () => toggleLayer("atmosphere") },
@@ -1993,6 +2020,55 @@ function App() {
             {(a.registration || a.type) && (
               <span className="atlasHoverTipSub">{a.registration} {a.type}</span>
             )}
+          </div>
+        );
+      })()}
+
+      {layers.neoWatch && (
+        <div className="atlasNeoWidget" role="status">
+          <div className="atlasNeoWidgetHead">
+            <Telescope size={12} />
+            <strong>Near-Earth objects today</strong>
+            <span>NASA NeoWS</span>
+          </div>
+          {neoToday.length === 0 ? (
+            <div className="atlasNeoEmpty">Loading…</div>
+          ) : (
+            <ul className="atlasNeoList">
+              {neoToday.slice(0, 4).map((n) => (
+                <li key={n.id} className={n.hazard ? "hazard" : ""}>
+                  <a href={n.jplUrl} target="_blank" rel="noreferrer" title={`${n.diameterMin.toFixed(2)}-${n.diameterMax.toFixed(2)} km diameter`}>
+                    <span className="atlasNeoName">{n.name}</span>
+                    <span className="atlasNeoMiss">{(n.missDistanceKm / 1e6).toFixed(2)} M km</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {layers.timeClock && (() => {
+        const now = new Date();
+        const cities = [
+          { label: "UTC", tz: "UTC" },
+          { label: "NYC", tz: "America/New_York" },
+          { label: "LDN", tz: "Europe/London" },
+          { label: "TYO", tz: "Asia/Tokyo" },
+        ];
+        const fmt = (tz: string) => {
+          try {
+            return new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false, timeZone: tz }).format(now);
+          } catch { return "—"; }
+        };
+        return (
+          <div className="atlasClockWidget" role="status">
+            {cities.map((c) => (
+              <div key={c.label} className="atlasClockCell">
+                <span>{c.label}</span>
+                <strong>{fmt(c.tz)}</strong>
+              </div>
+            ))}
           </div>
         );
       })()}
