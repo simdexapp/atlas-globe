@@ -2219,6 +2219,16 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
 .atlasNeoMiss { font-family: ui-monospace, monospace; font-size: 10px; color: var(--gray-9); }
 .atlasNeoEmpty { color: var(--gray-9); font-style: italic; padding: var(--s-2); }
 
+/* Per-segment trip-meta inside the mini pin list */
+.atlasPinSegMeta {
+  display: block;
+  font-size: 10px;
+  color: var(--gray-9);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  margin-top: 1px;
+}
+
 /* Pin Wikipedia summary block */
 .atlasPinWiki {
   margin: var(--s-2) 0;

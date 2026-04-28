@@ -3735,27 +3735,52 @@ function drawOverlay(ctx: CanvasRenderingContext2D, w: number, h: number, cam: C
 }
 
 function PinsMiniList({ pins, selectedId, onSelect, onFly, onDelete }: { pins: Pin[]; selectedId: string | null; onSelect: (id: string) => void; onFly: (p: Pin) => void; onDelete: (id: string) => void }) {
-  // Show distance/bearing readout when 2+ pins exist
-  const lastTwo = pins.slice(-2);
-  const distance = lastTwo.length === 2 ? haversineKm(lastTwo[0].lat, lastTwo[0].lon, lastTwo[1].lat, lastTwo[1].lon) : 0;
-  const bearing = lastTwo.length === 2 ? bearingDeg(lastTwo[0].lat, lastTwo[0].lon, lastTwo[1].lat, lastTwo[1].lon) : 0;
+  // Trip total: walk every consecutive pin pair via great-circle distance.
+  const trip = useMemo(() => {
+    if (pins.length < 2) return null;
+    let total = 0;
+    const segments: Array<{ from: Pin; to: Pin; dist: number; bearing: number }> = [];
+    for (let i = 0; i < pins.length - 1; i++) {
+      const a = pins[i];
+      const b = pins[i + 1];
+      const d = haversineKm(a.lat, a.lon, b.lat, b.lon);
+      total += d;
+      segments.push({ from: a, to: b, dist: d, bearing: bearingDeg(a.lat, a.lon, b.lat, b.lon) });
+    }
+    // Ballpark commercial-jet flight time: 800 km/h cruise + 30 min for taxi/climb/descent overhead
+    const flightHrs = total / 800 + 0.5;
+    return { total, segments, flightHrs };
+  }, [pins]);
+
   return (
     <div className="atlasPinsMini">
       <div className="atlasPinsMiniHead">
         <span>Pins ({pins.length})</span>
-        {lastTwo.length === 2 && (
-          <span className="atlasPinsMeasurement">{distance.toLocaleString(undefined, { maximumFractionDigits: 0 })} km · {bearing.toFixed(0)}°</span>
+        {trip && (
+          <span className="atlasPinsMeasurement" title={`Estimated commercial flight time: ${Math.round(trip.flightHrs)}h`}>
+            {trip.total.toLocaleString(undefined, { maximumFractionDigits: 0 })} km · ~{Math.round(trip.flightHrs)}h flight
+          </span>
         )}
       </div>
       <div className="atlasPinsMiniList">
-        {pins.slice(-6).reverse().map((p) => (
-          <div key={p.id} className={`atlasPinsMiniRow${p.id === selectedId ? " selected" : ""}`}>
-            <span className="atlasPinDot" style={{ background: p.color }} />
-            <button type="button" className="atlasPinsMiniLabel" onClick={() => onSelect(p.id)}>{p.label}</button>
-            <button type="button" className="atlasIconBtn" onClick={() => onFly(p)} title="Fly to" aria-label="Fly to"><Navigation size={11} /></button>
-            <button type="button" className="atlasIconBtn" onClick={() => onDelete(p.id)} title="Delete" aria-label="Delete"><Trash2 size={11} /></button>
-          </div>
-        ))}
+        {pins.slice(-6).reverse().map((p, i) => {
+          // Show segment distance+bearing for non-last items (i.e. there's
+          // a "next" pin in the visual list)
+          const reversed = pins.slice(-6).reverse();
+          const next = reversed[i + 1];
+          const seg = next ? { dist: haversineKm(next.lat, next.lon, p.lat, p.lon), bearing: bearingDeg(next.lat, next.lon, p.lat, p.lon) } : null;
+          return (
+            <div key={p.id} className={`atlasPinsMiniRow${p.id === selectedId ? " selected" : ""}`}>
+              <span className="atlasPinDot" style={{ background: p.color }} />
+              <button type="button" className="atlasPinsMiniLabel" onClick={() => onSelect(p.id)}>
+                {p.label}
+                {seg && <span className="atlasPinSegMeta"> · {Math.round(seg.dist).toLocaleString()} km from prev</span>}
+              </button>
+              <button type="button" className="atlasIconBtn" onClick={() => onFly(p)} title="Fly to" aria-label="Fly to"><Navigation size={11} /></button>
+              <button type="button" className="atlasIconBtn" onClick={() => onDelete(p.id)} title="Delete" aria-label="Delete"><Trash2 size={11} /></button>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
