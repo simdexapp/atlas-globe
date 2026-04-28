@@ -342,6 +342,11 @@ function App() {
   const [eonetLoading, setEonetLoading] = useState(false);
   const [selectedEonetId, setSelectedEonetId] = useState<string | null>(null);
 
+  // USGS volcano alert color codes (key: lowercase volcano name → color code).
+  // Refresh every 10 min. Used to tint markers in VolcanoMarkers when the
+  // volcano is currently at elevated alert.
+  const [volcanoAlerts, setVolcanoAlerts] = useState<Map<string, string>>(new Map());
+
   const [radarManifest, setRadarManifest] = useState<RadarManifest | null>(null);
   const [radarTexture, setRadarTexture] = useState<THREE.CanvasTexture | null>(null);
   const [radarFrameIndex, setRadarFrameIndex] = useState(-1);   // -1 = latest
@@ -560,6 +565,30 @@ function App() {
       window.clearInterval(handle);
     };
   }, [layers.aircraft]);
+
+  // USGS elevated volcanoes — refresh while the volcanoes layer is on.
+  useEffect(() => {
+    if (!layers.volcanoes) return;
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const res = await fetch("https://volcanoes.usgs.gov/hans-public/api/volcano/getElevatedVolcanoes");
+        if (!res.ok) return;
+        const arr = await res.json() as Array<{ volcano_name: string; color_code: string }>;
+        if (cancelled) return;
+        const map = new Map<string, string>();
+        for (const v of arr) {
+          if (v?.volcano_name && v?.color_code) {
+            map.set(v.volcano_name.toLowerCase(), v.color_code.toLowerCase());
+          }
+        }
+        setVolcanoAlerts(map);
+      } catch { /* silent */ }
+    };
+    tick();
+    const handle = window.setInterval(tick, 10 * 60 * 1000);
+    return () => { cancelled = true; window.clearInterval(handle); };
+  }, [layers.volcanoes]);
 
   // NEO (asteroid) feed when widget is on; cached 60 min in module-scope
   useEffect(() => {
@@ -1728,6 +1757,7 @@ function App() {
             onSelectEonet={setSelectedEonetId}
             auroraTexture={auroraTexture}
             aircraftHistory={aircraftHistoryRef.current}
+            volcanoAlerts={volcanoAlerts}
             onAircraftHover={(id, p) => { setHoveredAircraftId(id); setHoverPos(p); }}
             pins={pins}
             earthquakes={earthquakes}
@@ -3598,6 +3628,7 @@ function GlobeCanvas({
   onSelectEonet,
   auroraTexture,
   aircraftHistory,
+  volcanoAlerts,
   onAircraftHover,
   pins,
   earthquakes,
@@ -3628,6 +3659,7 @@ function GlobeCanvas({
   onSelectEonet: (id: string | null) => void;
   auroraTexture: THREE.Texture | null;
   aircraftHistory?: Map<string, Array<{ lat: number; lon: number; alt: number; t: number }>>;
+  volcanoAlerts: Map<string, string>;
   onAircraftHover: (id: string | null, screen: { x: number; y: number } | null) => void;
   pins: Pin[];
   earthquakes: Earthquake[];
@@ -3666,7 +3698,7 @@ function GlobeCanvas({
           {layers.cardinals && <Cardinals />}
           {layers.timezones && <TimeZoneBands />}
           {layers.earthquakes && <EarthquakeMarkers data={earthquakes} />}
-          {layers.volcanoes && <VolcanoMarkers />}
+          {layers.volcanoes && <VolcanoMarkers alerts={volcanoAlerts} />}
           {layers.pinPaths && <PinPaths pins={pins} sunDirection={sunDirection} />}
           {layers.pins && <PinMarkers pins={pins} selectedId={selectedPinId} onSelect={onSelectPin} />}
           {layers.aircraft && aircraft.length > 0 && (
@@ -4663,24 +4695,40 @@ function PinMarker({ pin, selected, onSelect }: { pin: Pin; selected: boolean; o
   );
 }
 
-function VolcanoMarkers() {
+function VolcanoMarkers({ alerts }: { alerts: Map<string, string> }) {
   const groupRef = useRef<THREE.Group>(null);
+  // Pulse only the elevated ones — calmer markers for inactive volcanoes.
   useFrame(({ clock }) => {
     if (!groupRef.current) return;
     const t = clock.elapsedTime;
     groupRef.current.children.forEach((child, i) => {
-      const phase = (t * 0.8 + i * 0.4) % 2;
-      child.scale.setScalar(1 + Math.max(0, 1 - phase) * 0.6);
+      const isElevated = (child as any).userData?.elevated === true;
+      const speed = isElevated ? 1.6 : 0.8;
+      const amplitude = isElevated ? 0.9 : 0.4;
+      const phase = (t * speed + i * 0.4) % 2;
+      child.scale.setScalar(1 + Math.max(0, 1 - phase) * amplitude);
     });
   });
+  // USGS color codes (lowercase): green/yellow/orange/red.
+  // Map to display tints — green for normal, yellow advisory, orange watch,
+  // red warning. Inactive (no alert) stays a calmer base orange.
+  const tintFor = (vname: string): { color: string; size: number; elevated: boolean } => {
+    const c = alerts.get(vname.toLowerCase());
+    if (c === "red")    return { color: "#ff3a3a", size: 0.013, elevated: true };
+    if (c === "orange") return { color: "#ff8a3a", size: 0.012, elevated: true };
+    if (c === "yellow") return { color: "#ffd66b", size: 0.010, elevated: true };
+    if (c === "green")  return { color: "#7cffb1", size: 0.008, elevated: false };
+    return { color: "#ff6a3d", size: 0.008, elevated: false };
+  };
   return (
     <group ref={groupRef}>
       {FAMOUS_VOLCANOES.map((v) => {
         const pos = latLonToVec3(v.lat, v.lon, 1.004);
+        const tint = tintFor(v.name);
         return (
-          <mesh key={v.id} position={pos}>
-            <coneGeometry args={[0.008, 0.018, 6]} />
-            <meshBasicMaterial color="#ff6a3d" transparent opacity={0.9} />
+          <mesh key={v.id} position={pos} userData={{ elevated: tint.elevated }}>
+            <coneGeometry args={[tint.size, tint.size * 2.25, 6]} />
+            <meshBasicMaterial color={tint.color} transparent opacity={0.92} toneMapped={false} />
           </mesh>
         );
       })}
