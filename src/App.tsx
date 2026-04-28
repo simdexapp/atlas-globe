@@ -1282,9 +1282,21 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Camera-change handler — fires on every Cesium/Three.js camera percent
+  // change, so we throttle the React state update. The status bar / mini
+  // map / coord readout consumers don't need sub-100ms accuracy. The ref
+  // (cameraStateRef) is always updated synchronously so internal logic
+  // (auto-mode-switch, follow-mode) sees the latest value.
+  const cameraEmitDeadlineRef = useRef(0);
   const onCameraChange = useCallback((lat: number, lon: number, altKm: number) => {
-    setCameraState({ lat, lon, altKm });
     cameraStateRef.current = { lat, lon, altKm };
+    // 200ms on desktop, 400ms on mobile — phones can't redraw the status
+    // bar 5× per second cheaply anyway.
+    const throttleMs = IS_LOW_END ? 400 : 200;
+    const now = performance.now();
+    if (now < cameraEmitDeadlineRef.current) return;
+    cameraEmitDeadlineRef.current = now + throttleMs;
+    setCameraState({ lat, lon, altKm });
   }, []);
 
   // Click-to-drop-pin (with reverse geocoding)
@@ -5733,9 +5745,12 @@ function Clouds({ opacity, paused }: { opacity: number; paused: boolean }) {
     }
   });
 
+  // Lower geo subdivision on mobile (32 vs 64) — visually identical at
+  // typical zoom but halves vertex count.
+  const segments = IS_LOW_END ? 32 : 64;
   return (
     <mesh ref={ref} scale={1.012}>
-      <sphereGeometry args={[1, 64, 64]} />
+      <sphereGeometry args={[1, segments, segments]} />
       <meshStandardMaterial
         map={tex}
         transparent

@@ -385,6 +385,9 @@ export default function Surface({
     viewer.scene.primitives.add(aircraftBillboardsRef.current);
 
     // ===== camera-change emit (status bar lat/lon/alt) =====
+    // Mobile: emit at 5% screen movement (was 1%) so we're not React-
+    // re-rendering for every pixel of pan. Status bar still updates ~10-20×
+    // per pan which is way more than the eye tracks.
     const removeListener = viewer.camera.changed.addEventListener(() => {
       const cartographic = viewer.camera.positionCartographic;
       const lat = Cesium.Math.toDegrees(cartographic.latitude);
@@ -392,7 +395,7 @@ export default function Surface({
       const altKm = cartographic.height / 1000;
       onCameraChange(lat, lon, altKm);
     });
-    viewer.camera.percentageChanged = 0.01;
+    viewer.camera.percentageChanged = isLow ? 0.05 : 0.01;
 
     // ===== left-click → emit lat/lon =====
     const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
