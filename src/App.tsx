@@ -1674,7 +1674,9 @@ function App() {
             </div>
             <div className="atlasAircraftCardBody">
               <div><span>ICAO24</span><b>{a.icao24.toUpperCase()}</b></div>
-              <div><span>Country</span><b>{a.country || "—"}</b></div>
+              <div><span>Reg</span><b>{a.registration || "—"}</b></div>
+              <div><span>Type</span><b>{a.type || "—"}</b></div>
+              <div><span>Squawk</span><b>{a.squawk || "—"}</b></div>
               <div><span>Position</span><b>{formatLat(a.lat)} · {formatLon(a.lon)}</b></div>
               <div><span>Altitude</span><b>{altitudeFt(a.altitudeM).toLocaleString()} ft</b></div>
               <div><span>Speed</span><b>{knotsFromMs(a.velocityMs)} kt</b></div>
@@ -1684,7 +1686,7 @@ function App() {
             </div>
             <div className="atlasAircraftCardActions">
               <button className="atlasBtn" onClick={() => setFlyTo((c) => ({ id: c.id + 1, lat: a.lat, lon: a.lon, altKm: 600 }))}>Fly to</button>
-              <a className="atlasBtn" href={`https://opensky-network.org/aircraft-profile?icao24=${a.icao24}`} target="_blank" rel="noreferrer">OpenSky ↗</a>
+              <a className="atlasBtn" href={`https://globe.airplanes.live/?icao=${a.icao24}`} target="_blank" rel="noreferrer">Track ↗</a>
             </div>
           </div>
         );

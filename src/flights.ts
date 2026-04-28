@@ -1,17 +1,22 @@
-// Real-time global aircraft tracking via the OpenSky Network public API.
-// /api/states/all returns every ADS-B aircraft seen in the last ~10s worldwide.
-// Anonymous polling is rate-limited to one request per ~10s.
-// https://opensky-network.org/apidoc/rest.html#all-state-vectors
+// Real-time global aircraft tracking.
+//
+// OpenSky's /api/states/all sets `Access-Control-Allow-Origin: https://opensky-network.org`
+// which blocks any third-party site from reading the response. So we use the
+// CORS-friendly community feeders instead. airplanes.live exposes a
+// /v2/point/{lat}/{lon}/{dist_nm} endpoint with `access-control-allow-origin: *`.
+//
+// A single point=(0,0), dist=10000nm sweep returns ~7000 aircraft worldwide,
+// covering effectively all current ADS-B-equipped traffic from this network.
 
-const OPENSKY_URL = "https://opensky-network.org/api/states/all";
-
-// Public mirror falls back if OpenSky is overloaded (returns 429/503).
-const ADSB_FALLBACK = "https://api.adsb.lol/v2/all";
+const PRIMARY_URL = "https://api.airplanes.live/v2/point/0/0/10000";
 
 export type Aircraft = {
   icao24: string;
   callsign: string;
-  country: string;
+  country: string;        // registration country (best-effort from `r` prefix)
+  registration: string;   // tail number (e.g. "N12345")
+  type: string;           // aircraft type code (e.g. "B738")
+  category: string;       // ADS-B emitter category
   lon: number;
   lat: number;
   altitudeM: number;       // geo altitude in meters above sea level
@@ -19,96 +24,60 @@ export type Aircraft = {
   headingDeg: number;      // 0..360, true track
   verticalRateMs: number;  // positive = climbing
   onGround: boolean;
+  squawk: string;
   lastContact: number;     // unix seconds
 };
 
 export type FlightSnapshot = {
-  source: "opensky" | "adsblol";
+  source: "airplanes.live";
   fetchedAt: number;       // unix ms
   aircraft: Aircraft[];
 };
 
-function parseOpenSky(json: any): Aircraft[] {
-  const states = json?.states;
-  if (!Array.isArray(states)) return [];
-  const out: Aircraft[] = [];
-  for (const s of states) {
-    const lon = s[5];
-    const lat = s[6];
-    if (typeof lon !== "number" || typeof lat !== "number") continue;
-    const geoAlt = typeof s[13] === "number" ? s[13] : null;
-    const baroAlt = typeof s[7] === "number" ? s[7] : null;
-    const altitudeM = geoAlt ?? baroAlt ?? 0;
-    const callsignRaw = typeof s[1] === "string" ? s[1].trim() : "";
-    out.push({
-      icao24: typeof s[0] === "string" ? s[0] : "",
-      callsign: callsignRaw,
-      country: typeof s[2] === "string" ? s[2] : "",
-      lon,
-      lat,
-      altitudeM,
-      velocityMs: typeof s[9] === "number" ? s[9] : 0,
-      headingDeg: typeof s[10] === "number" ? s[10] : 0,
-      verticalRateMs: typeof s[11] === "number" ? s[11] : 0,
-      onGround: !!s[8],
-      lastContact: typeof s[4] === "number" ? s[4] : 0,
-    });
-  }
-  return out;
-}
-
-function parseAdsbLol(json: any): Aircraft[] {
+function parseAircraftJson(json: any): Aircraft[] {
   const list = json?.ac;
   if (!Array.isArray(list)) return [];
   const out: Aircraft[] = [];
+  const nowSec = Math.floor(Date.now() / 1000);
   for (const a of list) {
     const lon = typeof a.lon === "number" ? a.lon : null;
     const lat = typeof a.lat === "number" ? a.lat : null;
     if (lon === null || lat === null) continue;
-    // adsb.lol altitudes are in feet; convert to meters
-    const altFt = typeof a.alt_geom === "number" ? a.alt_geom :
-                   typeof a.alt_baro === "number" ? a.alt_baro : 0;
+    // Altitudes from this feed are feet, sometimes the literal "ground"
+    const onGround = a.alt_baro === "ground" || a.alt_geom === "ground";
+    const altFt =
+      typeof a.alt_geom === "number" ? a.alt_geom :
+      typeof a.alt_baro === "number" ? a.alt_baro : 0;
     const altitudeM = altFt * 0.3048;
-    // ground speed in knots → m/s
     const gsKt = typeof a.gs === "number" ? a.gs : 0;
-    const velocityMs = gsKt * 0.514444;
     out.push({
       icao24: typeof a.hex === "string" ? a.hex : "",
       callsign: typeof a.flight === "string" ? a.flight.trim() : "",
-      country: typeof a.r === "string" ? a.r : "",
+      country: typeof a.country === "string" ? a.country : "",
+      registration: typeof a.r === "string" ? a.r : "",
+      type: typeof a.t === "string" ? a.t : "",
+      category: typeof a.category === "string" ? a.category : "",
       lon,
       lat,
       altitudeM,
-      velocityMs,
-      headingDeg: typeof a.track === "number" ? a.track : 0,
+      velocityMs: gsKt * 0.514444,
+      headingDeg: typeof a.track === "number" ? a.track :
+                  typeof a.true_heading === "number" ? a.true_heading : 0,
       verticalRateMs: typeof a.baro_rate === "number" ? a.baro_rate * 0.00508 : 0,
-      onGround: a.alt_baro === "ground",
-      lastContact: a.seen ? Math.floor(Date.now() / 1000 - a.seen) : Math.floor(Date.now() / 1000),
+      onGround,
+      squawk: typeof a.squawk === "string" ? a.squawk : "",
+      lastContact: typeof a.seen === "number" ? Math.floor(nowSec - a.seen) : nowSec,
     });
   }
   return out;
 }
 
 export async function fetchAllAircraft(signal?: AbortSignal): Promise<FlightSnapshot> {
-  // Try OpenSky first
-  try {
-    const res = await fetch(OPENSKY_URL, { signal, cache: "no-store" });
-    if (res.ok) {
-      const json = await res.json();
-      const aircraft = parseOpenSky(json);
-      if (aircraft.length > 0) {
-        return { source: "opensky", fetchedAt: Date.now(), aircraft };
-      }
-    }
-  } catch (e) {
-    if ((e as Error).name === "AbortError") throw e;
-  }
-  // Fall back to adsb.lol
-  const res = await fetch(ADSB_FALLBACK, { signal, cache: "no-store" });
-  if (!res.ok) throw new Error(`adsb.lol ${res.status}`);
+  const res = await fetch(PRIMARY_URL, { signal, cache: "no-store" });
+  if (!res.ok) throw new Error(`airplanes.live ${res.status}`);
   const json = await res.json();
-  const aircraft = parseAdsbLol(json);
-  return { source: "adsblol", fetchedAt: Date.now(), aircraft };
+  const aircraft = parseAircraftJson(json);
+  return { source: "airplanes.live", fetchedAt: Date.now(), aircraft };
 }
 
 // Color an aircraft instance by altitude (meters → THREE-friendly hex string).
