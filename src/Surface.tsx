@@ -156,11 +156,8 @@ export default function Surface({
     // when the camera is idle. Already on by viewer config, but reaffirm.
     viewer.scene.requestRenderMode = true;
     viewer.scene.maximumRenderTimeChange = Number.POSITIVE_INFINITY;
-    // Disable order-independent translucency for perf (we don't have many
-    // overlapping translucent surfaces; the cost > benefit on this app).
-    if ("orderIndependentTranslucency" in viewer.scene) {
-      (viewer.scene as any).orderIndependentTranslucency = false;
-    }
+    // (Tried disabling orderIndependentTranslucency for perf, but in this
+    // Cesium build it's a getter-only property — assigning it throws. Skip.)
 
     // ===== Atmosphere + lighting =====
     viewer.scene.globe.enableLighting = true;            // sun-driven day/night on globe
