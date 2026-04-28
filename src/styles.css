@@ -1572,7 +1572,7 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
   .searchTrigger { display: none; }
   .topActions .atlasIconBtn:nth-child(n+5) { display: none; }
   /* Bottom layout (top to bottom): rail (40px), inspector (220px) — NO bottom footer */
-  .globeLayer { left: 0; bottom: 260px; }
+  .globeLayer { inset: 38px 0 260px 0; }
   .atlasRail {
     top: auto;
     right: 0;
