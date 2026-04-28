@@ -16,26 +16,26 @@ export type GibsLayer = {
 };
 
 export const GIBS_LAYERS: Record<string, GibsLayer> = {
-  modisTrueColor: {
-    id: "modisTrueColor",
-    apiId: "MODIS_Terra_CorrectedReflectance_TrueColor",
-    name: "MODIS Terra true-color",
-    format: "jpg",
-    matrixSet: "250m",
-    hasTime: true,
-    earliestDate: "2000-02-24",
-    description: "Daily natural-color from NASA Terra/MODIS",
-    swap: "day"
-  },
   viirsTrueColor: {
     id: "viirsTrueColor",
     apiId: "VIIRS_SNPP_CorrectedReflectance_TrueColor",
-    name: "VIIRS SNPP true-color",
+    name: "VIIRS true-color (recommended)",
     format: "jpg",
     matrixSet: "250m",
     hasTime: true,
     earliestDate: "2015-11-24",
-    description: "Daily natural-color from VIIRS SNPP (newer satellite)",
+    description: "Daily natural-color from VIIRS SNPP — fewer swath gaps than MODIS",
+    swap: "day"
+  },
+  modisTrueColor: {
+    id: "modisTrueColor",
+    apiId: "MODIS_Terra_CorrectedReflectance_TrueColor",
+    name: "MODIS Terra true-color (has swath gaps)",
+    format: "jpg",
+    matrixSet: "250m",
+    hasTime: true,
+    earliestDate: "2000-02-24",
+    description: "Daily natural-color from NASA Terra/MODIS — note daily orbits leave visible gaps",
     swap: "day"
   },
   blueMarble: {

@@ -103,7 +103,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .globeLayer {
   position: fixed;
-  inset: 38px 320px 32px 50px;
+  inset: 38px 340px 32px 52px;
   z-index: 0;
   overflow: hidden;
   background: radial-gradient(ellipse at center, #0a1421 0%, #02050a 100%);
@@ -300,34 +300,50 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 5px;
-  width: 50px;
-  padding: 8px 6px;
-  border-right: 1px solid #1a2030;
-  background: linear-gradient(180deg, #0c1220 0%, #080d18 100%);
+  gap: 6px;
+  width: 52px;
+  padding: 10px 6px;
+  border-right: 1px solid #161e2c;
+  background: linear-gradient(180deg, #0a1220 0%, #060b16 100%);
+  box-shadow: 1px 0 0 rgba(255, 255, 255, 0.02) inset;
 }
+
+.atlasRail::before,
+.atlasRail::after {
+  content: "";
+  display: block;
+  width: 28px;
+  height: 1px;
+  background: #161e2c;
+  margin: 4px 0;
+}
+.atlasRail::before { order: 4; }
+.atlasRail::after { order: 8; }
 
 .atlasRailBtn {
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   border: 1px solid transparent;
-  border-radius: 7px;
-  color: #b8c2d2;
+  border-radius: 9px;
+  color: #a4b1c4;
   background: transparent;
+  transition: color 120ms ease, background 120ms ease, border-color 120ms ease, transform 120ms ease;
 }
+.atlasRailBtn:hover { transform: translateX(1px); }
 
 .atlasRailBtn:hover {
-  border-color: #2a3044;
-  background: #15202f;
-  color: #fff;
+  border-color: #2a3346;
+  background: #131c2c;
+  color: #ffffff;
 }
 
 .atlasRailBtn.active {
-  border-color: color-mix(in srgb, var(--accent), transparent 50%);
-  background: color-mix(in srgb, var(--accent), transparent 78%);
+  border-color: color-mix(in srgb, var(--accent), transparent 45%);
+  background: color-mix(in srgb, var(--accent), transparent 76%);
   color: var(--accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent), transparent 70%) inset, 0 4px 12px color-mix(in srgb, var(--accent), transparent 80%);
 }
 
 /* ============= viewport status (top bar over scene) ============= */
@@ -335,17 +351,17 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .viewportStatus {
   position: fixed;
   top: 38px;
-  left: 50px;
-  right: 320px;
+  left: 52px;
+  right: 340px;
   z-index: 3;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 28px;
-  padding: 0 12px;
-  border-bottom: 1px solid rgba(26, 32, 48, 0.6);
-  background: rgba(10, 15, 28, 0.6);
-  backdrop-filter: blur(12px);
+  height: 30px;
+  padding: 0 14px;
+  border-bottom: 1px solid rgba(22, 30, 44, 0.7);
+  background: rgba(8, 14, 26, 0.65);
+  backdrop-filter: blur(14px);
   color: #b8c2d2;
 }
 
@@ -385,11 +401,16 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   right: 0;
   bottom: 32px;
   z-index: 5;
-  width: 320px;
+  width: 340px;
   overflow-y: auto;
-  border-left: 1px solid #1a2030;
-  background: linear-gradient(180deg, #0c1220 0%, #080d18 100%);
+  border-left: 1px solid #161e2c;
+  background: linear-gradient(180deg, #0a1220 0%, #060b16 100%);
+  box-shadow: -1px 0 0 rgba(255, 255, 255, 0.02) inset;
 }
+.atlasInspector::-webkit-scrollbar { width: 6px; }
+.atlasInspector::-webkit-scrollbar-track { background: transparent; }
+.atlasInspector::-webkit-scrollbar-thumb { background: #1a2336; border-radius: 99px; }
+.atlasInspector::-webkit-scrollbar-thumb:hover { background: #2a334a; }
 
 .inspectorTabs {
   position: sticky;
@@ -398,10 +419,11 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
-  gap: 1px;
-  padding: 6px;
-  border-bottom: 1px solid #1a2030;
-  background: #0c1220;
+  gap: 2px;
+  padding: 8px;
+  border-bottom: 1px solid #161e2c;
+  background: rgba(10, 18, 32, 0.92);
+  backdrop-filter: blur(10px);
 }
 
 .inspectorTabs button {
@@ -432,19 +454,19 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .atlasPanelSection {
   display: grid;
-  gap: 9px;
-  padding: 14px;
-  border-bottom: 1px solid #15202f;
+  gap: 11px;
+  padding: 16px 18px;
+  border-bottom: 1px solid #131b29;
 }
 
 .atlasSectionTitle {
   display: flex;
   align-items: center;
-  gap: 7px;
-  color: #c8d3e0;
+  gap: 8px;
+  color: #d4dbe6;
   font-size: 10.5px;
   font-weight: 800;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
@@ -510,18 +532,23 @@ input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; border: 2px s
   display: grid;
   grid-template-columns: 16px 1fr auto;
   align-items: center;
-  gap: 9px;
-  padding: 8px 10px;
-  border: 1px solid #15202f;
-  border-radius: 6px;
-  background: #0e1524;
-  color: #c8d3e0;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid #141d2c;
+  border-radius: 7px;
+  background: linear-gradient(180deg, #0e1626 0%, #0b1120 100%);
+  color: #d4dbe6;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease, color 120ms ease;
 }
 
-.atlasLayerRow:hover { border-color: #1f2c44; background: #11192c; }
+.atlasLayerRow:hover { border-color: #243049; background: linear-gradient(180deg, #131c2e 0%, #101729 100%); color: #ffffff; }
+.atlasLayerRow:has(input[type="checkbox"]:checked) {
+  border-color: color-mix(in srgb, var(--accent), transparent 60%);
+  background: linear-gradient(180deg, #121d31 0%, #0d1525 100%);
+}
 
 .atlasLayerRow input[type="checkbox"] {
   width: 13px;

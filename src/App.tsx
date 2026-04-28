@@ -1867,12 +1867,18 @@ function ImageryPanel({ imagery, onUpdate, onReset, loading, progress }: { image
     <>
       <PanelSection title="Imagery source" icon={Sparkles}>
         <div className="atlasModeRow" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
-          <button type="button" className={imagery.source === "live" ? "active" : ""} onClick={() => onUpdate({ source: "live" })}>NASA live</button>
+          <button type="button" className={imagery.source === "live" ? "active" : ""} onClick={() => {
+            const layer = GIBS_LAYERS[imagery.layerId];
+            // Auto-promote bundled→live picks to a time-aware day layer (VIIRS = fewer swath gaps)
+            const patch: Partial<Imagery> = { source: "live" };
+            if (!layer || !layer.hasTime) patch.layerId = "viirsTrueColor";
+            onUpdate(patch);
+          }}>NASA live</button>
           <button type="button" className={imagery.source === "bundled" ? "active" : ""} onClick={() => onUpdate({ source: "bundled" })}>Bundled</button>
           <button type="button" className={imagery.source === "custom" ? "active" : ""} onClick={() => onUpdate({ source: "custom" })}>Custom URL</button>
         </div>
         {imagery.source === "live" && (
-          <p className="atlasHint">Streaming real Earth imagery from NASA GIBS. Default is yesterday's MODIS true-color.</p>
+          <p className="atlasHint">Streaming real Earth imagery from NASA GIBS. VIIRS is recommended (fewer swath gaps than MODIS).</p>
         )}
         {imagery.source === "bundled" && (
           <p className="atlasHint">Using the local 2K Blue Marble texture (offline-friendly, instant).</p>
@@ -3102,6 +3108,40 @@ function HubbleMarker({ lat, lon }: { lat: number; lon: number }) {
 
 // Render every aircraft worldwide as a single InstancedMesh — handles 30k+ at 60fps.
 // Triangles lie tangent to the sphere with their tip rotated by the aircraft's heading.
+// Custom shader: per-instance color + perspective-aware size scaling.
+// The triangle's screen-space size stays roughly constant regardless of camera distance,
+// so planes look like crisp 6-8px chevrons whether you're at 12000km or 100km altitude.
+const AIRCRAFT_VERT = `
+  attribute vec3 instanceColor;
+  varying vec3 vColor;
+  varying float vFade;
+  uniform float uPxScale;
+
+  void main() {
+    vColor = instanceColor;
+    // Anchor of the instance in world space (its position before the local triangle vertex offset)
+    vec4 instanceAnchor = modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+    // Distance from camera to that anchor — used to scale the triangle so it stays a fixed apparent size
+    float distFromCam = distance(cameraPosition, instanceAnchor.xyz);
+    // Instance basis (the right/forward/normal we set on the matrix) is unit-orthonormal.
+    // Scale the local vertex so the triangle is roughly uPxScale * distFromCam units across.
+    float scl = uPxScale * distFromCam;
+    vec3 scaled = position * scl;
+    vec4 mv = modelViewMatrix * instanceMatrix * vec4(scaled, 1.0);
+    gl_Position = projectionMatrix * mv;
+    // Fade tiny dots when zoomed way out so the globe doesn't get a film of black
+    vFade = smoothstep(8.0, 2.0, distFromCam);
+  }
+`;
+const AIRCRAFT_FRAG = `
+  precision mediump float;
+  varying vec3 vColor;
+  varying float vFade;
+  void main() {
+    gl_FragColor = vec4(vColor, 0.55 + 0.45 * vFade);
+  }
+`;
+
 function AircraftLayer({
   aircraft,
   selectedId,
@@ -3126,15 +3166,14 @@ function AircraftLayer({
     right: new THREE.Vector3(),
   }), []);
 
-  // Tiny flat triangle, tip pointing +Y, lying in XY plane (normal = +Z).
+  // Unit-sized triangle (the shader scales it by distance to camera each frame).
+  // Tip pointing +Y so heading rotation makes it point in the flight direction.
   const triGeometry = useMemo(() => {
     const g = new THREE.BufferGeometry();
-    const w = 0.0035;
-    const h = 0.009;
     g.setAttribute("position", new THREE.Float32BufferAttribute([
-      -w, -h * 0.4, 0,
-       w, -h * 0.4, 0,
-       0,  h * 0.6, 0
+      -0.4, -0.2, 0,
+       0.4, -0.2, 0,
+       0.0,  0.6, 0
     ], 3));
     g.setAttribute("normal", new THREE.Float32BufferAttribute([
       0, 0, 1, 0, 0, 1, 0, 0, 1
@@ -3142,17 +3181,58 @@ function AircraftLayer({
     return g;
   }, []);
 
-  // Halo (flat ring) for the selected aircraft; reuse the same geometry approach
-  const haloGeometry = useMemo(() => {
-    return new THREE.RingGeometry(0.012, 0.018, 24);
+  // Halo geometry — slightly bigger triangle outline for the selected plane
+  const haloGeometry = useMemo(() => new THREE.RingGeometry(0.6, 1.0, 24), []);
+
+  // Custom material with per-instance color + camera-distance scaling
+  const triMaterial = useMemo(() => {
+    return new THREE.ShaderMaterial({
+      uniforms: { uPxScale: { value: 0.0042 } },
+      vertexShader: AIRCRAFT_VERT,
+      fragmentShader: AIRCRAFT_FRAG,
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      toneMapped: false
+    });
+  }, []);
+
+  // Halo uses a similar shader but with a fixed accent color
+  const haloMaterial = useMemo(() => {
+    return new THREE.ShaderMaterial({
+      uniforms: { uPxScale: { value: 0.012 } },
+      vertexShader: `
+        varying float vFade;
+        uniform float uPxScale;
+        void main() {
+          vec4 anchor = modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+          float d = distance(cameraPosition, anchor.xyz);
+          vec3 scaled = position * (uPxScale * d);
+          gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(scaled, 1.0);
+          vFade = smoothstep(8.0, 1.0, d);
+        }
+      `,
+      fragmentShader: `
+        varying float vFade;
+        void main() {
+          gl_FragColor = vec4(0.36, 0.71, 1.0, 0.7 * vFade);
+        }
+      `,
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      toneMapped: false
+    });
   }, []);
 
   useEffect(() => {
     return () => {
       triGeometry.dispose();
       haloGeometry.dispose();
+      triMaterial.dispose();
+      haloMaterial.dispose();
     };
-  }, [triGeometry, haloGeometry]);
+  }, [triGeometry, haloGeometry, triMaterial, haloMaterial]);
 
   // Update per-instance matrix + color whenever the data changes.
   useEffect(() => {
@@ -3201,19 +3281,17 @@ function AircraftLayer({
     <>
       <instancedMesh
         ref={meshRef}
-        args={[triGeometry, undefined, Math.max(1, aircraft.length)]}
+        args={[triGeometry, triMaterial, Math.max(1, aircraft.length)]}
         onPointerDown={handleClick}
         frustumCulled={false}
-      >
-        <meshBasicMaterial vertexColors side={THREE.DoubleSide} toneMapped={false} />
-      </instancedMesh>
+        renderOrder={20}
+      />
       <instancedMesh
         ref={haloRef}
-        args={[haloGeometry, undefined, 1]}
+        args={[haloGeometry, haloMaterial, 1]}
         frustumCulled={false}
-      >
-        <meshBasicMaterial color="#5cb5ff" transparent opacity={0.65} side={THREE.DoubleSide} toneMapped={false} />
-      </instancedMesh>
+        renderOrder={21}
+      />
     </>
   );
 }
