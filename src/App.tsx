@@ -4698,15 +4698,24 @@ function solarPositionNow(): { az: number; el: number } {
   const now = new Date();
   const start = Date.UTC(now.getUTCFullYear(), 0, 0);
   const dayOfYear = Math.floor((now.getTime() - start) / 86400000);
-  // Declination of the sun, simplified (Spencer's formula approx)
+  // Solar declination via Spencer's approximation: -23.45° (winter solstice)
+  // to +23.45° (summer solstice).
   const decl = 23.45 * Math.sin((360 / 365) * (dayOfYear - 81) * Math.PI / 180);
-  // Sun azimuth from UTC hour (sun roughly above 0° lon at 12 UTC)
   const utcHours = now.getUTCHours() + now.getUTCMinutes() / 60 + now.getUTCSeconds() / 3600;
-  // sunAzimuth uniform: 0..1 → 0..360, where ~0.5 puts the sun on +Z (lon 0 facing camera/sun)
-  // We map UTC noon → azimuth ~0.25 (so the sun is over lon 0 at noon UTC)
-  const az = ((24 - utcHours) / 24 + 0.25) % 1;
-  // Elevation: 0..1 maps to -90..+90, our sun shader uses sin((el-0.5)*PI)
-  // Map declination directly: decl=0 → el=0.5; decl=23.45 → el ≈ 0.63
+  // Subsolar longitude: at 12:00 UTC the sun is over Greenwich; it sweeps 15°/hr
+  // westward. So subsolarLon = -(utcHours - 12) * 15. We want sunPosition() to
+  // emit a 3D direction that equals latLonToVec3(decl, subsolarLon, dist) under
+  // the negated-lon convention. Working backward through both formulas:
+  //   az_norm = (utcHours - 12) / 24    (mod 1, then +1 to keep positive)
+  // Verifies:
+  //   12 UTC → 0     → +X (lon=0, Greenwich) ✓
+  //   18 UTC → 0.25  → +Z (lon=-90, Americas at noon) ✓
+  //    6 UTC → 0.75  → -Z (lon=+90, Asia at noon)     ✓
+  //    0 UTC → 0.5   → -X (lon=180, Pacific at noon)  ✓
+  // The previous formula was offset 270° from this, so the day/night terminator
+  // never matched the actual UTC time — fixed now.
+  const az = ((utcHours - 12) / 24 + 1) % 1;
+  // Elevation: 0..1 → -90..+90 via sin((el-0.5)*π) in the sun shader.
   const el = 0.5 + decl / 180;
   return { az, el };
 }
