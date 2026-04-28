@@ -2064,6 +2064,9 @@ function App() {
               }}
               followSelectedAircraft={followSelectedAircraft}
               showTerminator={surfaceTerminator}
+              issPosition={layers.iss ? issPosition : null}
+              tiangongPosition={layers.tiangong ? tiangongPosition : null}
+              hubblePosition={layers.hubble ? hubblePosition : null}
             />
           </Suspense>
         )}

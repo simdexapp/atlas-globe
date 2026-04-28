@@ -88,7 +88,10 @@ export default function Surface({
   measurePoints,
   geoJson,
   followSelectedAircraft,
-  showTerminator
+  showTerminator,
+  issPosition,
+  tiangongPosition,
+  hubblePosition
 }: {
   token: string;
   onCameraChange: (lat: number, lon: number, altKm: number) => void;
@@ -138,6 +141,14 @@ export default function Surface({
   // with the Cesium clock (real-time or manual hour). Used to visualize
   // the solar limb without baking it into the imagery shader.
   showTerminator?: boolean;
+  // Live LEO satellite ground positions (polled in App.tsx). Each is
+  // null when the layer is off OR the wheretheiss.at fetch hasn't
+  // returned yet, so handle gracefully. Altitude is hard-coded to a
+  // representative orbital height since the upstream feed only gives
+  // lat/lon (it'd be ~3 lines to add altitude later if needed).
+  issPosition?: { lat: number; lon: number } | null;
+  tiangongPosition?: { lat: number; lon: number } | null;
+  hubblePosition?: { lat: number; lon: number } | null;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Cesium.Viewer | null>(null);
@@ -166,6 +177,9 @@ export default function Surface({
   const weatherImageryLayerRef = useRef<Cesium.ImageryLayer | null>(null);
   const terminatorEntityRef = useRef<Cesium.Entity | null>(null);
   const subsolarEntityRef = useRef<Cesium.Entity | null>(null);
+  const issEntityRef = useRef<Cesium.Entity | null>(null);
+  const tiangongEntityRef = useRef<Cesium.Entity | null>(null);
+  const hubbleEntityRef = useRef<Cesium.Entity | null>(null);
 
   // Resolve env token if no prop token. Production deploys bake VITE_CESIUM_TOKEN.
   const env = (import.meta as any).env;
@@ -826,6 +840,70 @@ export default function Surface({
       }
     };
   }, [showTerminator]);
+
+  // ===== Live LEO satellite markers (ISS / Tiangong / Hubble) =====
+  // Reuses the polled positions from App.tsx. Each satellite is a
+  // billboard-and-label entity at a fixed orbital altitude — orbit
+  // altitudes vary in reality but at the camera distances Surface mode
+  // supports, the visual difference is sub-pixel.
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    type SatRender = {
+      pos: { lat: number; lon: number } | null | undefined;
+      ref: React.MutableRefObject<Cesium.Entity | null>;
+      name: string;
+      color: string;
+      icon: string;
+      altKm: number;
+    };
+    const sats: SatRender[] = [
+      { pos: issPosition,      ref: issEntityRef,      name: "ISS",      color: "#7cffb1", icon: "🛰", altKm: 408 },
+      { pos: tiangongPosition, ref: tiangongEntityRef, name: "Tiangong", color: "#ffd66b", icon: "🛰", altKm: 380 },
+      { pos: hubblePosition,   ref: hubbleEntityRef,   name: "Hubble",   color: "#5cb5ff", icon: "🔭", altKm: 540 },
+    ];
+    for (const s of sats) {
+      // Tear down old.
+      if (s.ref.current) {
+        viewer.entities.remove(s.ref.current);
+        s.ref.current = null;
+      }
+      if (!s.pos) continue;
+      s.ref.current = viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(s.pos.lon, s.pos.lat, s.altKm * 1000),
+        label: {
+          text: `${s.icon} ${s.name}`,
+          font: "600 12px Inter, sans-serif",
+          fillColor: Cesium.Color.fromCssColorString(s.color),
+          outlineColor: Cesium.Color.fromCssColorString("rgba(0,0,0,0.95)"),
+          outlineWidth: 4,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+          pixelOffset: new Cesium.Cartesian2(0, -14),
+          showBackground: true,
+          backgroundColor: Cesium.Color.fromCssColorString("rgba(8, 14, 26, 0.92)"),
+          backgroundPadding: new Cesium.Cartesian2(8, 4),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+        point: {
+          pixelSize: 12,
+          color: Cesium.Color.fromCssColorString(s.color),
+          outlineColor: Cesium.Color.WHITE,
+          outlineWidth: 2,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+      });
+    }
+    return () => {
+      for (const s of sats) {
+        if (s.ref.current) {
+          viewer.entities.remove(s.ref.current);
+          s.ref.current = null;
+        }
+      }
+    };
+  }, [issPosition, tiangongPosition, hubblePosition]);
 
   // ===== Selected-aircraft callsign label (DOM-overlay style billboard label) =====
   // Floats just above the billboard with the callsign and altitude. Uses an
