@@ -165,6 +165,7 @@ export default function Surface({
   const launchEntitiesRef = useRef<Cesium.Entity[]>([]);
   const weatherImageryLayerRef = useRef<Cesium.ImageryLayer | null>(null);
   const terminatorEntityRef = useRef<Cesium.Entity | null>(null);
+  const subsolarEntityRef = useRef<Cesium.Entity | null>(null);
 
   // Resolve env token if no prop token. Production deploys bake VITE_CESIUM_TOKEN.
   const env = (import.meta as any).env;
@@ -696,6 +697,10 @@ export default function Surface({
       viewer.entities.remove(terminatorEntityRef.current);
       terminatorEntityRef.current = null;
     }
+    if (subsolarEntityRef.current) {
+      viewer.entities.remove(subsolarEntityRef.current);
+      subsolarEntityRef.current = null;
+    }
     if (!showTerminator) return;
 
     // Position generator — recomputed every render. Cheap enough (180
@@ -763,6 +768,44 @@ export default function Surface({
       },
     });
 
+    // Subsolar point — the spot on Earth where the sun is directly
+    // overhead at this instant. Same math as the terminator, just the
+    // single (subsolarLon, declRad) point. Emoji label gives it instant
+    // visual identity.
+    const computeSubsolar = () => {
+      const jd = viewer.clock.currentTime;
+      const date = Cesium.JulianDate.toDate(jd);
+      const start = Date.UTC(date.getUTCFullYear(), 0, 0);
+      const doy = Math.floor((date.getTime() - start) / 86400000);
+      const declDeg = 23.45 * Math.sin(2 * Math.PI / 365 * (doy - 81));
+      const utcHours = date.getUTCHours() + date.getUTCMinutes() / 60 + date.getUTCSeconds() / 3600;
+      const subsolarLonDeg = -((utcHours - 12) * 15);
+      return Cesium.Cartesian3.fromDegrees(subsolarLonDeg, declDeg, 0);
+    };
+    subsolarEntityRef.current = viewer.entities.add({
+      position: new Cesium.CallbackProperty(computeSubsolar, false) as any,
+      label: {
+        text: "☀",
+        font: "700 22px sans-serif",
+        fillColor: Cesium.Color.fromCssColorString("#ffd66b"),
+        outlineColor: Cesium.Color.fromCssColorString("rgba(0,0,0,0.95)"),
+        outlineWidth: 5,
+        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+        verticalOrigin: Cesium.VerticalOrigin.CENTER,
+        horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      },
+      point: {
+        pixelSize: 8,
+        color: Cesium.Color.fromCssColorString("#ffd66b"),
+        outlineColor: Cesium.Color.WHITE,
+        outlineWidth: 1,
+        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      },
+    });
+
     // requestRenderMode means Cesium only redraws when something marks
     // the scene dirty. The CallbackProperty needs us to nudge it — we
     // force a redraw every 60s, which advances the terminator ~0.25°
@@ -776,6 +819,10 @@ export default function Surface({
       if (terminatorEntityRef.current) {
         viewer.entities.remove(terminatorEntityRef.current);
         terminatorEntityRef.current = null;
+      }
+      if (subsolarEntityRef.current) {
+        viewer.entities.remove(subsolarEntityRef.current);
+        subsolarEntityRef.current = null;
       }
     };
   }, [showTerminator]);
