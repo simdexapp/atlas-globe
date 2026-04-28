@@ -49,6 +49,7 @@ import { fetchRadarManifest, composeRadarFrame, frameLabel, type RadarManifest, 
 import { fetchEonetEvents, categoryColor, categoryIconLabel, type EonetEvent } from "./eonet";
 import { fetchSpaceWeather, fetchAuroraSnapshot, auroraIntensityToRGBA, kpScale, type SpaceWeather, type AuroraSnapshot } from "./space";
 import { fetchNeoToday, type NearEarthObject } from "./nearEarthObjects";
+import { fetchUpcomingLaunches, timeUntilLaunch, type RocketLaunch } from "./launches";
 
 const SurfaceMode = lazy(() => import("./Surface"));
 
@@ -110,6 +111,7 @@ type LayerVisibility = {
   neoWatch: boolean;
   timeClock: boolean;
   dayInfo: boolean;
+  launches: boolean;
 };
 
 type GlobeSettings = {
@@ -166,7 +168,7 @@ type PersistedState = {
   pins?: Pin[];
 };
 
-const STORAGE_KEY = "atlas-globe-state-v11";
+const STORAGE_KEY = "atlas-globe-state-v12";
 const EARTH_RADIUS_KM = 6371;
 const MIN_DISTANCE = 1.0008;        // ~5 km above surface (texture-pixelated, but real zoom)
 const MAX_DISTANCE = 12;            // far view from space
@@ -201,7 +203,8 @@ const defaultLayers: LayerVisibility = {
   aurora: false,
   neoWatch: false,
   timeClock: false,
-  dayInfo: false
+  dayInfo: false,
+  launches: false
 };
 
 const FAMOUS_VOLCANOES: { id: string; name: string; lat: number; lon: number }[] = [
@@ -337,6 +340,9 @@ function App() {
   // Tick once per second so the timezone clock displays update; only used
   // when timeClock layer is on.
   const [, setClockTick] = useState(0);
+
+  const [launches, setLaunches] = useState<RocketLaunch[]>([]);
+  const [selectedLaunchId, setSelectedLaunchId] = useState<string | null>(null);
 
   const [eonetEvents, setEonetEvents] = useState<EonetEvent[]>([]);
   const [eonetLoading, setEonetLoading] = useState(false);
@@ -565,6 +571,25 @@ function App() {
       window.clearInterval(handle);
     };
   }, [layers.aircraft]);
+
+  // Upcoming rocket launches (Launch Library 2). Cached 30 min in module.
+  useEffect(() => {
+    if (!layers.launches) {
+      setLaunches([]);
+      setSelectedLaunchId(null);
+      return;
+    }
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const list = await fetchUpcomingLaunches();
+        if (!cancelled) setLaunches(list);
+      } catch { /* silent */ }
+    };
+    tick();
+    const handle = window.setInterval(tick, 5 * 60 * 1000);
+    return () => { cancelled = true; window.clearInterval(handle); };
+  }, [layers.launches]);
 
   // USGS elevated volcanoes — refresh while the volcanoes layer is on.
   useEffect(() => {
@@ -1755,6 +1780,9 @@ function App() {
             eonetEvents={eonetEvents}
             selectedEonetId={selectedEonetId}
             onSelectEonet={setSelectedEonetId}
+            launchList={launches}
+            selectedLaunchId={selectedLaunchId}
+            onSelectLaunch={setSelectedLaunchId}
             auroraTexture={auroraTexture}
             aircraftHistory={aircraftHistoryRef.current}
             volcanoAlerts={volcanoAlerts}
@@ -2003,6 +2031,7 @@ function App() {
             { id: "layerWeather", label: layers.weather ? "Hide weather radar" : "Show live weather radar", group: "Layers", icon: Cloud, run: () => toggleLayer("weather") },
             { id: "layerEonet", label: layers.eonet ? "Hide natural-events overlay" : "Show natural events (NASA EONET)", group: "Layers", icon: Sparkles, run: () => toggleLayer("eonet") },
             { id: "layerAurora", label: layers.aurora ? "Hide aurora forecast" : "Show aurora forecast (NOAA OVATION)", group: "Layers", icon: Sparkles, run: () => toggleLayer("aurora") },
+            { id: "layerLaunches", label: layers.launches ? "Hide rocket launches" : "Show upcoming rocket launches", group: "Layers", icon: Telescope, run: () => toggleLayer("launches") },
             { id: "widgetNeo", label: layers.neoWatch ? "Hide asteroid watch" : "Show asteroid watch (NASA NeoWS)", group: "Widgets", icon: Telescope, run: () => toggleLayer("neoWatch") },
             { id: "widgetClock", label: layers.timeClock ? "Hide world-clock widget" : "Show world-clock widget", group: "Widgets", icon: Compass, run: () => toggleLayer("timeClock") },
             { id: "widgetDayInfo", label: layers.dayInfo ? "Hide sunrise/sunset widget" : "Show sunrise/sunset for camera location", group: "Widgets", icon: SunIcon, run: () => toggleLayer("dayInfo") },
@@ -2164,6 +2193,48 @@ function App() {
                 <strong>{fmt(c.tz)}</strong>
               </div>
             ))}
+          </div>
+        );
+      })()}
+
+      {selectedLaunchId && (() => {
+        const l = launches.find((x) => x.id === selectedLaunchId);
+        if (!l) return null;
+        return (
+          <div className="atlasEventCard atlasLaunchCard" role="dialog">
+            <div className="atlasEventCardHead">
+              <div className="atlasEventCardTag" style={{ background: "#5cb5ff" }}>LAUNCH</div>
+              <div className="atlasEventCardTitle">
+                <strong>{l.name}</strong>
+                <span>{l.agency} · {l.padName}</span>
+              </div>
+              <button className="atlasIconBtn" onClick={() => setSelectedLaunchId(null)} aria-label="Close"><X size={14} /></button>
+            </div>
+            <div className="atlasEventCardBody">
+              <div><span>Status</span><b>{l.status}</b></div>
+              <div><span>{l.netUnixMs > Date.now() ? "Lifts off" : "Lifted off"}</span><b>{timeUntilLaunch(l.netUnixMs)}</b></div>
+              <div><span>Rocket</span><b>{l.rocket}</b></div>
+              <div><span>NET</span><b>{new Date(l.netUtc).toUTCString().slice(5, 22)} UTC</b></div>
+              <div className="atlasAircraftCardWide"><span>Pad</span><b>{formatLat(l.padLat)} · {formatLon(l.padLon)}</b></div>
+            </div>
+            {l.mission && (
+              <p className="atlasLaunchMission">{l.mission.length > 280 ? l.mission.slice(0, 277) + "…" : l.mission}</p>
+            )}
+            <div className="atlasAircraftCardActions">
+              <button className="atlasBtn" onClick={() => setFlyTo((c) => ({ id: c.id + 1, lat: l.padLat, lon: l.padLon, altKm: 600 }))}>Fly to pad</button>
+              {l.url && <a className="atlasBtn" href={l.url} target="_blank" rel="noreferrer">LL2 ↗</a>}
+            </div>
+          </div>
+        );
+      })()}
+
+      {layers.launches && launches.length > 0 && (() => {
+        const next = launches.find((l) => l.netUnixMs > Date.now());
+        if (!next) return null;
+        return (
+          <div className="atlasNextLaunchPill" role="status">
+            <Telescope size={11} />
+            <span><b>Next launch:</b> {next.name.split("|")[0].trim()} · {timeUntilLaunch(next.netUnixMs)}</span>
           </div>
         );
       })()}
@@ -2475,6 +2546,7 @@ function LayersPanel({ layers, onToggle, bordersLoading }: { layers: LayerVisibi
     { key: "weather", label: "Weather radar — live precipitation (RainViewer)", icon: Cloud },
     { key: "eonet", label: "Natural events — fires/storms/volcanoes (NASA EONET)", icon: Sparkles },
     { key: "aurora", label: "Aurora forecast (NOAA OVATION)", icon: Sparkles },
+    { key: "launches", label: "Upcoming rocket launches (Launch Library 2)", icon: Telescope },
     { key: "iss", label: "ISS — live position", icon: Telescope },
     { key: "tiangong", label: "Tiangong CSS — live position", icon: Telescope },
     { key: "hubble", label: "Hubble — live position", icon: Telescope },
@@ -3626,6 +3698,9 @@ function GlobeCanvas({
   eonetEvents,
   selectedEonetId,
   onSelectEonet,
+  launchList,
+  selectedLaunchId,
+  onSelectLaunch,
   auroraTexture,
   aircraftHistory,
   volcanoAlerts,
@@ -3657,6 +3732,9 @@ function GlobeCanvas({
   eonetEvents: EonetEvent[];
   selectedEonetId: string | null;
   onSelectEonet: (id: string | null) => void;
+  launchList: RocketLaunch[];
+  selectedLaunchId: string | null;
+  onSelectLaunch: (id: string | null) => void;
   auroraTexture: THREE.Texture | null;
   aircraftHistory?: Map<string, Array<{ lat: number; lon: number; alt: number; t: number }>>;
   volcanoAlerts: Map<string, string>;
@@ -3709,6 +3787,9 @@ function GlobeCanvas({
           )}
           {layers.eonet && eonetEvents.length > 0 && (
             <EonetMarkers events={eonetEvents} selectedId={selectedEonetId} onSelect={onSelectEonet} />
+          )}
+          {layers.launches && launchList.length > 0 && (
+            <LaunchMarkers launches={launchList} selectedId={selectedLaunchId} onSelect={onSelectLaunch} />
           )}
           {layers.aurora && auroraTexture && (
             <AuroraOverlay texture={auroraTexture} />
@@ -4787,6 +4868,59 @@ function EonetMarkers({ events, selectedId, onSelect }: {
           >
             <sphereGeometry args={[size, 16, 16]} />
             <meshBasicMaterial color={color} transparent opacity={isSelected ? 1 : 0.85} toneMapped={false} />
+          </mesh>
+        );
+      })}
+    </group>
+  );
+}
+
+function LaunchMarkers({ launches, selectedId, onSelect }: {
+  launches: RocketLaunch[];
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
+}) {
+  const groupRef = useRef<THREE.Group>(null);
+  // Pulse imminent launches harder than ones days away.
+  useFrame(({ clock }) => {
+    if (!groupRef.current) return;
+    const t = clock.elapsedTime;
+    const now = Date.now();
+    groupRef.current.children.forEach((child, i) => {
+      const launch = launches[i];
+      if (!launch) return;
+      const hoursOut = Math.max(0, (launch.netUnixMs - now) / 3_600_000);
+      // Imminent (< 6h): bright fast pulse. Far (> 24h): subtle slow pulse.
+      const speed = hoursOut < 6 ? 2.5 : hoursOut < 24 ? 1.4 : 0.8;
+      const amplitude = hoursOut < 6 ? 1.2 : hoursOut < 24 ? 0.7 : 0.3;
+      const phase = (t * speed + i * 0.31) % 2.4;
+      child.scale.setScalar(1 + Math.max(0, 1 - phase / 1.2) * amplitude);
+    });
+  });
+  const colorFor = (l: RocketLaunch): string => {
+    const hoursOut = Math.max(0, (l.netUnixMs - Date.now()) / 3_600_000);
+    if (l.statusAbbrev === "Failure") return "#ff5a7a";
+    if (hoursOut < 1)  return "#ffd66b";       // imminent — gold
+    if (hoursOut < 24) return "#5cb5ff";       // soon — accent blue
+    return "#7a8db5";                           // future — muted
+  };
+  return (
+    <group ref={groupRef}>
+      {launches.map((l) => {
+        const pos = latLonToVec3(l.padLat, l.padLon, 1.007);
+        const isSelected = l.id === selectedId;
+        const baseSize = isSelected ? 0.014 : 0.010;
+        return (
+          <mesh
+            key={l.id}
+            position={pos}
+            onPointerDown={(e: any) => {
+              e.stopPropagation();
+              onSelect(l.id);
+            }}
+          >
+            <octahedronGeometry args={[baseSize]} />
+            <meshBasicMaterial color={colorFor(l)} transparent opacity={0.9} toneMapped={false} />
           </mesh>
         );
       })}

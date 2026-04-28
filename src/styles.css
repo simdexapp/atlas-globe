@@ -2219,6 +2219,41 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
 .atlasNeoMiss { font-family: ui-monospace, monospace; font-size: 10px; color: var(--gray-9); }
 .atlasNeoEmpty { color: var(--gray-9); font-style: italic; padding: var(--s-2); }
 
+/* Rocket-launch widgets */
+.atlasNextLaunchPill {
+  position: fixed;
+  top: 124px;
+  left: 64px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 6px var(--s-3);
+  border-radius: 99px;
+  border: 1px solid var(--border);
+  background: rgba(10, 16, 28, 0.78);
+  backdrop-filter: blur(10px);
+  font-size: var(--text-xs);
+  color: var(--gray-10);
+  pointer-events: none;
+  box-shadow: var(--shadow-1);
+  max-width: 360px;
+}
+.atlasNextLaunchPill svg { color: var(--accent); }
+.atlasNextLaunchPill b { color: var(--gray-12); font-weight: 800; }
+.atlasNextLaunchPill span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.atlasLaunchCard .atlasLaunchMission {
+  margin: 0 0 var(--s-3);
+  padding: var(--s-2) var(--s-3);
+  font-size: 11px;
+  color: var(--gray-10);
+  line-height: 1.5;
+  border-left: 2px solid var(--accent);
+  background: color-mix(in srgb, var(--accent), transparent 92%);
+  border-radius: 0 var(--r-2) var(--r-2) 0;
+}
+
 /* Sunrise/sunset for the camera's current lat/lon */
 .atlasDayInfoWidget {
   position: fixed;
