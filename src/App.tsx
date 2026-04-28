@@ -43,7 +43,7 @@ import {
 } from "lucide-react";
 import * as THREE from "three";
 import { GIBS_LAYERS, DEFAULT_GIBS_DAY, DEFAULT_GIBS_NIGHT, todayUTC, loadGibsComposite } from "./tiles";
-import { fetchAllAircraft, altitudeColor, altitudeFt, knotsFromMs, type Aircraft, type FlightSnapshot } from "./flights";
+import { fetchAllAircraft, altitudeColor, altitudeFt, knotsFromMs, fetchAircraftDetail, fetchFlightRoute, type Aircraft, type FlightSnapshot, type AircraftDetail, type FlightRoute } from "./flights";
 import { dateRange, shiftDate, loadTimelapseFrames, disposeFrames, type TimelapseFrame } from "./timelapse";
 import { fetchRadarManifest, composeRadarFrame, frameLabel, type RadarManifest, type RadarFrame } from "./weather";
 
@@ -463,7 +463,12 @@ function App() {
     return () => { cancelled = true; window.clearInterval(handle); };
   }, [layers.iss, layers.tiangong, layers.hubble]);
 
-  // Global aircraft polling — every ~12s (OpenSky anonymous tier limit is 10s).
+  // Global aircraft polling. Reliability strategy:
+  //   - Poll airplanes.live every 12s
+  //   - On any error, KEEP the previous snapshot visible (don't clear) and just
+  //     bump aircraftError so the pill can surface the failure
+  //   - Show staleness in the pill ("28s ago") so the user knows when data
+  //     stopped refreshing without losing all the planes from the last good fetch
   useEffect(() => {
     if (!layers.aircraft) {
       setAircraftSnapshot(null);
@@ -473,6 +478,7 @@ function App() {
     }
     let cancelled = false;
     let abort: AbortController | null = null;
+    let consecutiveFailures = 0;
     const tick = async () => {
       abort?.abort();
       abort = new AbortController();
@@ -482,9 +488,14 @@ function App() {
         if (cancelled) return;
         setAircraftSnapshot(snap);
         setAircraftError(null);
+        consecutiveFailures = 0;
       } catch (e) {
         if ((e as Error).name === "AbortError") return;
-        if (!cancelled) setAircraftError((e as Error).message);
+        if (!cancelled) {
+          consecutiveFailures += 1;
+          // Don't clobber the previous snapshot — keep showing what we have.
+          setAircraftError(`${(e as Error).message} (retry #${consecutiveFailures})`);
+        }
       } finally {
         if (!cancelled) setAircraftLoading(false);
       }
@@ -1936,28 +1947,11 @@ function App() {
         const a = aircraftSnapshot.aircraft.find((x) => x.icao24 === selectedAircraftId);
         if (!a) return null;
         return (
-          <div className="atlasAircraftCard" role="dialog">
-            <div className="atlasAircraftCardHead">
-              <strong>{a.callsign || a.icao24.toUpperCase()}</strong>
-              <button className="atlasIconBtn" onClick={() => setSelectedAircraftId(null)} aria-label="Close"><X size={14} /></button>
-            </div>
-            <div className="atlasAircraftCardBody">
-              <div><span>ICAO24</span><b>{a.icao24.toUpperCase()}</b></div>
-              <div><span>Reg</span><b>{a.registration || "—"}</b></div>
-              <div><span>Type</span><b>{a.type || "—"}</b></div>
-              <div><span>Squawk</span><b>{a.squawk || "—"}</b></div>
-              <div><span>Position</span><b>{formatLat(a.lat)} · {formatLon(a.lon)}</b></div>
-              <div><span>Altitude</span><b>{altitudeFt(a.altitudeM).toLocaleString()} ft</b></div>
-              <div><span>Speed</span><b>{knotsFromMs(a.velocityMs)} kt</b></div>
-              <div><span>Heading</span><b>{Math.round(a.headingDeg)}°</b></div>
-              <div><span>Vert.rate</span><b>{a.verticalRateMs > 0 ? "+" : ""}{Math.round(a.verticalRateMs * 196.85)} ft/min</b></div>
-              <div><span>Ground</span><b>{a.onGround ? "yes" : "no"}</b></div>
-            </div>
-            <div className="atlasAircraftCardActions">
-              <button className="atlasBtn" onClick={() => setFlyTo((c) => ({ id: c.id + 1, lat: a.lat, lon: a.lon, altKm: 600 }))}>Fly to</button>
-              <a className="atlasBtn" href={`https://globe.airplanes.live/?icao=${a.icao24}`} target="_blank" rel="noreferrer">Track ↗</a>
-            </div>
-          </div>
+          <AircraftCard
+            aircraft={a}
+            onClose={() => setSelectedAircraftId(null)}
+            onFlyTo={() => setFlyTo((c) => ({ id: c.id + 1, lat: a.lat, lon: a.lon, altKm: 600 }))}
+          />
         );
       })()}
 
@@ -2923,6 +2917,97 @@ function CoordInputModal({ onSubmit, onClose }: { onSubmit: (lat: number, lon: n
   );
 }
 
+// Live aircraft info card with lazy-loaded enrichment from adsbdb.com.
+// Shows the full picture: operator + manufacturer + model + flight route
+// (origin/destination airports + airline) on top of the live ADS-B telemetry.
+function AircraftCard({ aircraft, onClose, onFlyTo }: {
+  aircraft: Aircraft;
+  onClose: () => void;
+  onFlyTo: () => void;
+}) {
+  const [detail, setDetail] = useState<AircraftDetail | null>(null);
+  const [route, setRoute] = useState<FlightRoute | null>(null);
+  const [enriching, setEnriching] = useState(false);
+
+  // Fetch enrichment when the selected aircraft changes
+  useEffect(() => {
+    let cancelled = false;
+    const ac = new AbortController();
+    setDetail(null);
+    setRoute(null);
+    setEnriching(true);
+    Promise.all([
+      fetchAircraftDetail(aircraft.icao24, ac.signal).catch(() => null),
+      aircraft.callsign ? fetchFlightRoute(aircraft.callsign, ac.signal).catch(() => null) : Promise.resolve(null),
+    ]).then(([d, r]) => {
+      if (cancelled) return;
+      setDetail(d);
+      setRoute(r);
+      setEnriching(false);
+    });
+    return () => { cancelled = true; ac.abort(); };
+  }, [aircraft.icao24, aircraft.callsign]);
+
+  const a = aircraft;
+  return (
+    <div className="atlasAircraftCard" role="dialog">
+      <div className="atlasAircraftCardHead">
+        <div className="atlasAircraftCardTitle">
+          <strong>{a.callsign || a.icao24.toUpperCase()}</strong>
+          {route?.airline && <span className="atlasAircraftAirline">{route.airline}</span>}
+        </div>
+        <button className="atlasIconBtn" onClick={onClose} aria-label="Close"><X size={14} /></button>
+      </div>
+
+      {(route?.origin || route?.destination) && (
+        <div className="atlasAircraftRoute">
+          <div className="atlasAircraftAirport">
+            <strong>{route.origin?.iata || "—"}</strong>
+            <span>{route.origin?.city || (route.origin?.country || "")}</span>
+          </div>
+          <div className="atlasAircraftRouteArrow" aria-hidden>→</div>
+          <div className="atlasAircraftAirport">
+            <strong>{route.destination?.iata || "—"}</strong>
+            <span>{route.destination?.city || (route.destination?.country || "")}</span>
+          </div>
+        </div>
+      )}
+
+      {detail && (detail.manufacturer || detail.owner) && (
+        <div className="atlasAircraftIdent">
+          {detail.manufacturer && detail.model && (
+            <span className="atlasAircraftModel">{detail.manufacturer} {detail.icaoType || detail.model}</span>
+          )}
+          {detail.owner && (
+            <span className="atlasAircraftOwner">{detail.owner}{detail.ownerCountry ? ` · ${detail.ownerCountry}` : ""}</span>
+          )}
+        </div>
+      )}
+
+      <div className="atlasAircraftCardBody">
+        <div><span>ICAO24</span><b>{a.icao24.toUpperCase()}</b></div>
+        <div><span>Reg</span><b>{detail?.registration || a.registration || "—"}</b></div>
+        <div><span>Squawk</span><b>{a.squawk || "—"}</b></div>
+        <div><span>Type</span><b>{detail?.icaoType || a.type || "—"}</b></div>
+        <div><span>Altitude</span><b>{altitudeFt(a.altitudeM).toLocaleString()} ft</b></div>
+        <div><span>Speed</span><b>{knotsFromMs(a.velocityMs)} kt</b></div>
+        <div><span>Heading</span><b>{Math.round(a.headingDeg)}°</b></div>
+        <div><span>Vert.rate</span><b>{a.verticalRateMs > 0 ? "+" : ""}{Math.round(a.verticalRateMs * 196.85)} ft/min</b></div>
+        <div className="atlasAircraftCardWide"><span>Position</span><b>{formatLat(a.lat)} · {formatLon(a.lon)}{a.onGround ? " · on ground" : ""}</b></div>
+      </div>
+
+      {enriching && !detail && !route && (
+        <div className="atlasAircraftEnriching">Loading flight info…</div>
+      )}
+
+      <div className="atlasAircraftCardActions">
+        <button className="atlasBtn" onClick={onFlyTo}>Fly to</button>
+        <a className="atlasBtn" href={`https://globe.airplanes.live/?icao=${a.icao24}`} target="_blank" rel="noreferrer">Track ↗</a>
+      </div>
+    </div>
+  );
+}
+
 function PinInfoCard({ pin, onClose, onDelete, onUpdate, onFly }: { pin: Pin; onClose: () => void; onDelete: (id: string) => void; onUpdate: (id: string, patch: Partial<Pin>) => void; onFly: (p: Pin) => void }) {
   const [editing, setEditing] = useState(false);
   const [label, setLabel] = useState(pin.label);
@@ -3513,41 +3598,104 @@ function HubbleMarker({ lat, lon }: { lat: number; lon: number }) {
   return <SatelliteMarker lat={lat} lon={lon} altitudeKm={540} color="#5cb5ff" />;
 }
 
-// Render every aircraft worldwide as a single InstancedMesh — handles 30k+ at 60fps.
-// Triangles lie tangent to the sphere with their tip rotated by the aircraft's heading.
-// Custom shader: per-instance color + perspective-aware size scaling.
-// The triangle's screen-space size stays roughly constant regardless of camera distance,
-// so planes look like crisp 6-8px chevrons whether you're at 12000km or 100km altitude.
+// Render every aircraft worldwide as a single InstancedMesh of textured plane
+// silhouettes — top-down airliner shape (fuselage + swept wings + tail), tinted
+// by altitude per-instance. Single shared CanvasTexture keeps perf at ~30k aircraft.
+function createPlaneSilhouetteTexture(): THREE.CanvasTexture {
+  const SIZE = 128;
+  const c = document.createElement("canvas");
+  c.width = SIZE;
+  c.height = SIZE;
+  const ctx = c.getContext("2d")!;
+  ctx.clearRect(0, 0, SIZE, SIZE);
+  ctx.fillStyle = "#ffffff";
+  // Soft glow under the plane so it pops over dark continents
+  ctx.shadowColor = "rgba(0,0,0,0.6)";
+  ctx.shadowBlur = 4;
+
+  const cx = SIZE / 2;
+  const cy = SIZE / 2;
+  // Nose at canvas top (small Y) → maps to local +Y on the quad → forward direction.
+  // Coordinates expressed in pixels, fits nicely inside 128×128.
+
+  // Fuselage — long thin ellipse
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, 7, 48, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Main wings — large swept-back delta
+  ctx.beginPath();
+  ctx.moveTo(cx - 54, cy + 14);     // left wing tip (back-swept)
+  ctx.lineTo(cx - 4, cy - 4);       // left root leading edge
+  ctx.lineTo(cx + 4, cy - 4);       // right root leading edge
+  ctx.lineTo(cx + 54, cy + 14);     // right wing tip
+  ctx.lineTo(cx + 6, cy + 12);      // right root trailing edge
+  ctx.lineTo(cx - 6, cy + 12);      // left root trailing edge
+  ctx.closePath();
+  ctx.fill();
+
+  // Horizontal stabilizers (rear wings)
+  ctx.beginPath();
+  ctx.moveTo(cx - 22, cy + 38);
+  ctx.lineTo(cx - 4, cy + 30);
+  ctx.lineTo(cx + 4, cy + 30);
+  ctx.lineTo(cx + 22, cy + 38);
+  ctx.lineTo(cx + 4, cy + 42);
+  ctx.lineTo(cx - 4, cy + 42);
+  ctx.closePath();
+  ctx.fill();
+
+  // Nose taper (gives a pointed front)
+  ctx.beginPath();
+  ctx.moveTo(cx - 6, cy - 36);
+  ctx.lineTo(cx, cy - 50);
+  ctx.lineTo(cx + 6, cy - 36);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.shadowBlur = 0;
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearMipMapLinearFilter;
+  tex.generateMipmaps = true;
+  tex.needsUpdate = true;
+  return tex;
+}
+
 const AIRCRAFT_VERT = `
-  // NB: three.js auto-injects \`attribute vec3 instanceColor\` for InstancedMesh
-  // when mesh.instanceColor is set (USE_INSTANCING_COLOR define). Redeclaring
-  // it here triggers a 'redefinition' shader-compile error → broken render.
+  // three.js auto-injects \`attribute vec3 instanceColor\` for InstancedMesh
+  // when mesh.instanceColor is set. Don't redeclare — that's a compile error.
   varying vec3 vColor;
+  varying vec2 vUv;
   varying float vFade;
   uniform float uPxScale;
 
   void main() {
     vColor = instanceColor;
-    // Anchor of the instance in world space (its position before the local triangle vertex offset)
+    vUv = uv;
     vec4 instanceAnchor = modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
-    // Distance from camera to that anchor — used to scale the triangle so it stays a fixed apparent size
     float distFromCam = distance(cameraPosition, instanceAnchor.xyz);
-    // Instance basis (the right/forward/normal we set on the matrix) is unit-orthonormal.
-    // Scale the local vertex so the triangle is roughly uPxScale * distFromCam units across.
+    // Distance-based scale so on-screen plane size stays consistent at any zoom.
     float scl = uPxScale * distFromCam;
     vec3 scaled = position * scl;
-    vec4 mv = modelViewMatrix * instanceMatrix * vec4(scaled, 1.0);
-    gl_Position = projectionMatrix * mv;
-    // Fade tiny dots when zoomed way out so the globe doesn't get a film of black
+    gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(scaled, 1.0);
     vFade = smoothstep(8.0, 2.0, distFromCam);
   }
 `;
 const AIRCRAFT_FRAG = `
   precision mediump float;
+  uniform sampler2D uPlaneTex;
   varying vec3 vColor;
+  varying vec2 vUv;
   varying float vFade;
   void main() {
-    gl_FragColor = vec4(vColor, 0.55 + 0.45 * vFade);
+    vec4 t = texture2D(uPlaneTex, vUv);
+    if (t.a < 0.04) discard;
+    // Multiply the white silhouette by per-instance altitude color, keep the
+    // texture's anti-aliased alpha for clean edges, fade with distance.
+    gl_FragColor = vec4(vColor * t.rgb, t.a * (0.65 + 0.35 * vFade));
   }
 `;
 
@@ -3577,28 +3725,24 @@ function AircraftLayer({
     right: new THREE.Vector3(),
   }), []);
 
-  // Unit-sized triangle (the shader scales it by distance to camera each frame).
-  // Tip pointing +Y so heading rotation makes it point in the flight direction.
-  const triGeometry = useMemo(() => {
-    const g = new THREE.BufferGeometry();
-    g.setAttribute("position", new THREE.Float32BufferAttribute([
-      -0.4, -0.2, 0,
-       0.4, -0.2, 0,
-       0.0,  0.6, 0
-    ], 3));
-    g.setAttribute("normal", new THREE.Float32BufferAttribute([
-      0, 0, 1, 0, 0, 1, 0, 0, 1
-    ], 3));
-    return g;
-  }, []);
+  // 1×1 quad with UVs — shader scales by distance, samples the plane texture,
+  // and tints by per-instance altitude color. Local +Y is the nose direction
+  // (matches canvas top, which maps to UV.v=1 with flipY).
+  const triGeometry = useMemo(() => new THREE.PlaneGeometry(1, 1), []);
 
-  // Halo geometry — slightly bigger triangle outline for the selected plane
-  const haloGeometry = useMemo(() => new THREE.RingGeometry(0.6, 1.0, 24), []);
+  // Halo geometry — ring around the selected plane
+  const haloGeometry = useMemo(() => new THREE.RingGeometry(0.55, 0.85, 32), []);
+
+  // Shared plane silhouette texture (allocated once)
+  const planeTex = useMemo(() => createPlaneSilhouetteTexture(), []);
 
   // Custom material with per-instance color + camera-distance scaling
   const triMaterial = useMemo(() => {
     return new THREE.ShaderMaterial({
-      uniforms: { uPxScale: { value: 0.0042 } },
+      uniforms: {
+        uPxScale: { value: 0.012 },          // ~3x bigger than the old triangle since the silhouette has detail
+        uPlaneTex: { value: planeTex }
+      },
       vertexShader: AIRCRAFT_VERT,
       fragmentShader: AIRCRAFT_FRAG,
       transparent: true,
@@ -3608,10 +3752,11 @@ function AircraftLayer({
     });
   }, []);
 
-  // Halo uses a similar shader but with a fixed accent color
+  // Halo uses a similar shader but with a fixed accent color. Slightly bigger
+  // than the plane silhouette (0.014 vs 0.012) so the ring sits around the plane.
   const haloMaterial = useMemo(() => {
     return new THREE.ShaderMaterial({
-      uniforms: { uPxScale: { value: 0.012 } },
+      uniforms: { uPxScale: { value: 0.022 } },
       vertexShader: `
         varying float vFade;
         uniform float uPxScale;
@@ -3642,8 +3787,9 @@ function AircraftLayer({
       haloGeometry.dispose();
       triMaterial.dispose();
       haloMaterial.dispose();
+      planeTex.dispose();
     };
-  }, [triGeometry, haloGeometry, triMaterial, haloMaterial]);
+  }, [triGeometry, haloGeometry, triMaterial, haloMaterial, planeTex]);
 
   // Update per-instance matrix + color whenever the data changes.
   useEffect(() => {

@@ -80,6 +80,122 @@ export async function fetchAllAircraft(signal?: AbortSignal): Promise<FlightSnap
   return { source: "airplanes.live", fetchedAt: Date.now(), aircraft };
 }
 
+// ===== Per-aircraft enrichment via adsbdb.com (free, CORS=*) =====
+// /v0/aircraft/{HEX} → manufacturer, model, registration, owner, country, photo
+// /v0/callsign/{CALLSIGN} → airline + origin + destination airports
+
+export type AircraftDetail = {
+  manufacturer: string;        // "Airbus"
+  model: string;               // "A321 211SL"
+  icaoType: string;            // "A321"
+  registration: string;        // "C-GEZX"
+  owner: string;               // "Air Transat"
+  ownerCountry: string;        // "Canada"
+  photoUrl: string | null;     // small photo if available
+};
+
+export type Airport = {
+  iata: string;                // "LAX"
+  icao: string;                // "KLAX"
+  name: string;                // "Los Angeles International Airport"
+  city: string;                // "Los Angeles"
+  country: string;             // "United States"
+  lat: number;
+  lon: number;
+};
+
+export type FlightRoute = {
+  callsignIcao: string;
+  callsignIata: string;
+  airline: string;             // "United Airlines"
+  airlineIata: string;
+  airlineCallsign: string;     // "UNITED"
+  origin: Airport | null;
+  destination: Airport | null;
+};
+
+const aircraftDetailCache = new Map<string, AircraftDetail | null>();
+const flightRouteCache = new Map<string, FlightRoute | null>();
+
+export async function fetchAircraftDetail(icao24: string, signal?: AbortSignal): Promise<AircraftDetail | null> {
+  const key = icao24.toUpperCase();
+  if (aircraftDetailCache.has(key)) return aircraftDetailCache.get(key)!;
+  try {
+    const res = await fetch(`https://api.adsbdb.com/v0/aircraft/${key}`, { signal });
+    if (!res.ok) {
+      aircraftDetailCache.set(key, null);
+      return null;
+    }
+    const json = await res.json();
+    const a = json?.response?.aircraft;
+    if (!a) {
+      aircraftDetailCache.set(key, null);
+      return null;
+    }
+    const detail: AircraftDetail = {
+      manufacturer: a.manufacturer || "",
+      model: a.type || "",
+      icaoType: a.icao_type || "",
+      registration: a.registration || "",
+      owner: a.registered_owner || "",
+      ownerCountry: a.registered_owner_country_name || "",
+      photoUrl: a.url_photo_thumbnail || a.url_photo || null,
+    };
+    aircraftDetailCache.set(key, detail);
+    return detail;
+  } catch (e) {
+    if ((e as Error).name === "AbortError") throw e;
+    aircraftDetailCache.set(key, null);
+    return null;
+  }
+}
+
+export async function fetchFlightRoute(callsign: string, signal?: AbortSignal): Promise<FlightRoute | null> {
+  const key = callsign.trim().toUpperCase();
+  if (!key) return null;
+  if (flightRouteCache.has(key)) return flightRouteCache.get(key)!;
+  try {
+    const res = await fetch(`https://api.adsbdb.com/v0/callsign/${key}`, { signal });
+    if (!res.ok) {
+      flightRouteCache.set(key, null);
+      return null;
+    }
+    const json = await res.json();
+    const r = json?.response?.flightroute;
+    if (!r) {
+      flightRouteCache.set(key, null);
+      return null;
+    }
+    const buildAirport = (a: any): Airport | null => {
+      if (!a) return null;
+      return {
+        iata: a.iata_code || "",
+        icao: a.icao_code || "",
+        name: a.name || "",
+        city: a.municipality || "",
+        country: a.country_name || "",
+        lat: typeof a.latitude === "number" ? a.latitude : 0,
+        lon: typeof a.longitude === "number" ? a.longitude : 0,
+      };
+    };
+    const route: FlightRoute = {
+      callsignIcao: r.callsign_icao || key,
+      callsignIata: r.callsign_iata || "",
+      airline: r.airline?.name || "",
+      airlineIata: r.airline?.iata || "",
+      airlineCallsign: r.airline?.callsign || "",
+      origin: buildAirport(r.origin),
+      destination: buildAirport(r.destination),
+    };
+    flightRouteCache.set(key, route);
+    return route;
+  } catch (e) {
+    if ((e as Error).name === "AbortError") throw e;
+    flightRouteCache.set(key, null);
+    return null;
+  }
+}
+
 // Color an aircraft instance by altitude (meters → THREE-friendly hex string).
 // Low = warm orange, mid = teal, high = bright cyan/white.
 export function altitudeColor(altitudeM: number): [number, number, number] {
