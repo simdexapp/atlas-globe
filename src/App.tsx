@@ -2204,6 +2204,9 @@ function App() {
             { id: "flyHubble", label: hubblePosition ? "Fly to Hubble (live position)" : "Hubble position not loaded yet", group: "View", icon: Telescope, run: () => hubblePosition && setFlyTo((c) => ({ id: c.id + 1, lat: hubblePosition.lat, lon: hubblePosition.lon, altKm: 800 })) },
             { id: "flyGround", label: "Fly to ground level at current view", group: "View", icon: Mountain, run: () => setFlyTo((c) => ({ id: c.id + 1, lat: cameraState.lat, lon: cameraState.lon, altKm: 0.5 })) },
             { id: "flyOrbit", label: "Pull back to orbital view", group: "View", icon: Globe2, run: () => setFlyTo((c) => ({ id: c.id + 1, lat: cameraState.lat, lon: cameraState.lon, altKm: 12000 })) },
+            { id: "flyHome", label: "Fly home (Atlantic, full Earth)", group: "View", icon: Globe2, run: () => setFlyTo((c) => ({ id: c.id + 1, lat: 25, lon: 0, altKm: 12000 })) },
+            { id: "flyAmericas", label: "Fly to the Americas hemisphere", group: "View", icon: Globe2, run: () => setFlyTo((c) => ({ id: c.id + 1, lat: 15, lon: -80, altKm: 12000 })) },
+            { id: "flyAsia", label: "Fly to the Asia/Pacific hemisphere", group: "View", icon: Globe2, run: () => setFlyTo((c) => ({ id: c.id + 1, lat: 20, lon: 110, altKm: 12000 })) },
             { id: "flyLEO", label: "Fly to LEO altitude (400km)", group: "View", icon: Telescope, run: () => setFlyTo((c) => ({ id: c.id + 1, lat: cameraState.lat, lon: cameraState.lon, altKm: 400 })) },
             { id: "randomPlace", label: "Fly to a random place on Earth", group: "View", icon: Sparkles, run: () => {
               // Pick a uniformly distributed point on the sphere (using inverse CDF on lat
