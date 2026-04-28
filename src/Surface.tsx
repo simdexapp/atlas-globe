@@ -79,7 +79,8 @@ export default function Surface({
   imageryStyle,
   tiltCommand,
   terrainExaggeration,
-  fogEnabled
+  fogEnabled,
+  manualUtcHour
 }: {
   token: string;
   onCameraChange: (lat: number, lon: number, altKm: number) => void;
@@ -107,6 +108,10 @@ export default function Surface({
   terrainExaggeration?: number;
   // Toggles Cesium's built-in atmospheric fog (gives distance haze).
   fogEnabled?: boolean;
+  // Manual UTC hour-of-day for the Cesium clock (0..24). Only honored when
+  // realTimeSun is false; ignored otherwise so the user can switch back to
+  // real-time without restarting the viewer.
+  manualUtcHour?: number;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Cesium.Viewer | null>(null);
@@ -502,7 +507,7 @@ export default function Surface({
     };
   }, [onSelectAircraft, aircraft]);
 
-  // ===== Real-time-sun toggle: when on, lock the Cesium clock to actual UTC =====
+  // ===== Real-time-sun toggle / manual hour =====
   useEffect(() => {
     const viewer = viewerRef.current;
     if (!viewer) return;
@@ -510,10 +515,20 @@ export default function Surface({
       viewer.clock.shouldAnimate = true;
       viewer.clock.multiplier = 1;
       viewer.clock.currentTime = Cesium.JulianDate.now();
+    } else if (typeof manualUtcHour === "number") {
+      // Snap clock to today at the requested UTC hour.
+      const now = new Date();
+      const target = new Date(Date.UTC(
+        now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(),
+        Math.floor(manualUtcHour), Math.round((manualUtcHour % 1) * 60), 0, 0
+      ));
+      viewer.clock.shouldAnimate = false;
+      viewer.clock.currentTime = Cesium.JulianDate.fromDate(target);
+      viewer.scene.requestRender();
     } else {
       viewer.clock.shouldAnimate = false;
     }
-  }, [realTimeSun]);
+  }, [realTimeSun, manualUtcHour]);
 
   // ===== Pin sync =====
   useEffect(() => {
