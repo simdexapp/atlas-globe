@@ -18,6 +18,7 @@ import {
   Compass,
   Crosshair,
   Eye,
+  Film,
   Globe2,
   Layers,
   Maximize2,
@@ -25,11 +26,14 @@ import {
   Mountain,
   Navigation,
   Pause,
+  Plane,
   Play,
   RotateCcw,
   Search,
   Share2,
   Sparkles,
+  SkipBack,
+  SkipForward,
   Sun as SunIcon,
   Square,
   Telescope,
@@ -39,6 +43,8 @@ import {
 } from "lucide-react";
 import * as THREE from "three";
 import { GIBS_LAYERS, DEFAULT_GIBS_DAY, DEFAULT_GIBS_NIGHT, todayUTC, loadGibsComposite } from "./tiles";
+import { fetchAllAircraft, altitudeColor, altitudeFt, knotsFromMs, type Aircraft, type FlightSnapshot } from "./flights";
+import { dateRange, shiftDate, loadTimelapseFrames, disposeFrames, type TimelapseFrame } from "./timelapse";
 
 const SurfaceMode = lazy(() => import("./Surface"));
 
@@ -93,6 +99,7 @@ type LayerVisibility = {
   constellations: boolean;
   volcanoes: boolean;
   compass: boolean;
+  aircraft: boolean;
 };
 
 type GlobeSettings = {
@@ -149,7 +156,7 @@ type PersistedState = {
   pins?: Pin[];
 };
 
-const STORAGE_KEY = "atlas-globe-state-v4";
+const STORAGE_KEY = "atlas-globe-state-v5";
 const EARTH_RADIUS_KM = 6371;
 const MIN_DISTANCE = 1.0008;        // ~5 km above surface (texture-pixelated, but real zoom)
 const MAX_DISTANCE = 12;            // far view from space
@@ -177,7 +184,8 @@ const defaultLayers: LayerVisibility = {
   subsolar: false,
   constellations: false,
   volcanoes: false,
-  compass: true
+  compass: true,
+  aircraft: false
 };
 
 const FAMOUS_VOLCANOES: { id: string; name: string; lat: number; lon: number }[] = [
@@ -280,6 +288,21 @@ function App() {
   const [issPosition, setIssPosition] = useState<{ lat: number; lon: number } | null>(null);
   const [tiangongPosition, setTiangongPosition] = useState<{ lat: number; lon: number } | null>(null);
   const [hubblePosition, setHubblePosition] = useState<{ lat: number; lon: number } | null>(null);
+  const [aircraftSnapshot, setAircraftSnapshot] = useState<FlightSnapshot | null>(null);
+  const [aircraftLoading, setAircraftLoading] = useState(false);
+  const [aircraftError, setAircraftError] = useState<string | null>(null);
+  const [selectedAircraftId, setSelectedAircraftId] = useState<string | null>(null);
+  const [timelapseOpen, setTimelapseOpen] = useState(false);
+  const [timelapseFrames, setTimelapseFrames] = useState<TimelapseFrame[]>([]);
+  const [timelapseLoading, setTimelapseLoading] = useState(false);
+  const [timelapseLoadProgress, setTimelapseLoadProgress] = useState(0);
+  const [timelapsePlaying, setTimelapsePlaying] = useState(false);
+  const [timelapseFps, setTimelapseFps] = useState(4);
+  const [timelapseIndex, setTimelapseIndex] = useState(0);
+  const [timelapseLayerId, setTimelapseLayerId] = useState<string>("modisTrueColor");
+  const [timelapseStartDate, setTimelapseStartDate] = useState<string>(() => shiftDate(todayUTC(), -7));
+  const [timelapseEndDate, setTimelapseEndDate] = useState<string>(() => todayUTC());
+  const timelapseAbortRef = useRef<AbortController | null>(null);
   const [searchResults, setSearchResults] = useState<Bookmark[]>([]);
   const [searching, setSearching] = useState(false);
   const [imagery, setImagery] = useState<Imagery>(defaultImagery);
@@ -389,6 +412,41 @@ function App() {
     const handle = window.setInterval(fetchAll, 5000);
     return () => { cancelled = true; window.clearInterval(handle); };
   }, [layers.iss, layers.tiangong, layers.hubble]);
+
+  // Global aircraft polling — every ~12s (OpenSky anonymous tier limit is 10s).
+  useEffect(() => {
+    if (!layers.aircraft) {
+      setAircraftSnapshot(null);
+      setAircraftError(null);
+      setSelectedAircraftId(null);
+      return;
+    }
+    let cancelled = false;
+    let abort: AbortController | null = null;
+    const tick = async () => {
+      abort?.abort();
+      abort = new AbortController();
+      setAircraftLoading(true);
+      try {
+        const snap = await fetchAllAircraft(abort.signal);
+        if (cancelled) return;
+        setAircraftSnapshot(snap);
+        setAircraftError(null);
+      } catch (e) {
+        if ((e as Error).name === "AbortError") return;
+        if (!cancelled) setAircraftError((e as Error).message);
+      } finally {
+        if (!cancelled) setAircraftLoading(false);
+      }
+    };
+    tick();
+    const handle = window.setInterval(tick, 12000);
+    return () => {
+      cancelled = true;
+      abort?.abort();
+      window.clearInterval(handle);
+    };
+  }, [layers.aircraft]);
 
   // Persist
   useEffect(() => {
@@ -644,6 +702,68 @@ function App() {
 
   const updateImagery = useCallback((patch: Partial<Imagery>) => {
     setImagery((prev) => ({ ...prev, ...patch }));
+  }, []);
+
+  // Time-lapse: load N daily composites at low zoom into ready-to-bind textures.
+  const loadTimelapse = useCallback(async () => {
+    timelapseAbortRef.current?.abort();
+    const controller = new AbortController();
+    timelapseAbortRef.current = controller;
+    setTimelapseLoading(true);
+    setTimelapseLoadProgress(0);
+    setTimelapsePlaying(false);
+    setTimelapseIndex(0);
+    // Dispose any previous frames
+    setTimelapseFrames((prev) => { disposeFrames(prev); return []; });
+    try {
+      const dates = dateRange(timelapseStartDate, timelapseEndDate);
+      // Cap to 30 frames to keep memory under control on mobile
+      const cappedDates = dates.length > 30 ? dates.slice(-30) : dates;
+      const dayFallback = await fallbackImagesRef.current.dayPromise.catch(() => null);
+      if (controller.signal.aborted) return;
+      const frames = await loadTimelapseFrames(
+        timelapseLayerId,
+        cappedDates,
+        1,
+        controller.signal,
+        (loaded, total) => setTimelapseLoadProgress(loaded / total),
+        dayFallback ?? undefined
+      );
+      if (controller.signal.aborted) { disposeFrames(frames); return; }
+      setTimelapseFrames(frames);
+      setTimelapseLoadProgress(1);
+      showToast(`Time-lapse ready: ${frames.length} frames`);
+    } catch (e) {
+      if ((e as Error).name !== "AbortError") {
+        showToast(`Time-lapse failed: ${(e as Error).message}`);
+      }
+    } finally {
+      if (!controller.signal.aborted) setTimelapseLoading(false);
+    }
+  }, [timelapseStartDate, timelapseEndDate, timelapseLayerId]);
+
+  const closeTimelapse = useCallback(() => {
+    timelapseAbortRef.current?.abort();
+    setTimelapsePlaying(false);
+    setTimelapseFrames((prev) => { disposeFrames(prev); return []; });
+    setTimelapseOpen(false);
+  }, []);
+
+  // Frame ticker — advances index at the requested FPS while playing
+  useEffect(() => {
+    if (!timelapsePlaying || timelapseFrames.length === 0) return;
+    const ms = 1000 / Math.max(1, timelapseFps);
+    const handle = window.setInterval(() => {
+      setTimelapseIndex((i) => (i + 1) % timelapseFrames.length);
+    }, ms);
+    return () => window.clearInterval(handle);
+  }, [timelapsePlaying, timelapseFps, timelapseFrames.length]);
+
+  // Cleanup any timelapse frames on unmount
+  useEffect(() => () => {
+    timelapseAbortRef.current?.abort();
+    setTimelapseFrames((prev) => { disposeFrames(prev); return []; });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const onCameraChange = useCallback((lat: number, lon: number, altKm: number) => {
@@ -1287,14 +1407,17 @@ function App() {
             issPosition={issPosition}
             tiangongPosition={tiangongPosition}
             hubblePosition={hubblePosition}
+            aircraft={aircraftSnapshot?.aircraft ?? []}
+            selectedAircraftId={selectedAircraftId}
             pins={pins}
             earthquakes={earthquakes}
             borders={borders}
             selectedPinId={selectedPin}
-            dayTexture={dayTexture}
+            dayTexture={timelapsePlaying && timelapseFrames[timelapseIndex] ? timelapseFrames[timelapseIndex].texture : dayTexture}
             nightTexture={nightTexture}
             pinTool={pinTool}
             onSelectPin={setSelectedPin}
+            onSelectAircraft={setSelectedAircraftId}
             onGlobeClick={onGlobeClick}
             onCameraChange={onCameraChange}
           />
@@ -1366,6 +1489,8 @@ function App() {
         <RailButton icon={Bookmark} label="Bookmarks" active={inspectorTab === "bookmarks"} onClick={() => setInspectorTab("bookmarks")} />
         <RailButton icon={Globe2} label="Globe controls" active={inspectorTab === "globe"} onClick={() => setInspectorTab("globe")} />
         <RailButton icon={Crosshair} label="Reset view (R)" onClick={resetView} />
+        <RailButton icon={Plane} label="Live aircraft (toggle)" active={layers.aircraft} onClick={() => toggleLayer("aircraft")} />
+        <RailButton icon={Film} label="Time-lapse" active={timelapseOpen} onClick={() => setTimelapseOpen(true)} />
         <RailButton icon={Telescope} label="Show FPS" active={showFps} onClick={() => setShowFps((v) => !v)} />
         <RailButton icon={Maximize2} label="Hide UI (H)" active={hideUi} onClick={() => setHideUi((v) => !v)} />
       </aside>
@@ -1525,6 +1650,68 @@ function App() {
         </div>
       )}
 
+      {layers.aircraft && (
+        <div className="atlasFlightPill" role="status">
+          <Plane size={11} />
+          {aircraftError ? (
+            <span>Flights: {aircraftError}</span>
+          ) : aircraftSnapshot ? (
+            <span>{aircraftSnapshot.aircraft.length.toLocaleString()} aircraft tracked · {Math.round((Date.now() - aircraftSnapshot.fetchedAt) / 1000)}s ago · {aircraftSnapshot.source}</span>
+          ) : (
+            <span>{aircraftLoading ? "Polling OpenSky…" : "Flights idle"}</span>
+          )}
+        </div>
+      )}
+
+      {selectedAircraftId && aircraftSnapshot && (() => {
+        const a = aircraftSnapshot.aircraft.find((x) => x.icao24 === selectedAircraftId);
+        if (!a) return null;
+        return (
+          <div className="atlasAircraftCard" role="dialog">
+            <div className="atlasAircraftCardHead">
+              <strong>{a.callsign || a.icao24.toUpperCase()}</strong>
+              <button className="atlasIconBtn" onClick={() => setSelectedAircraftId(null)} aria-label="Close"><X size={14} /></button>
+            </div>
+            <div className="atlasAircraftCardBody">
+              <div><span>ICAO24</span><b>{a.icao24.toUpperCase()}</b></div>
+              <div><span>Country</span><b>{a.country || "—"}</b></div>
+              <div><span>Position</span><b>{formatLat(a.lat)} · {formatLon(a.lon)}</b></div>
+              <div><span>Altitude</span><b>{altitudeFt(a.altitudeM).toLocaleString()} ft</b></div>
+              <div><span>Speed</span><b>{knotsFromMs(a.velocityMs)} kt</b></div>
+              <div><span>Heading</span><b>{Math.round(a.headingDeg)}°</b></div>
+              <div><span>Vert.rate</span><b>{a.verticalRateMs > 0 ? "+" : ""}{Math.round(a.verticalRateMs * 196.85)} ft/min</b></div>
+              <div><span>Ground</span><b>{a.onGround ? "yes" : "no"}</b></div>
+            </div>
+            <div className="atlasAircraftCardActions">
+              <button className="atlasBtn" onClick={() => setFlyTo((c) => ({ id: c.id + 1, lat: a.lat, lon: a.lon, altKm: 600 }))}>Fly to</button>
+              <a className="atlasBtn" href={`https://opensky-network.org/aircraft-profile?icao24=${a.icao24}`} target="_blank" rel="noreferrer">OpenSky ↗</a>
+            </div>
+          </div>
+        );
+      })()}
+
+      {timelapseOpen && (
+        <TimelapseModal
+          startDate={timelapseStartDate}
+          endDate={timelapseEndDate}
+          layerId={timelapseLayerId}
+          fps={timelapseFps}
+          frames={timelapseFrames}
+          loading={timelapseLoading}
+          loadProgress={timelapseLoadProgress}
+          playing={timelapsePlaying}
+          index={timelapseIndex}
+          onChangeStart={setTimelapseStartDate}
+          onChangeEnd={setTimelapseEndDate}
+          onChangeLayer={setTimelapseLayerId}
+          onChangeFps={setTimelapseFps}
+          onChangeIndex={setTimelapseIndex}
+          onLoad={loadTimelapse}
+          onPlayPause={() => setTimelapsePlaying((p) => !p)}
+          onClose={closeTimelapse}
+        />
+      )}
+
       {exportProgress && (
         <div className="atlasExportProgress" role="status">
           <span>{exportProgress.label}</span>
@@ -1642,6 +1829,7 @@ function LayersPanel({ layers, onToggle, bordersLoading }: { layers: LayerVisibi
     { key: "pinPaths", label: "Great-circle pin paths", icon: Compass },
     { key: "earthquakes", label: "Earthquakes (24h, USGS)", icon: Sparkles },
     { key: "volcanoes", label: "Notable volcanoes (24)", icon: Sparkles },
+    { key: "aircraft", label: "Aircraft — live (every plane)", icon: Plane },
     { key: "iss", label: "ISS — live position", icon: Telescope },
     { key: "tiangong", label: "Tiangong CSS — live position", icon: Telescope },
     { key: "hubble", label: "Hubble — live position", icon: Telescope },
@@ -1958,6 +2146,108 @@ function DataPanel({ pins, earthquakes, coordFormat, pinSearch, tourPlaying, onP
         <button type="button" className="atlasPrimaryBtn small" onClick={onShowEmbed}><Share2 size={12} /> Embed iframe snippet</button>
       </PanelSection>
     </>
+  );
+}
+
+function TimelapseModal({
+  startDate, endDate, layerId, fps, frames, loading, loadProgress, playing, index,
+  onChangeStart, onChangeEnd, onChangeLayer, onChangeFps, onChangeIndex, onLoad, onPlayPause, onClose
+}: {
+  startDate: string;
+  endDate: string;
+  layerId: string;
+  fps: number;
+  frames: TimelapseFrame[];
+  loading: boolean;
+  loadProgress: number;
+  playing: boolean;
+  index: number;
+  onChangeStart: (s: string) => void;
+  onChangeEnd: (s: string) => void;
+  onChangeLayer: (s: string) => void;
+  onChangeFps: (n: number) => void;
+  onChangeIndex: (n: number) => void;
+  onLoad: () => void;
+  onPlayPause: () => void;
+  onClose: () => void;
+}) {
+  // Only the time-aware day layers make sense for time-lapse
+  const candidateLayers = Object.values(GIBS_LAYERS).filter((l) => l.hasTime && (l.swap === "day" || !l.swap));
+  const today = todayUTC();
+  const totalFrames = frames.length;
+  const currentDate = totalFrames > 0 ? frames[index]?.date : "";
+  return (
+    <div className="atlasModalShade" onClick={onClose} role="dialog" aria-modal="true">
+      <div className="atlasShortcutsModal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 580 }}>
+        <div className="atlasModalHead">
+          <strong>Time-lapse · NASA daily imagery</strong>
+          <button type="button" className="atlasIconBtn" onClick={onClose} aria-label="Close"><X size={14} /></button>
+        </div>
+        <p className="atlasHint" style={{ marginTop: 0, marginBottom: 12 }}>
+          Streams a sequence of GIBS daily composites (low-res) and plays them as an animated reel on the globe.
+          Up to 30 frames; older dates have better global coverage.
+        </p>
+
+        <div className="timelapseGrid">
+          <label>
+            <span>Layer</span>
+            <select value={layerId} onChange={(e) => onChangeLayer(e.target.value)} disabled={loading || playing}>
+              {candidateLayers.map((l) => (
+                <option key={l.id} value={l.id}>{l.name}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Start date</span>
+            <input type="date" value={startDate} max={today} onChange={(e) => onChangeStart(e.target.value)} disabled={loading || playing} />
+          </label>
+          <label>
+            <span>End date</span>
+            <input type="date" value={endDate} max={today} onChange={(e) => onChangeEnd(e.target.value)} disabled={loading || playing} />
+          </label>
+          <label>
+            <span>Speed (fps): <b>{fps}</b></span>
+            <input type="range" min={1} max={20} step={1} value={fps} onChange={(e) => onChangeFps(parseInt(e.target.value, 10))} />
+          </label>
+        </div>
+
+        {loading ? (
+          <div className="timelapseLoad">
+            <div className="atlasImageryStatusBar"><div style={{ width: `${loadProgress * 100}%` }} /></div>
+            <span>Loading frames… {Math.round(loadProgress * 100)}%</span>
+          </div>
+        ) : totalFrames === 0 ? (
+          <button type="button" className="atlasPrimaryBtn" style={{ width: "100%" }} onClick={onLoad}>
+            Load frames
+          </button>
+        ) : (
+          <>
+            <div className="timelapsePlayer">
+              <button type="button" className="atlasIconBtn" onClick={() => onChangeIndex(Math.max(0, index - 1))} aria-label="Previous frame"><SkipBack size={14} /></button>
+              <button type="button" className="atlasPrimaryBtn small" onClick={onPlayPause}>
+                {playing ? (<><Pause size={12} /> Pause</>) : (<><Play size={12} /> Play</>)}
+              </button>
+              <button type="button" className="atlasIconBtn" onClick={() => onChangeIndex(Math.min(totalFrames - 1, index + 1))} aria-label="Next frame"><SkipForward size={14} /></button>
+              <input
+                type="range"
+                min={0}
+                max={totalFrames - 1}
+                value={index}
+                onChange={(e) => onChangeIndex(parseInt(e.target.value, 10))}
+                style={{ flex: 1 }}
+              />
+              <span className="timelapseFrameLabel">{currentDate}</span>
+            </div>
+            <p className="atlasHint" style={{ marginTop: 8, marginBottom: 0 }}>
+              Frame {index + 1}/{totalFrames} · close this dialog to revert to your normal imagery.
+            </p>
+            <button type="button" className="atlasBtn small" style={{ marginTop: 10 }} onClick={onLoad}>
+              Reload (with current dates)
+            </button>
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -2459,6 +2749,8 @@ function GlobeCanvas({
   issPosition,
   tiangongPosition,
   hubblePosition,
+  aircraft,
+  selectedAircraftId,
   pins,
   earthquakes,
   borders,
@@ -2467,6 +2759,7 @@ function GlobeCanvas({
   nightTexture,
   pinTool,
   onSelectPin,
+  onSelectAircraft,
   onGlobeClick,
   onCameraChange
 }: {
@@ -2478,6 +2771,8 @@ function GlobeCanvas({
   issPosition: { lat: number; lon: number } | null;
   tiangongPosition: { lat: number; lon: number } | null;
   hubblePosition: { lat: number; lon: number } | null;
+  aircraft: Aircraft[];
+  selectedAircraftId: string | null;
   pins: Pin[];
   earthquakes: Earthquake[];
   borders: Float32Array | null;
@@ -2486,6 +2781,7 @@ function GlobeCanvas({
   nightTexture: THREE.Texture | null;
   pinTool: boolean;
   onSelectPin: (id: string | null) => void;
+  onSelectAircraft: (id: string | null) => void;
   onGlobeClick: (lat: number, lon: number) => void;
   onCameraChange: (lat: number, lon: number, altKm: number) => void;
 }) {
@@ -2517,6 +2813,9 @@ function GlobeCanvas({
           {layers.volcanoes && <VolcanoMarkers />}
           {layers.pinPaths && <PinPaths pins={pins} sunDirection={sunDirection} />}
           {layers.pins && <PinMarkers pins={pins} selectedId={selectedPinId} onSelect={onSelectPin} />}
+          {layers.aircraft && aircraft.length > 0 && (
+            <AircraftLayer aircraft={aircraft} selectedId={selectedAircraftId} onSelect={onSelectAircraft} />
+          )}
           {layers.terminator && <TerminatorRing sunDirection={sunDirection} />}
           {layers.subsolar && <SubsolarPoint sunDirection={sunDirection} />}
         </EarthGroup>
@@ -2797,6 +3096,166 @@ function TiangongMarker({ lat, lon }: { lat: number; lon: number }) {
 
 function HubbleMarker({ lat, lon }: { lat: number; lon: number }) {
   return <SatelliteMarker lat={lat} lon={lon} altitudeKm={540} color="#5cb5ff" />;
+}
+
+// Render every aircraft worldwide as a single InstancedMesh — handles 30k+ at 60fps.
+// Triangles lie tangent to the sphere with their tip rotated by the aircraft's heading.
+function AircraftLayer({
+  aircraft,
+  selectedId,
+  onSelect
+}: {
+  aircraft: Aircraft[];
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
+}) {
+  const meshRef = useRef<THREE.InstancedMesh>(null);
+  const haloRef = useRef<THREE.InstancedMesh>(null);
+
+  // Pre-allocate scratch objects (recreated reference each rebuild for clarity)
+  const scratch = useMemo(() => ({
+    matrix: new THREE.Matrix4(),
+    color: new THREE.Color(),
+    pos: new THREE.Vector3(),
+    normal: new THREE.Vector3(),
+    east: new THREE.Vector3(),
+    north: new THREE.Vector3(),
+    forward: new THREE.Vector3(),
+    right: new THREE.Vector3(),
+  }), []);
+
+  // Tiny flat triangle, tip pointing +Y, lying in XY plane (normal = +Z).
+  const triGeometry = useMemo(() => {
+    const g = new THREE.BufferGeometry();
+    const w = 0.0035;
+    const h = 0.009;
+    g.setAttribute("position", new THREE.Float32BufferAttribute([
+      -w, -h * 0.4, 0,
+       w, -h * 0.4, 0,
+       0,  h * 0.6, 0
+    ], 3));
+    g.setAttribute("normal", new THREE.Float32BufferAttribute([
+      0, 0, 1, 0, 0, 1, 0, 0, 1
+    ], 3));
+    return g;
+  }, []);
+
+  // Halo (flat ring) for the selected aircraft; reuse the same geometry approach
+  const haloGeometry = useMemo(() => {
+    return new THREE.RingGeometry(0.012, 0.018, 24);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      triGeometry.dispose();
+      haloGeometry.dispose();
+    };
+  }, [triGeometry, haloGeometry]);
+
+  // Update per-instance matrix + color whenever the data changes.
+  useEffect(() => {
+    const mesh = meshRef.current;
+    if (!mesh) return;
+    const n = aircraft.length;
+    mesh.count = n;
+    for (let i = 0; i < n; i++) {
+      const a = aircraft[i];
+      computeAircraftMatrix(a, scratch);
+      mesh.setMatrixAt(i, scratch.matrix);
+      const [r, g, b] = altitudeColor(a.altitudeM);
+      scratch.color.setRGB(r, g, b);
+      mesh.setColorAt(i, scratch.color);
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    mesh.computeBoundingSphere();
+  }, [aircraft, scratch]);
+
+  // Halo for the currently selected aircraft (single instance for simplicity)
+  const selectedAircraft = useMemo(() => {
+    if (!selectedId) return null;
+    return aircraft.find((a) => a.icao24 === selectedId) ?? null;
+  }, [selectedId, aircraft]);
+
+  useEffect(() => {
+    const halo = haloRef.current;
+    if (!halo) return;
+    if (!selectedAircraft) { halo.count = 0; halo.instanceMatrix.needsUpdate = true; return; }
+    halo.count = 1;
+    computeAircraftMatrix(selectedAircraft, scratch);
+    halo.setMatrixAt(0, scratch.matrix);
+    halo.instanceMatrix.needsUpdate = true;
+  }, [selectedAircraft, scratch]);
+
+  // Click → pick instance
+  const handleClick = useCallback((e: any) => {
+    if (typeof e.instanceId !== "number") return;
+    e.stopPropagation();
+    const a = aircraft[e.instanceId];
+    if (a) onSelect(a.icao24);
+  }, [aircraft, onSelect]);
+
+  return (
+    <>
+      <instancedMesh
+        ref={meshRef}
+        args={[triGeometry, undefined, Math.max(1, aircraft.length)]}
+        onPointerDown={handleClick}
+        frustumCulled={false}
+      >
+        <meshBasicMaterial vertexColors side={THREE.DoubleSide} toneMapped={false} />
+      </instancedMesh>
+      <instancedMesh
+        ref={haloRef}
+        args={[haloGeometry, undefined, 1]}
+        frustumCulled={false}
+      >
+        <meshBasicMaterial color="#5cb5ff" transparent opacity={0.65} side={THREE.DoubleSide} toneMapped={false} />
+      </instancedMesh>
+    </>
+  );
+}
+
+function computeAircraftMatrix(
+  a: Aircraft,
+  scratch: {
+    matrix: THREE.Matrix4;
+    pos: THREE.Vector3;
+    normal: THREE.Vector3;
+    east: THREE.Vector3;
+    north: THREE.Vector3;
+    forward: THREE.Vector3;
+    right: THREE.Vector3;
+  }
+) {
+  // Aircraft typical altitudes are 0-15km — well under 1% of Earth radius.
+  // We add a small visibility bump so they don't z-fight with the surface.
+  const altKm = Math.max(0, a.altitudeM / 1000);
+  const radius = 1 + altKm / EARTH_RADIUS_KM + 0.005;
+  const lat = a.lat;
+  const lon = a.lon;
+  const phi = (90 - lat) * Math.PI / 180;
+  const theta = lon * Math.PI / 180;
+  scratch.pos.set(
+    radius * Math.sin(phi) * Math.cos(theta),
+    radius * Math.cos(phi),
+    radius * Math.sin(phi) * Math.sin(theta)
+  );
+  scratch.normal.copy(scratch.pos).normalize();
+  // east is the tangent in +lon direction at any (lat, lon)
+  scratch.east.set(-Math.sin(theta), 0, Math.cos(theta));
+  // north = east × normal (right-handed)
+  scratch.north.crossVectors(scratch.east, scratch.normal).normalize();
+  // re-orthogonalize east to handle pole edge cases
+  scratch.east.crossVectors(scratch.normal, scratch.north).normalize();
+  // forward = north * cos(h) + east * sin(h), heading 0=N, 90=E
+  const h = (a.headingDeg || 0) * Math.PI / 180;
+  scratch.forward.copy(scratch.north).multiplyScalar(Math.cos(h))
+    .addScaledVector(scratch.east, Math.sin(h));
+  scratch.right.crossVectors(scratch.forward, scratch.normal).normalize();
+  // Build basis: triangle's local (X = right, Y = forward, Z = normal/up)
+  scratch.matrix.makeBasis(scratch.right, scratch.forward, scratch.normal);
+  scratch.matrix.setPosition(scratch.pos);
 }
 
 function ExposureBridge({ exposure }: { exposure: number }) {
