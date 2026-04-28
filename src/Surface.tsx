@@ -83,7 +83,9 @@ export default function Surface({
   fogEnabled,
   manualUtcHour,
   screenshotCommand,
-  onScreenshot
+  onScreenshot,
+  measurePoints,
+  geoJson
 }: {
   token: string;
   onCameraChange: (lat: number, lon: number, altKm: number) => void;
@@ -122,6 +124,10 @@ export default function Surface({
   // ensure the latest frame is in the buffer.
   screenshotCommand?: { id: number } | null;
   onScreenshot?: (blob: Blob, dataUrl: string) => void;
+  // Live measurement: 1 or 2 points to render as visible polyline + endpoint dots.
+  measurePoints?: Array<{ lat: number; lon: number }>;
+  // GeoJSON FeatureCollection to render as Cesium entities (drag-drop import).
+  geoJson?: any;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Cesium.Viewer | null>(null);
@@ -135,6 +141,8 @@ export default function Surface({
   const aircraftTrailEntityRef = useRef<Cesium.Entity | null>(null);
   const aircraftHistoryEntityRef = useRef<Cesium.Entity | null>(null);
   const buildingsTilesetRef = useRef<Cesium.Cesium3DTileset | null>(null);
+  const measureEntitiesRef = useRef<Cesium.Entity[]>([]);
+  const geoJsonDataSourceRef = useRef<Cesium.GeoJsonDataSource | null>(null);
   const eonetEntitiesRef = useRef<Cesium.Entity[]>([]);
   const earthquakeEntitiesRef = useRef<Cesium.Entity[]>([]);
   const volcanoEntitiesRef = useRef<Cesium.Entity[]>([]);
@@ -367,6 +375,12 @@ export default function Surface({
       aircraftBillboardsRef.current?.removeAll();
       if (aircraftHistoryEntityRef.current) viewer.entities.remove(aircraftHistoryEntityRef.current);
       if (aircraftTrailEntityRef.current) viewer.entities.remove(aircraftTrailEntityRef.current);
+      for (const e of measureEntitiesRef.current) viewer.entities.remove(e);
+      measureEntitiesRef.current = [];
+      if (geoJsonDataSourceRef.current) {
+        viewer.dataSources.remove(geoJsonDataSourceRef.current, true);
+        geoJsonDataSourceRef.current = null;
+      }
       aircraftHistoryEntityRef.current = null;
       aircraftTrailEntityRef.current = null;
       if (weatherImageryLayerRef.current) {
@@ -423,6 +437,104 @@ export default function Surface({
     if (!tileset) return;
     tileset.show = show3DBuildings !== false;
   }, [show3DBuildings]);
+
+  // ===== Measure-tool overlay =====
+  // When the App's measure mode collects 1 or 2 points, render them as
+  // dot entities + (if 2) a polyline between with the great-circle distance
+  // as a center label.
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    for (const e of measureEntitiesRef.current) viewer.entities.remove(e);
+    measureEntitiesRef.current = [];
+    if (!measurePoints || measurePoints.length === 0) return;
+    // Endpoint dots
+    for (const p of measurePoints) {
+      const dot = viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(p.lon, p.lat),
+        point: {
+          pixelSize: 10,
+          color: Cesium.Color.fromCssColorString("#ffd66b"),
+          outlineColor: Cesium.Color.WHITE,
+          outlineWidth: 2,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+      });
+      measureEntitiesRef.current.push(dot);
+    }
+    // Connecting line + distance label
+    if (measurePoints.length === 2) {
+      const a = measurePoints[0];
+      const b = measurePoints[1];
+      // Great-circle distance via haversine.
+      const R = 6371;
+      const dLat = (b.lat - a.lat) * Math.PI / 180;
+      const dLon = (b.lon - a.lon) * Math.PI / 180;
+      const lat1 = a.lat * Math.PI / 180;
+      const lat2 = b.lat * Math.PI / 180;
+      const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+      const dist = 2 * R * Math.asin(Math.sqrt(h));
+      const line = viewer.entities.add({
+        polyline: {
+          positions: [
+            Cesium.Cartesian3.fromDegrees(a.lon, a.lat),
+            Cesium.Cartesian3.fromDegrees(b.lon, b.lat),
+          ],
+          width: 3,
+          arcType: Cesium.ArcType.GEODESIC,
+          material: new Cesium.PolylineDashMaterialProperty({
+            color: Cesium.Color.fromCssColorString("#ffd66b"),
+            dashLength: 16,
+          }),
+          clampToGround: true,
+        },
+      });
+      measureEntitiesRef.current.push(line);
+      // Mid-arc label with distance.
+      const midLat = (a.lat + b.lat) / 2;
+      const midLon = (a.lon + b.lon) / 2;
+      const label = viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(midLon, midLat),
+        label: {
+          text: `${dist.toLocaleString(undefined, { maximumFractionDigits: 0 })} km`,
+          font: "12px ui-monospace, monospace",
+          fillColor: Cesium.Color.fromCssColorString("#ffd66b"),
+          outlineColor: Cesium.Color.fromCssColorString("rgba(0,0,0,0.85)"),
+          outlineWidth: 4,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          verticalOrigin: Cesium.VerticalOrigin.CENTER,
+          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+          showBackground: true,
+          backgroundColor: Cesium.Color.fromCssColorString("rgba(8,14,26,0.92)"),
+          backgroundPadding: new Cesium.Cartesian2(8, 4),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+      });
+      measureEntitiesRef.current.push(label);
+    }
+  }, [measurePoints]);
+
+  // ===== GeoJSON sync =====
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    if (geoJsonDataSourceRef.current) {
+      viewer.dataSources.remove(geoJsonDataSourceRef.current, true);
+      geoJsonDataSourceRef.current = null;
+    }
+    if (!geoJson) return;
+    Cesium.GeoJsonDataSource.load(geoJson, {
+      stroke: Cesium.Color.fromCssColorString("#5cb5ff"),
+      fill: Cesium.Color.fromCssColorString("#5cb5ff").withAlpha(0.15),
+      strokeWidth: 2,
+      clampToGround: true,
+    }).then((ds) => {
+      viewer.dataSources.add(ds);
+      geoJsonDataSourceRef.current = ds;
+      viewer.scene.requestRender();
+    }).catch(() => { /* malformed GeoJSON — silent */ });
+  }, [geoJson]);
 
   // ===== Aircraft past-history polyline (selected) =====
   useEffect(() => {

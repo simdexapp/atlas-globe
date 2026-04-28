@@ -374,6 +374,34 @@ function App() {
   const [surfaceFog, setSurfaceFog] = useState(true);
   const [surfaceManualHour, setSurfaceManualHour] = useState<number | null>(null);
   const [surfaceScreenshotCmd, setSurfaceScreenshotCmd] = useState<{ id: number } | null>(null);
+  // GeoJSON drag-import state — set by the body-level dragdrop listener.
+  const [geoJsonImport, setGeoJsonImport] = useState<any | null>(null);
+
+  // Body-level drag-and-drop import for GeoJSON files. Drop a .json/.geojson
+  // anywhere on the page to render its features as Cesium entities.
+  useEffect(() => {
+    const onDragOver = (e: DragEvent) => { e.preventDefault(); };
+    const onDrop = async (e: DragEvent) => {
+      e.preventDefault();
+      const file = e.dataTransfer?.files?.[0];
+      if (!file) return;
+      if (!/\.(json|geojson)$/i.test(file.name)) return;
+      try {
+        const text = await file.text();
+        const parsed = JSON.parse(text);
+        setGeoJsonImport(parsed);
+        showToast(`Imported ${file.name} (${parsed.features?.length ?? 0} features)`);
+      } catch {
+        showToast(`Failed to parse ${file.name}`);
+      }
+    };
+    window.addEventListener("dragover", onDragOver);
+    window.addEventListener("drop", onDrop);
+    return () => {
+      window.removeEventListener("dragover", onDragOver);
+      window.removeEventListener("drop", onDrop);
+    };
+  }, [showToast]);
 
   // Per-aircraft history: last 12 polled positions (~2.4 minutes) so the
   // selected plane can render a fading trail behind it. Stored in a ref so
@@ -1947,6 +1975,8 @@ function App() {
               fogEnabled={surfaceFog}
               manualUtcHour={surfaceManualHour ?? undefined}
               screenshotCommand={surfaceScreenshotCmd}
+              measurePoints={measureMode ? measurePoints : undefined}
+              geoJson={geoJsonImport ?? undefined}
               onScreenshot={(blob) => {
                 // Trigger a download
                 const url = URL.createObjectURL(blob);
@@ -2281,6 +2311,7 @@ function App() {
             { id: "time18", label: "Surface clock: 18:00 UTC (sunset Greenwich)", group: "Imagery", icon: SunIcon, run: () => { updateGlobe({ realTimeSun: false }); setSurfaceManualHour(18); } },
             { id: "time00", label: "Surface clock: 00:00 UTC (midnight Greenwich)", group: "Imagery", icon: SunIcon, run: () => { updateGlobe({ realTimeSun: false }); setSurfaceManualHour(0); } },
             { id: "surfShot", label: "Save Surface screenshot (.png)", group: "Tools", icon: Camera, run: () => setSurfaceScreenshotCmd((c) => ({ id: (c?.id ?? 0) + 1 })) },
+            { id: "geoJsonHint", label: geoJsonImport ? `Clear imported GeoJSON (${geoJsonImport.features?.length ?? 0} features)` : "Drag & drop a .geojson onto the page to import", group: "Tools", icon: Sparkles, run: () => setGeoJsonImport(null) },
             { id: "imgViirs", label: "Imagery: NASA Live VIIRS true-color", group: "Imagery", icon: Sparkles, run: () => updateImagery({ source: "live", layerId: "viirsTrueColor" }) },
             { id: "imgModis", label: "Imagery: NASA Live MODIS Terra", group: "Imagery", icon: Sparkles, run: () => updateImagery({ source: "live", layerId: "modisTrueColor" }) },
             { id: "imgFires", label: "Imagery: MODIS active fires overlay", group: "Imagery", icon: Sparkles, run: () => updateImagery({ source: "live", layerId: "modisFires" }) },
