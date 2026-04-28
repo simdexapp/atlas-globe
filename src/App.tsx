@@ -117,6 +117,7 @@ type LayerVisibility = {
   worldDigest: boolean;
   noonMeridian: boolean;
   buildings3D: boolean;
+  storms: boolean;
 };
 
 type GlobeSettings = {
@@ -245,7 +246,10 @@ const defaultLayers: LayerVisibility = {
   noonMeridian: false,
   // 3D OSM Buildings tileset is heavy — ~50-200MB streamed for a typical
   // city view. Off by default on mobile; user can opt-in via Cmd+K.
-  buildings3D: !IS_LOW_END
+  buildings3D: !IS_LOW_END,
+  // Active tropical cyclones (NOAA NHC). Cheap to render (handful of
+  // points), so on by default.
+  storms: true
 };
 
 const FAMOUS_VOLCANOES: { id: string; name: string; lat: number; lon: number }[] = [
@@ -482,6 +486,22 @@ function App() {
     if (eonetHidden.size === 0) return eonetEvents;
     return eonetEvents.filter((e) => !eonetHidden.has(e.category));
   }, [eonetEvents, eonetHidden]);
+
+  // NOAA NHC active tropical cyclones — public CurrentStorms.json. Empty
+  // outside hurricane season; populated 0-6 entries during active season.
+  type ActiveStorm = {
+    id: string;
+    name: string;
+    classification: string;       // Hurricane / Tropical Storm / etc.
+    intensityKph: number | null;  // sustained wind speed
+    pressureMb: number | null;
+    lat: number;
+    lon: number;
+    movementDir: number | null;   // degrees
+    movementKph: number | null;
+    lastUpdate: string;           // ISO timestamp
+  };
+  const [activeStorms, setActiveStorms] = useState<ActiveStorm[]>([]);
 
   // USGS volcano alert color codes (key: lowercase volcano name → color code).
   // Refresh every 10 min. Used to tint markers in VolcanoMarkers when the
@@ -891,6 +911,41 @@ function App() {
       window.clearInterval(handle);
     };
   }, [layers.eonet]);
+
+  // NOAA NHC active tropical cyclones. Refresh every 30 min — storm
+  // positions are updated 4×/day during active storms but the feed itself
+  // is cached. Empty array out-of-season; render nothing in that case.
+  useEffect(() => {
+    if (!layers.storms) {
+      setActiveStorms([]);
+      return;
+    }
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const res = await fetch("https://www.nhc.noaa.gov/CurrentStorms.json", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled) return;
+        const storms: ActiveStorm[] = (data.activeStorms || []).map((s: any) => ({
+          id: s.id || s.binNumber || crypto.randomUUID(),
+          name: s.name || "Unnamed",
+          classification: s.classification || "Tropical System",
+          intensityKph: s.intensityKPH ? Number(s.intensityKPH) : null,
+          pressureMb: s.pressure ? Number(s.pressure) : null,
+          lat: typeof s.latitudeNumeric === "number" ? s.latitudeNumeric : 0,
+          lon: typeof s.longitudeNumeric === "number" ? s.longitudeNumeric : 0,
+          movementDir: s.movementDir ? Number(s.movementDir) : null,
+          movementKph: s.movementKPH ? Number(s.movementKPH) : null,
+          lastUpdate: s.lastUpdate || "",
+        }));
+        setActiveStorms(storms);
+      } catch { /* CORS / network — silent */ }
+    };
+    tick();
+    const handle = window.setInterval(tick, 30 * 60 * 1000);
+    return () => { cancelled = true; window.clearInterval(handle); };
+  }, [layers.storms]);
 
   // Weather radar — fetch the manifest once when the layer turns on, then refresh every 5 min
   useEffect(() => {
@@ -2071,6 +2126,7 @@ function App() {
               issPosition={layers.iss ? issPosition : null}
               tiangongPosition={layers.tiangong ? tiangongPosition : null}
               hubblePosition={layers.hubble ? hubblePosition : null}
+              storms={layers.storms ? activeStorms.map((s) => ({ id: s.id, name: s.name, classification: s.classification, intensityKph: s.intensityKph, lat: s.lat, lon: s.lon, movementDir: s.movementDir })) : []}
             />
           </Suspense>
         )}
@@ -3136,6 +3192,7 @@ function LayersPanel({ layers, onToggle, bordersLoading }: { layers: LayerVisibi
     { key: "terminator", label: "Day/night terminator line", icon: Compass },
     { key: "noonMeridian", label: "Solar-noon meridian (where sun is overhead)", icon: SunIcon },
     { key: "buildings3D", label: "Cesium 3D buildings (Surface mode)", icon: Mountain },
+    { key: "storms", label: "Active tropical cyclones (NOAA NHC)", icon: Cloud },
     { key: "subsolar", label: "Subsolar point (sun overhead)", icon: SunIcon },
     { key: "constellations", label: "Constellation lines (Orion etc)", icon: Sparkles },
     { key: "compass", label: "Compass / heading widget", icon: Navigation },

@@ -59,6 +59,16 @@ export type SurfaceLaunch = {
   soon: boolean;             // <24h
 };
 
+export type SurfaceStorm = {
+  id: string;
+  name: string;
+  classification: string;
+  intensityKph: number | null;
+  lat: number;
+  lon: number;
+  movementDir: number | null;
+};
+
 export default function Surface({
   token,
   onCameraChange,
@@ -92,7 +102,8 @@ export default function Surface({
   enableGlobeLighting,
   issPosition,
   tiangongPosition,
-  hubblePosition
+  hubblePosition,
+  storms
 }: {
   token: string;
   onCameraChange: (lat: number, lon: number, altKm: number) => void;
@@ -154,6 +165,9 @@ export default function Surface({
   issPosition?: { lat: number; lon: number } | null;
   tiangongPosition?: { lat: number; lon: number } | null;
   hubblePosition?: { lat: number; lon: number } | null;
+  // Active tropical cyclones (NOAA NHC). Each renders as a spinning
+  // hurricane glyph at the eye location, with a label below.
+  storms?: SurfaceStorm[];
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Cesium.Viewer | null>(null);
@@ -179,6 +193,7 @@ export default function Surface({
   const earthquakeEntitiesRef = useRef<Cesium.Entity[]>([]);
   const volcanoEntitiesRef = useRef<Cesium.Entity[]>([]);
   const launchEntitiesRef = useRef<Cesium.Entity[]>([]);
+  const stormEntitiesRef = useRef<Cesium.Entity[]>([]);
   const weatherImageryLayerRef = useRef<Cesium.ImageryLayer | null>(null);
   const terminatorEntityRef = useRef<Cesium.Entity | null>(null);
   const subsolarEntityRef = useRef<Cesium.Entity | null>(null);
@@ -477,6 +492,8 @@ export default function Surface({
       earthquakeEntitiesRef.current.forEach((e) => viewer.entities.remove(e));
       volcanoEntitiesRef.current.forEach((e) => viewer.entities.remove(e));
       launchEntitiesRef.current.forEach((e) => viewer.entities.remove(e));
+      stormEntitiesRef.current.forEach((e) => viewer.entities.remove(e));
+      stormEntitiesRef.current = [];
       countryLabelsRef.current.forEach((e) => viewer.entities.remove(e));
       countryLabelsRef.current = [];
       if (aircraftCallsignLabelRef.current) viewer.entities.remove(aircraftCallsignLabelRef.current);
@@ -1360,6 +1377,60 @@ export default function Surface({
       launchEntitiesRef.current.push(entity);
     }
   }, [launches]);
+
+  // ===== Active tropical cyclones (NOAA NHC) =====
+  // Rendered as a 🌀 emoji label + colored point at the storm eye. Wind
+  // speed determines color (Saffir-Simpson rough mapping):
+  //   < 119 kph: Tropical Storm (blue)
+  //   119–153 kph: Cat 1 (yellow)
+  //   154–177 kph: Cat 2 (orange)
+  //   178–208 kph: Cat 3 (red)
+  //   ≥ 209 kph: Cat 4-5 (deep red)
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    for (const e of stormEntitiesRef.current) viewer.entities.remove(e);
+    stormEntitiesRef.current = [];
+    if (!storms) return;
+    for (const s of storms) {
+      const ws = s.intensityKph ?? 0;
+      const color =
+        ws >= 209 ? "#9b1c1c" :
+        ws >= 178 ? "#ff3a3a" :
+        ws >= 154 ? "#ff8a3a" :
+        ws >= 119 ? "#ffd66b" :
+                    "#5cb5ff";
+      const sizePx = ws >= 178 ? 18 : ws >= 119 ? 14 : 10;
+      const entity = viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(s.lon, s.lat),
+        point: {
+          pixelSize: sizePx,
+          color: Cesium.Color.fromCssColorString(color).withAlpha(0.9),
+          outlineColor: Cesium.Color.WHITE,
+          outlineWidth: 2,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+        label: {
+          text: `🌀 ${s.name} · ${s.classification}${ws ? ` · ${Math.round(ws)} kph` : ""}`,
+          font: "600 12px Inter, sans-serif",
+          fillColor: Cesium.Color.fromCssColorString(color),
+          outlineColor: Cesium.Color.fromCssColorString("rgba(0,0,0,0.92)"),
+          outlineWidth: 4,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+          pixelOffset: new Cesium.Cartesian2(0, -16),
+          showBackground: true,
+          backgroundColor: Cesium.Color.fromCssColorString("rgba(8, 14, 26, 0.92)"),
+          backgroundPadding: new Cesium.Cartesian2(8, 4),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 12_000_000),
+        },
+      });
+      stormEntitiesRef.current.push(entity);
+    }
+  }, [storms]);
 
   // ===== Weather radar overlay (Cesium ImageryLayer) =====
   useEffect(() => {
