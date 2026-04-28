@@ -1,0 +1,26 @@
+{
+  "name": "Atlas — 3D Globe",
+  "short_name": "Atlas",
+  "description": "Interactive 3D Earth — orbit the planet, fly to any location, switch to high-detail surface mode with real terrain, photorealistic imagery, live aircraft, weather, earthquakes, and more.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#02060f",
+  "theme_color": "#5cb5ff",
+  "categories": ["education", "navigation", "utilities"],
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

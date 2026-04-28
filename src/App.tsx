@@ -2522,6 +2522,25 @@ function App() {
             { id: "time12", label: "Surface clock: 12:00 UTC (noon Greenwich)", group: "Imagery", icon: SunIcon, run: () => { updateGlobe({ realTimeSun: false }); setSurfaceManualHour(12); } },
             { id: "time18", label: "Surface clock: 18:00 UTC (sunset Greenwich)", group: "Imagery", icon: SunIcon, run: () => { updateGlobe({ realTimeSun: false }); setSurfaceManualHour(18); } },
             { id: "time00", label: "Surface clock: 00:00 UTC (midnight Greenwich)", group: "Imagery", icon: SunIcon, run: () => { updateGlobe({ realTimeSun: false }); setSurfaceManualHour(0); } },
+            { id: "time03", label: "Surface clock: 03:00 UTC", group: "Imagery", icon: SunIcon, run: () => { updateGlobe({ realTimeSun: false }); setSurfaceManualHour(3); } },
+            { id: "time09", label: "Surface clock: 09:00 UTC", group: "Imagery", icon: SunIcon, run: () => { updateGlobe({ realTimeSun: false }); setSurfaceManualHour(9); } },
+            { id: "time15", label: "Surface clock: 15:00 UTC", group: "Imagery", icon: SunIcon, run: () => { updateGlobe({ realTimeSun: false }); setSurfaceManualHour(15); } },
+            { id: "time21", label: "Surface clock: 21:00 UTC", group: "Imagery", icon: SunIcon, run: () => { updateGlobe({ realTimeSun: false }); setSurfaceManualHour(21); } },
+            // Step UTC hour by ±1, wrapping. Skips real-time mode and snaps to manual.
+            { id: "timeStepFwd", label: surfaceManualHour !== null ? `Surface clock: step +1h (now ${String(Math.floor(surfaceManualHour)).padStart(2, "0")}:00 UTC)` : "Surface clock: step +1h from now", group: "Imagery", icon: SunIcon, run: () => {
+              updateGlobe({ realTimeSun: false });
+              setSurfaceManualHour((h) => {
+                const cur = h ?? new Date().getUTCHours();
+                return (cur + 1) % 24;
+              });
+            }},
+            { id: "timeStepBack", label: surfaceManualHour !== null ? `Surface clock: step -1h (now ${String(Math.floor(surfaceManualHour)).padStart(2, "0")}:00 UTC)` : "Surface clock: step -1h from now", group: "Imagery", icon: SunIcon, run: () => {
+              updateGlobe({ realTimeSun: false });
+              setSurfaceManualHour((h) => {
+                const cur = h ?? new Date().getUTCHours();
+                return (cur + 23) % 24;
+              });
+            }},
             { id: "surfShot", label: "Save Surface screenshot (.png)", group: "Tools", icon: Camera, run: () => setSurfaceScreenshotCmd((c) => ({ id: (c?.id ?? 0) + 1 })) },
             { id: "geoJsonHint", label: geoJsonImport ? `Clear imported GeoJSON (${geoJsonImport.features?.length ?? 0} features)` : "Drag & drop a .geojson onto the page to import", group: "Tools", icon: Sparkles, run: () => setGeoJsonImport(null) },
             { id: "imgViirs", label: "Imagery: NASA Live VIIRS true-color", group: "Imagery", icon: Sparkles, run: () => updateImagery({ source: "live", layerId: "viirsTrueColor" }) },
