@@ -226,7 +226,9 @@ const defaultImagery: Imagery = {
   nightLayerId: DEFAULT_GIBS_NIGHT,
   date: todayUTC(),
   zoom: 2,
-  source: "live"
+  // Bundled by default = instant beautiful Earth, no loading bar, no swath gaps.
+  // Users opt into NASA live imagery via the Imagery panel when they want today's data.
+  source: "bundled"
 };
 
 const cityBookmarks: Bookmark[] = [
