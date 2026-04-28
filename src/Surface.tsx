@@ -83,7 +83,13 @@ export default function Surface({
     });
   }, [flyTo]);
 
-  if (!token) {
+  // The prop may be empty if the user hasn't pasted one yet, but VITE_CESIUM_TOKEN
+  // baked at build time still works. Only show the "needs token" message when
+  // there's nothing to use at all.
+  const env = (import.meta as any).env;
+  const haveToken = !!(token || env?.VITE_CESIUM_TOKEN);
+
+  if (!haveToken) {
     return (
       <div className="surfaceLoading">
         Surface mode needs a Cesium ion token.<br />

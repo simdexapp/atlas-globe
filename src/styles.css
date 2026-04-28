@@ -2163,6 +2163,100 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
 .atlasLowAltHint strong { color: var(--gray-12); font-size: var(--text-base); }
 .atlasLowAltHint span { color: var(--gray-9); font-size: 10.5px; line-height: 1.35; }
 
+/* NASA EONET natural events */
+.atlasEonetPill {
+  position: fixed;
+  top: 84px;
+  right: 360px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 6px var(--s-3);
+  border-radius: 99px;
+  border: 1px solid var(--border);
+  background: rgba(10, 16, 28, 0.78);
+  backdrop-filter: blur(10px);
+  font-size: var(--text-xs);
+  color: var(--gray-10);
+  pointer-events: none;
+  box-shadow: var(--shadow-1);
+}
+.atlasEonetPill svg { color: #ff9d4d; }
+.atlasEonetPill b { color: var(--gray-12); font-weight: 800; font-variant-numeric: tabular-nums; }
+
+.atlasEventCard {
+  position: fixed;
+  bottom: 50px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 8;
+  width: min(420px, calc(100vw - 100px));
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-4);
+  border: 1px solid var(--border);
+  background: var(--surface-elevated);
+  backdrop-filter: blur(14px);
+  box-shadow: var(--shadow-3);
+  color: var(--gray-12);
+  animation: slideUp var(--dur-base) var(--ease-out);
+}
+.atlasEventCardHead {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--s-3);
+  margin-bottom: var(--s-3);
+}
+.atlasEventCardTag {
+  padding: 4px 8px;
+  border-radius: var(--r-2);
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: #04060c;
+}
+.atlasEventCardTitle {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.atlasEventCardTitle strong {
+  font-size: var(--text-md);
+  font-weight: 700;
+  color: var(--gray-12);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.atlasEventCardTitle span {
+  font-size: 10.5px;
+  color: var(--gray-9);
+  letter-spacing: 0.02em;
+}
+.atlasEventCardBody {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-1) var(--s-3);
+  margin-bottom: var(--s-3);
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+}
+.atlasEventCardBody > div {
+  display: grid;
+  gap: 1px;
+}
+.atlasEventCardBody span {
+  color: var(--gray-9);
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.atlasEventCardBody b {
+  color: var(--gray-12);
+  font-weight: 700;
+}
+
 /* Inline "Switch to VIIRS" fix-it card */
 .atlasFixHint {
   display: grid;

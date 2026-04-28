@@ -46,6 +46,7 @@ import { GIBS_LAYERS, DEFAULT_GIBS_DAY, DEFAULT_GIBS_NIGHT, todayUTC, loadGibsCo
 import { fetchAllAircraft, altitudeColor, altitudeFt, knotsFromMs, fetchAircraftDetail, fetchFlightRoute, type Aircraft, type FlightSnapshot, type AircraftDetail, type FlightRoute } from "./flights";
 import { dateRange, shiftDate, loadTimelapseFrames, disposeFrames, type TimelapseFrame } from "./timelapse";
 import { fetchRadarManifest, composeRadarFrame, frameLabel, type RadarManifest, type RadarFrame } from "./weather";
+import { fetchEonetEvents, categoryColor, categoryIconLabel, type EonetEvent } from "./eonet";
 
 const SurfaceMode = lazy(() => import("./Surface"));
 
@@ -102,6 +103,7 @@ type LayerVisibility = {
   compass: boolean;
   aircraft: boolean;
   weather: boolean;
+  eonet: boolean;
 };
 
 type GlobeSettings = {
@@ -158,7 +160,7 @@ type PersistedState = {
   pins?: Pin[];
 };
 
-const STORAGE_KEY = "atlas-globe-state-v7";
+const STORAGE_KEY = "atlas-globe-state-v8";
 const EARTH_RADIUS_KM = 6371;
 const MIN_DISTANCE = 1.0008;        // ~5 km above surface (texture-pixelated, but real zoom)
 const MAX_DISTANCE = 12;            // far view from space
@@ -188,7 +190,8 @@ const defaultLayers: LayerVisibility = {
   volcanoes: false,
   compass: true,
   aircraft: false,
-  weather: false
+  weather: false,
+  eonet: false
 };
 
 const FAMOUS_VOLCANOES: { id: string; name: string; lat: number; lon: number }[] = [
@@ -303,6 +306,10 @@ function App() {
   const [aircraftCategory, setAircraftCategory] = useState<"all" | "commercial" | "private" | "military" | "heli">("all");
   const [hoveredAircraftId, setHoveredAircraftId] = useState<string | null>(null);
   const [hoverPos, setHoverPos] = useState<{ x: number; y: number } | null>(null);
+
+  const [eonetEvents, setEonetEvents] = useState<EonetEvent[]>([]);
+  const [eonetLoading, setEonetLoading] = useState(false);
+  const [selectedEonetId, setSelectedEonetId] = useState<string | null>(null);
 
   const [radarManifest, setRadarManifest] = useState<RadarManifest | null>(null);
   const [radarTexture, setRadarTexture] = useState<THREE.CanvasTexture | null>(null);
@@ -509,6 +516,42 @@ function App() {
     };
   }, [layers.aircraft]);
 
+  // NASA EONET — global natural events (wildfires, severe storms, volcanoes,
+  // sea ice, dust/haze, drought, snow, temp extremes, water-color anomalies,
+  // floods, landslides, manmade emissions). Refresh every 10 min.
+  useEffect(() => {
+    if (!layers.eonet) {
+      setEonetEvents([]);
+      setSelectedEonetId(null);
+      return;
+    }
+    let cancelled = false;
+    let abort: AbortController | null = null;
+    const tick = async () => {
+      abort?.abort();
+      abort = new AbortController();
+      setEonetLoading(true);
+      try {
+        const events = await fetchEonetEvents(abort.signal);
+        if (!cancelled) setEonetEvents(events);
+      } catch (e) {
+        if ((e as Error).name === "AbortError") return;
+        // Silent failure — pill stays in loading state; the user toggle off
+        // and on again to retry. Toast queue isn't accessible at this point
+        // in the component init order.
+      } finally {
+        if (!cancelled) setEonetLoading(false);
+      }
+    };
+    tick();
+    const handle = window.setInterval(tick, 10 * 60 * 1000);
+    return () => {
+      cancelled = true;
+      abort?.abort();
+      window.clearInterval(handle);
+    };
+  }, [layers.eonet]);
+
   // Weather radar — fetch the manifest once when the layer turns on, then refresh every 5 min
   useEffect(() => {
     if (!layers.weather) {
@@ -585,7 +628,11 @@ function App() {
     }
     try {
       const token = window.localStorage.getItem("cesium-token");
+      // Production deploys bake VITE_CESIUM_TOKEN at build time. Use it if no
+      // user token is in localStorage.
+      const envToken = (import.meta as any).env?.VITE_CESIUM_TOKEN as string | undefined;
       if (token) setCesiumToken(token);
+      else if (envToken) setCesiumToken(envToken);
     } catch {}
     skipPersistRef.current = false;
   }, []);
@@ -709,7 +756,9 @@ function App() {
   }, [bookmarks, filteredBookmarks, searchQuery, searchResults]);
 
   const switchToSurface = useCallback(() => {
-    if (!cesiumToken) {
+    const envToken = (import.meta as any).env?.VITE_CESIUM_TOKEN as string | undefined;
+    const effectiveToken = cesiumToken || envToken || "";
+    if (!effectiveToken) {
       const token = window.prompt(
         "Cesium ion access token (free at cesium.com/ion):",
         ""
@@ -717,6 +766,9 @@ function App() {
       if (!token) return;
       window.localStorage.setItem("cesium-token", token);
       setCesiumToken(token);
+    } else if (!cesiumToken && envToken) {
+      // Lift the env token into state so Surface.tsx receives it as a prop
+      setCesiumToken(envToken);
     }
     setMode("surface");
     showToast("Switched to Surface mode");
@@ -1534,6 +1586,9 @@ function App() {
             selectedAircraftId={selectedAircraftId}
             radarTexture={radarTexture}
             radarOpacity={radarOpacity}
+            eonetEvents={eonetEvents}
+            selectedEonetId={selectedEonetId}
+            onSelectEonet={setSelectedEonetId}
             onAircraftHover={(id, p) => { setHoveredAircraftId(id); setHoverPos(p); }}
             pins={pins}
             earthquakes={earthquakes}
@@ -1777,6 +1832,7 @@ function App() {
             // Layers
             { id: "layerAircraft", label: layers.aircraft ? "Hide aircraft" : "Show live aircraft", group: "Layers", icon: Plane, run: () => toggleLayer("aircraft") },
             { id: "layerWeather", label: layers.weather ? "Hide weather radar" : "Show live weather radar", group: "Layers", icon: Cloud, run: () => toggleLayer("weather") },
+            { id: "layerEonet", label: layers.eonet ? "Hide natural-events overlay" : "Show natural events (NASA EONET)", group: "Layers", icon: Sparkles, run: () => toggleLayer("eonet") },
             { id: "layerClouds", label: layers.clouds ? "Hide clouds" : "Show clouds", group: "Layers", icon: Cloud, run: () => toggleLayer("clouds") },
             { id: "layerNight", label: layers.nightLights ? "Hide city lights" : "Show city lights", group: "Layers", icon: SunIcon, run: () => toggleLayer("nightLights") },
             { id: "layerAtm", label: layers.atmosphere ? "Hide atmosphere" : "Show atmosphere", group: "Layers", icon: Sparkles, run: () => toggleLayer("atmosphere") },
@@ -1849,6 +1905,54 @@ function App() {
             {(a.registration || a.type) && (
               <span className="atlasHoverTipSub">{a.registration} {a.type}</span>
             )}
+          </div>
+        );
+      })()}
+
+      {layers.eonet && (
+        <div className="atlasEonetPill" role="status">
+          <Sparkles size={11} />
+          {eonetLoading && eonetEvents.length === 0 ? (
+            <span>Loading natural events…</span>
+          ) : (
+            <span>
+              <b>{eonetEvents.length.toLocaleString()}</b> open natural events
+              <span className="atlasFlightMeta"> · NASA EONET · last 30d</span>
+            </span>
+          )}
+        </div>
+      )}
+
+      {selectedEonetId && (() => {
+        const ev = eonetEvents.find((x) => x.id === selectedEonetId);
+        if (!ev) return null;
+        const ageHrs = Math.max(0, (Date.now() - ev.date) / 3_600_000);
+        const ageLabel = ageHrs < 1 ? `${Math.round(ageHrs * 60)} min ago`
+                        : ageHrs < 48 ? `${Math.round(ageHrs)} hr ago`
+                        : `${Math.round(ageHrs / 24)} d ago`;
+        return (
+          <div className="atlasEventCard" role="dialog">
+            <div className="atlasEventCardHead">
+              <div className="atlasEventCardTag" style={{ background: categoryColor(ev.category) }}>
+                {categoryIconLabel(ev.category)}
+              </div>
+              <div className="atlasEventCardTitle">
+                <strong>{ev.title}</strong>
+                <span>{ev.categoryTitle} · {ageLabel}</span>
+              </div>
+              <button className="atlasIconBtn" onClick={() => setSelectedEonetId(null)} aria-label="Close"><X size={14} /></button>
+            </div>
+            <div className="atlasEventCardBody">
+              <div><span>Position</span><b>{formatLat(ev.lat)} · {formatLon(ev.lon)}</b></div>
+              <div><span>Reported</span><b>{new Date(ev.date).toUTCString().slice(5, 22)}</b></div>
+              {ev.magnitude !== null && (
+                <div><span>Magnitude</span><b>{ev.magnitude.toLocaleString()} {ev.magnitudeUnit || ""}</b></div>
+              )}
+            </div>
+            <div className="atlasAircraftCardActions">
+              <button className="atlasBtn" onClick={() => setFlyTo((c) => ({ id: c.id + 1, lat: ev.lat, lon: ev.lon, altKm: 800 }))}>Fly to</button>
+              {ev.sourceUrl && <a className="atlasBtn" href={ev.sourceUrl} target="_blank" rel="noreferrer">Source ↗</a>}
+            </div>
           </div>
         );
       })()}
@@ -2096,6 +2200,7 @@ function LayersPanel({ layers, onToggle, bordersLoading }: { layers: LayerVisibi
     { key: "volcanoes", label: "Notable volcanoes (24)", icon: Sparkles },
     { key: "aircraft", label: "Aircraft — live (every plane)", icon: Plane },
     { key: "weather", label: "Weather radar — live precipitation (RainViewer)", icon: Cloud },
+    { key: "eonet", label: "Natural events — fires/storms/volcanoes (NASA EONET)", icon: Sparkles },
     { key: "iss", label: "ISS — live position", icon: Telescope },
     { key: "tiangong", label: "Tiangong CSS — live position", icon: Telescope },
     { key: "hubble", label: "Hubble — live position", icon: Telescope },
@@ -3244,6 +3349,9 @@ function GlobeCanvas({
   selectedAircraftId,
   radarTexture,
   radarOpacity,
+  eonetEvents,
+  selectedEonetId,
+  onSelectEonet,
   onAircraftHover,
   pins,
   earthquakes,
@@ -3269,6 +3377,9 @@ function GlobeCanvas({
   selectedAircraftId: string | null;
   radarTexture: THREE.Texture | null;
   radarOpacity: number;
+  eonetEvents: EonetEvent[];
+  selectedEonetId: string | null;
+  onSelectEonet: (id: string | null) => void;
   onAircraftHover: (id: string | null, screen: { x: number; y: number } | null) => void;
   pins: Pin[];
   earthquakes: Earthquake[];
@@ -3315,6 +3426,9 @@ function GlobeCanvas({
           )}
           {layers.weather && radarTexture && (
             <WeatherRadar texture={radarTexture} opacity={radarOpacity} />
+          )}
+          {layers.eonet && eonetEvents.length > 0 && (
+            <EonetMarkers events={eonetEvents} selectedId={selectedEonetId} onSelect={onSelectEonet} />
           )}
           {layers.terminator && <TerminatorRing sunDirection={sunDirection} />}
           {layers.subsolar && <SubsolarPoint sunDirection={sunDirection} />}
@@ -4238,6 +4352,45 @@ function VolcanoMarkers() {
           <mesh key={v.id} position={pos}>
             <coneGeometry args={[0.008, 0.018, 6]} />
             <meshBasicMaterial color="#ff6a3d" transparent opacity={0.9} />
+          </mesh>
+        );
+      })}
+    </group>
+  );
+}
+
+function EonetMarkers({ events, selectedId, onSelect }: {
+  events: EonetEvent[];
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
+}) {
+  const groupRef = useRef<THREE.Group>(null);
+  useFrame(({ clock }) => {
+    if (!groupRef.current) return;
+    const t = clock.elapsedTime;
+    // Soft pulse — different speeds per event so they're not all in sync
+    groupRef.current.children.forEach((child, i) => {
+      const phase = (t * 1.4 + i * 0.21) % 2.5;
+      child.scale.setScalar(1 + Math.max(0, 1 - phase / 1.2) * 0.7);
+    });
+  });
+  return (
+    <group ref={groupRef}>
+      {events.map((ev) => {
+        const pos = latLonToVec3(ev.lat, ev.lon, 1.006);
+        const color = categoryColor(ev.category);
+        const isSelected = ev.id === selectedId;
+        return (
+          <mesh
+            key={ev.id}
+            position={pos}
+            onPointerDown={(e: any) => {
+              e.stopPropagation();
+              onSelect(ev.id);
+            }}
+          >
+            <sphereGeometry args={[isSelected ? 0.013 : 0.008, 16, 16]} />
+            <meshBasicMaterial color={color} transparent opacity={isSelected ? 1 : 0.85} toneMapped={false} />
           </mesh>
         );
       })}
