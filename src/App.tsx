@@ -3889,7 +3889,9 @@ function AircraftTrail({ aircraft }: { aircraft: Aircraft }) {
         Math.cos(d) - Math.sin(lat0) * Math.sin(lat2)
       );
       const phi = Math.PI / 2 - lat2;
-      const theta = lon2;
+      // Negate lon to match latLonToVec3's convention; otherwise the trail
+      // diverges from the plane (which IS at the negated lat/lon).
+      const theta = -lon2;
       pos[i * 3 + 0] = radius * Math.sin(phi) * Math.cos(theta);
       pos[i * 3 + 1] = radius * Math.cos(phi);
       pos[i * 3 + 2] = radius * Math.sin(phi) * Math.sin(theta);
@@ -3945,28 +3947,31 @@ function computeAircraftMatrix(
   // We add a small visibility bump so they don't z-fight with the surface.
   const altKm = Math.max(0, a.altitudeM / 1000);
   const radius = 1 + altKm / EARTH_RADIUS_KM + 0.005;
-  const lat = a.lat;
-  const lon = a.lon;
-  const phi = (90 - lat) * Math.PI / 180;
-  const theta = lon * Math.PI / 180;
+  // Mirror the latLonToVec3 convention (lon negated) so planes sit on the same
+  // sphere position as a pin/border at the same lat/lon.
+  const phi = (90 - a.lat) * Math.PI / 180;
+  const theta = -a.lon * Math.PI / 180;
   scratch.pos.set(
     radius * Math.sin(phi) * Math.cos(theta),
     radius * Math.cos(phi),
     radius * Math.sin(phi) * Math.sin(theta)
   );
   scratch.normal.copy(scratch.pos).normalize();
-  // east is the tangent in +lon direction at any (lat, lon)
-  scratch.east.set(-Math.sin(theta), 0, Math.cos(theta));
-  // north = east × normal (right-handed)
-  scratch.north.crossVectors(scratch.east, scratch.normal).normalize();
-  // re-orthogonalize east to handle pole edge cases
-  scratch.east.crossVectors(scratch.normal, scratch.north).normalize();
+  // east is ∂pos/∂lon. With theta = -lon*π/180, derivative chain gives
+  //   east ∝ (sin(theta), 0, -cos(theta))   (sign on z is the consequence of negation).
+  scratch.east.set(Math.sin(theta), 0, -Math.cos(theta));
+  // After the lon negation, north = normal × east (NOT east × normal — that
+  // would give south because the handedness flipped with theta).
+  scratch.north.crossVectors(scratch.normal, scratch.east).normalize();
+  // Re-orthogonalize east against (north, normal) so we have a clean tangent
+  // frame even at poles where the closed-form east is degenerate.
+  scratch.east.crossVectors(scratch.north, scratch.normal).normalize();
   // forward = north * cos(h) + east * sin(h), heading 0=N, 90=E
   const h = (a.headingDeg || 0) * Math.PI / 180;
   scratch.forward.copy(scratch.north).multiplyScalar(Math.cos(h))
     .addScaledVector(scratch.east, Math.sin(h));
   scratch.right.crossVectors(scratch.forward, scratch.normal).normalize();
-  // Build basis: triangle's local (X = right, Y = forward, Z = normal/up)
+  // Build basis: plane silhouette's local (X = right, Y = forward, Z = normal/up)
   scratch.matrix.makeBasis(scratch.right, scratch.forward, scratch.normal);
   scratch.matrix.setPosition(scratch.pos);
 }
@@ -4448,24 +4453,28 @@ function Atmosphere({ intensity }: { intensity: number }) {
 function Graticule() {
   const lines = useMemo(() => {
     const segments: THREE.Vector3[][] = [];
-    // Latitude rings (parallels)
+    // Latitude rings (parallels) — for the texture-aligned convention, theta = -lon*π/180.
+    // For a closed parallel ring we sweep lon 0..360 anyway, so the negation only
+    // flips the sweep direction; the same circle gets drawn either way.
     for (let lat = -75; lat <= 75; lat += 15) {
       const points: THREE.Vector3[] = [];
       const phi = THREE.MathUtils.degToRad(90 - lat);
       const r = Math.sin(phi);
       const y = Math.cos(phi);
       for (let lon = 0; lon <= 360; lon += 4) {
-        const t = THREE.MathUtils.degToRad(lon);
+        const t = THREE.MathUtils.degToRad(-lon);
         points.push(new THREE.Vector3(Math.cos(t) * r, y, Math.sin(t) * r).multiplyScalar(1.001));
       }
       segments.push(points);
     }
-    // Longitude meridians
+    // Longitude meridians — sweep lat -90..+90 along a fixed lon. Here the negation
+    // matters: a 'lon=90E' meridian must sit at the mesh position the texture
+    // shows lon=+90 at, which after the latLonToVec3 fix is the -Z hemisphere.
     for (let lon = 0; lon < 360; lon += 30) {
       const points: THREE.Vector3[] = [];
       for (let lat = -90; lat <= 90; lat += 4) {
         const phi = THREE.MathUtils.degToRad(90 - lat);
-        const t = THREE.MathUtils.degToRad(lon);
+        const t = THREE.MathUtils.degToRad(-lon);
         points.push(new THREE.Vector3(Math.cos(t) * Math.sin(phi), Math.cos(phi), Math.sin(t) * Math.sin(phi)).multiplyScalar(1.001));
       }
       segments.push(points);
@@ -4486,14 +4495,16 @@ function Graticule() {
 }
 
 function Cardinals() {
-  // Faint dots at N/S poles + 0/90/180/270 longitude on equator
+  // Faint dots at N/S poles + 0°/90°E/180°/90°W meridians on the equator.
+  // After the lat/lon fix, lon=+90 lands on the -Z axis (and lon=-90 on +Z),
+  // matching where the Earth texture renders those meridians.
   const positions: { p: [number, number, number]; c: string }[] = [
     { p: [0, 1.05, 0], c: "#ffd66b" },     // N pole
     { p: [0, -1.05, 0], c: "#5cb5ff" },    // S pole
-    { p: [1.05, 0, 0], c: "#5cb5ff" },     // 0E
-    { p: [-1.05, 0, 0], c: "#5cb5ff" },    // 180
-    { p: [0, 0, 1.05], c: "#5cb5ff" },     // 90E
-    { p: [0, 0, -1.05], c: "#5cb5ff" }     // 90W
+    { p: [1.05, 0, 0], c: "#5cb5ff" },     // 0°E
+    { p: [-1.05, 0, 0], c: "#5cb5ff" },    // 180°
+    { p: [0, 0, -1.05], c: "#5cb5ff" },    // 90°E (now at -Z)
+    { p: [0, 0, 1.05], c: "#5cb5ff" }      // 90°W (now at +Z)
   ];
   return (
     <group>
