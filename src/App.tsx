@@ -2176,6 +2176,9 @@ function App() {
             { id: "tour", label: tourPlaying ? "Stop bookmark tour" : "Start bookmark tour (cycle through pins)", group: "View", icon: Play, run: () => tourPlaying ? stopPinTour() : startPinTour() },
             { id: "saveBookmark", label: "Bookmark current view", group: "View", icon: BookmarkPlus, hint: "B", run: () => saveCurrentBookmark() },
             { id: "myLoc", label: "Fly to my location", group: "View", icon: Navigation, run: () => flyToMyLocation() },
+            { id: "flyISS", label: issPosition ? "Fly to ISS (live position)" : "ISS position not loaded yet", group: "View", icon: Telescope, run: () => issPosition && setFlyTo((c) => ({ id: c.id + 1, lat: issPosition.lat, lon: issPosition.lon, altKm: 600 })) },
+            { id: "flyTiangong", label: tiangongPosition ? "Fly to Tiangong (live position)" : "Tiangong position not loaded yet", group: "View", icon: Telescope, run: () => tiangongPosition && setFlyTo((c) => ({ id: c.id + 1, lat: tiangongPosition.lat, lon: tiangongPosition.lon, altKm: 600 })) },
+            { id: "flyHubble", label: hubblePosition ? "Fly to Hubble (live position)" : "Hubble position not loaded yet", group: "View", icon: Telescope, run: () => hubblePosition && setFlyTo((c) => ({ id: c.id + 1, lat: hubblePosition.lat, lon: hubblePosition.lon, altKm: 800 })) },
             { id: "randomPlace", label: "Fly to a random place on Earth", group: "View", icon: Sparkles, run: () => {
               // Pick a uniformly distributed point on the sphere (using inverse CDF on lat
               // so we don't cluster at the poles), biased toward landmasses by retrying
