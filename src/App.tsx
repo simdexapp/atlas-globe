@@ -4121,7 +4121,7 @@ function GlobeCanvas({
             <WeatherRadar texture={radarTexture} opacity={radarOpacity} />
           )}
           {layers.eonet && eonetEvents.length > 0 && (
-            <EonetMarkers events={visibleEonetEvents} selectedId={selectedEonetId} onSelect={onSelectEonet} />
+            <EonetMarkers events={eonetEvents} selectedId={selectedEonetId} onSelect={onSelectEonet} />
           )}
           {layers.launches && launchList.length > 0 && (
             <LaunchMarkers launches={launchList} selectedId={selectedLaunchId} onSelect={onSelectLaunch} />
