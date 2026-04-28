@@ -249,13 +249,18 @@ export default function Surface({
       // Initial imagery is set by the imageryStyle effect below.
 
       // Cesium OSM Buildings — global 3D building footprints + heights.
-      Cesium.Cesium3DTileset.fromIonAssetId(96188)
-        .then((tileset) => {
-          viewer.scene.primitives.add(tileset);
-          buildingsTilesetRef.current = tileset;
-          tileset.show = show3DBuildings !== false;
-        })
-        .catch(() => { /* OSM Buildings unavailable on this token tier */ });
+      // Only request the tileset when the user actually wants it; on phones
+      // we don't even *initiate* the network fetch unless they opt in,
+      // which saves the initial ~5MB metadata round-trip alone.
+      if (show3DBuildings) {
+        Cesium.Cesium3DTileset.fromIonAssetId(96188)
+          .then((tileset) => {
+            viewer.scene.primitives.add(tileset);
+            buildingsTilesetRef.current = tileset;
+            tileset.show = true;
+          })
+          .catch(() => { /* OSM Buildings unavailable on this token tier */ });
+      }
     }
 
     // Initial camera position: if Atlas handed us coordinates, fly there
@@ -492,11 +497,28 @@ export default function Surface({
     apply();
   }, [imageryStyle]);
 
-  // ===== 3D Buildings toggle =====
+  // ===== 3D Buildings toggle (lazy-load) =====
+  // First time user enables buildings, we initiate the tileset fetch.
+  // Subsequent toggles just flip .show on the loaded tileset.
   useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    const want = show3DBuildings !== false;
     const tileset = buildingsTilesetRef.current;
-    if (!tileset) return;
-    tileset.show = show3DBuildings !== false;
+    if (tileset) {
+      tileset.show = want;
+      return;
+    }
+    if (!want) return;            // not loaded, not wanted — no-op
+    Cesium.Cesium3DTileset.fromIonAssetId(96188)
+      .then((ts) => {
+        // Guard against the user toggling off before the network resolves.
+        if (!viewerRef.current) return;
+        viewer.scene.primitives.add(ts);
+        buildingsTilesetRef.current = ts;
+        ts.show = true;
+      })
+      .catch(() => { /* OSM Buildings unavailable on this token tier */ });
   }, [show3DBuildings]);
 
   // ===== Measure-tool overlay =====
