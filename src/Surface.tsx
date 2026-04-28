@@ -140,6 +140,7 @@ export default function Surface({
   const aircraftBillboardIndexRef = useRef<Map<Cesium.Billboard, string>>(new Map());
   const aircraftTrailEntityRef = useRef<Cesium.Entity | null>(null);
   const aircraftHistoryEntityRef = useRef<Cesium.Entity | null>(null);
+  const aircraftSelectionRingRef = useRef<Cesium.Entity | null>(null);
   const buildingsTilesetRef = useRef<Cesium.Cesium3DTileset | null>(null);
   const measureEntitiesRef = useRef<Cesium.Entity[]>([]);
   const geoJsonDataSourceRef = useRef<Cesium.GeoJsonDataSource | null>(null);
@@ -375,6 +376,7 @@ export default function Surface({
       aircraftBillboardsRef.current?.removeAll();
       if (aircraftHistoryEntityRef.current) viewer.entities.remove(aircraftHistoryEntityRef.current);
       if (aircraftTrailEntityRef.current) viewer.entities.remove(aircraftTrailEntityRef.current);
+      if (aircraftSelectionRingRef.current) viewer.entities.remove(aircraftSelectionRingRef.current);
       for (const e of measureEntitiesRef.current) viewer.entities.remove(e);
       measureEntitiesRef.current = [];
       if (geoJsonDataSourceRef.current) {
@@ -535,6 +537,40 @@ export default function Surface({
       viewer.scene.requestRender();
     }).catch(() => { /* malformed GeoJSON — silent */ });
   }, [geoJson]);
+
+  // ===== Selected-aircraft pulse ring =====
+  // A separate entity layered on top of the billboard. CallbackProperty
+  // returns a pixelSize that breathes 16..28 with time, giving a visible
+  // 'this plane is selected' affordance over Cesium's flat billboard.
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    if (aircraftSelectionRingRef.current) {
+      viewer.entities.remove(aircraftSelectionRingRef.current);
+      aircraftSelectionRingRef.current = null;
+    }
+    if (!selectedAircraft) return;
+    const startMs = Date.now();
+    aircraftSelectionRingRef.current = viewer.entities.add({
+      position: Cesium.Cartesian3.fromDegrees(selectedAircraft.lon, selectedAircraft.lat, Math.max(0, selectedAircraft.altitudeM)),
+      point: {
+        pixelSize: new Cesium.CallbackProperty(() => {
+          const t = (Date.now() - startMs) / 1000;
+          return 16 + 12 * (0.5 + 0.5 * Math.sin(t * 3));
+        }, false),
+        color: Cesium.Color.fromCssColorString("#5cb5ff").withAlpha(0),
+        outlineColor: Cesium.Color.fromCssColorString("#5cb5ff").withAlpha(0.85),
+        outlineWidth: 2,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      },
+    });
+    return () => {
+      if (aircraftSelectionRingRef.current) {
+        viewer.entities.remove(aircraftSelectionRingRef.current);
+        aircraftSelectionRingRef.current = null;
+      }
+    };
+  }, [selectedAircraft]);
 
   // ===== Aircraft past-history polyline (selected) =====
   useEffect(() => {
