@@ -375,7 +375,15 @@ function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [uiTheme, setUiTheme] = useState<"dark" | "light">("dark");
   const [cameraState, setCameraState] = useState<CameraState>({ lat: 25, lon: 0, altKm: distanceToAltKm(SPACE_DISTANCE) });
-  const [flyTo, setFlyTo] = useState<FlyToTarget>({ id: 0, lat: 0, lon: 0, altKm: 0 });
+  // Initial flyTo: if the URL hash contains an `@lat,lon,altKm` token,
+  // fly there on mount. Format: `#@29.9,-90.07,8.5km`. Same convention
+  // as Google Maps so it's familiar.
+  const [flyTo, setFlyTo] = useState<FlyToTarget>(() => {
+    if (typeof window === "undefined") return { id: 0, lat: 0, lon: 0, altKm: 0 };
+    const m = window.location.hash.match(/^#@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)(km)?$/);
+    if (!m) return { id: 0, lat: 0, lon: 0, altKm: 0 };
+    return { id: 1, lat: parseFloat(m[1]), lon: parseFloat(m[2]), altKm: parseFloat(m[3]) };
+  });
   const [toast, setToast] = useState<{ id: number; text: string } | null>(null);
   const [showFps, setShowFps] = useState(false);
   const [paused, setPaused] = useState(false);
@@ -2069,7 +2077,7 @@ function App() {
               onPickLocation={onGlobeClick}
               flyTo={flyTo}
               pins={pins.map((p) => ({ id: p.id, lat: p.lat, lon: p.lon, label: p.label, color: p.color }))}
-              aircraft={layers.aircraft ? filteredAircraft.map((a) => ({ icao24: a.icao24, callsign: a.callsign, lat: a.lat, lon: a.lon, altitudeM: a.altitudeM, headingDeg: a.headingDeg })) : []}
+              aircraft={layers.aircraft ? filteredAircraft.map((a) => ({ icao24: a.icao24, callsign: a.callsign, lat: a.lat, lon: a.lon, altitudeM: a.altitudeM, headingDeg: a.headingDeg, squawk: a.squawk })) : []}
               realTimeSun={globe.realTimeSun}
               initialCamera={cameraState}
               eonet={layers.eonet ? visibleEonetEvents.map((e) => ({ id: e.id, title: e.title, lat: e.lat, lon: e.lon, category: e.category, color: categoryColor(e.category) })) : []}
@@ -2439,6 +2447,66 @@ function App() {
             { id: "toggleFog", label: surfaceFog ? "Hide atmospheric fog" : "Show atmospheric fog", group: "Imagery", icon: Cloud, run: () => setSurfaceFog((v) => !v) },
             { id: "toggleTerminator", label: surfaceTerminator ? "Hide day/night terminator (Surface)" : "Show day/night terminator (Surface)", group: "Layers", icon: SunIcon, run: () => setSurfaceTerminator((v) => !v) },
             { id: "toggleGlobeLighting", label: surfaceGlobeLighting === false ? "Enable Cesium globe lighting (sun-shaded)" : "Disable Cesium globe lighting (flat)", group: "Imagery", icon: SunIcon, run: () => setSurfaceGlobeLighting((v) => v === false ? true : false) },
+            // Computes local solar info for the camera-center lat/lon —
+            // sunrise / sunset / day length / current sun elevation. No
+            // pinning needed; the user just navigates to a place and runs
+            // this command from Cmd+K. Math is NOAA-style hour-angle
+            // approximation (within ~1 minute of the official table).
+            // Encodes camera lat/lon/altKm into the URL's hash and copies
+            // it to the clipboard. Pasting the URL in another tab lands
+            // the user at the same view.
+            { id: "shareView", label: "Copy share-link to current view", group: "Tools", icon: Bookmark, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) { showToast("Camera position unknown"); return; }
+              const url = new URL(window.location.href);
+              url.hash = `#@${c.lat.toFixed(4)},${c.lon.toFixed(4)},${c.altKm.toFixed(1)}km`;
+              const link = url.toString();
+              navigator.clipboard?.writeText(link).then(
+                () => showToast(`Copied: ${link.length > 60 ? link.slice(0, 57) + "..." : link}`),
+                () => showToast(link)
+              );
+            }},
+            { id: "sunInfo", label: "Show local sun info (sunrise/sunset/elevation) for this view", group: "Tools", icon: SunIcon, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) { showToast("Camera position unknown"); return; }
+              const { lat, lon } = c;
+              const now = new Date();
+              const start = Date.UTC(now.getUTCFullYear(), 0, 0);
+              const doy = Math.floor((now.getTime() - start) / 86400000);
+              const declRad = 23.45 * Math.PI / 180 * Math.sin(2 * Math.PI / 365 * (doy - 81));
+              const latRad = lat * Math.PI / 180;
+              // Hour angle in radians for sunrise/sunset:
+              //   cos(H) = -tan(lat) tan(decl)
+              const cosH = -Math.tan(latRad) * Math.tan(declRad);
+              const utcHours = now.getUTCHours() + now.getUTCMinutes() / 60 + now.getUTCSeconds() / 3600;
+              const subsolarLon = -((utcHours - 12) * 15);
+              // Solar elevation right now:
+              //   sin(elev) = sin(lat)sin(decl) + cos(lat)cos(decl)cos(H_now)
+              const hNowRad = (lon - subsolarLon) * Math.PI / 180;
+              const sinElev = Math.sin(latRad) * Math.sin(declRad) + Math.cos(latRad) * Math.cos(declRad) * Math.cos(hNowRad);
+              const elevDeg = Math.asin(Math.max(-1, Math.min(1, sinElev))) * 180 / Math.PI;
+              if (cosH > 1) {
+                showToast(`At ${formatLat(lat)} ${formatLon(lon)} → polar night (sun stays below horizon today). Current elev ${elevDeg.toFixed(1)}°`);
+                return;
+              }
+              if (cosH < -1) {
+                showToast(`At ${formatLat(lat)} ${formatLon(lon)} → polar day (sun never sets today). Current elev ${elevDeg.toFixed(1)}°`);
+                return;
+              }
+              const HhoursHalf = Math.acos(cosH) * 12 / Math.PI;
+              const dayLengthH = HhoursHalf * 2;
+              // UTC of solar noon at this longitude:
+              const solarNoonUtc = 12 - lon / 15;
+              const sunriseUtc = solarNoonUtc - HhoursHalf;
+              const sunsetUtc = solarNoonUtc + HhoursHalf;
+              const fmt = (h: number) => {
+                let hh = ((h % 24) + 24) % 24;
+                const m = Math.round((hh - Math.floor(hh)) * 60);
+                hh = Math.floor(hh);
+                return `${String(hh).padStart(2, "0")}:${String(m).padStart(2, "0")} UTC`;
+              };
+              showToast(`☀ ${formatLat(lat)} ${formatLon(lon)} · sunrise ${fmt(sunriseUtc)} · noon ${fmt(solarNoonUtc)} · sunset ${fmt(sunsetUtc)} · day ${dayLengthH.toFixed(1)}h · elev ${elevDeg.toFixed(1)}°`);
+            }},
             // Camera-follow only makes sense when an aircraft is selected
             // and we're in Surface mode. The label changes based on state so
             // users always see whether the toggle would start or stop following.

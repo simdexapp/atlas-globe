@@ -21,6 +21,10 @@ export type SurfaceAircraft = {
   lon: number;
   altitudeM: number;
   headingDeg: number;
+  // ADS-B squawk code. 7500 = hijack, 7600 = radio failure,
+  // 7700 = general emergency. We tint these magenta/red and pulse
+  // them so they stand out from normal traffic.
+  squawk?: string;
 };
 
 export type SurfaceEonet = {
@@ -1493,7 +1497,12 @@ export default function Surface({
     for (const a of aircraft) {
       const alt = Math.max(0, a.altitudeM);
       const altT = Math.min(1, alt / 12000);
-      const color = Cesium.Color.fromHsl(0.05 + altT * 0.5, 0.85, 0.6, 1.0);
+      // Emergency squawks override the normal altitude tint with a
+      // bright magenta/red so they're impossible to miss.
+      const isEmergency = a.squawk === "7500" || a.squawk === "7600" || a.squawk === "7700";
+      const color = isEmergency
+        ? Cesium.Color.fromCssColorString("#ff3a8a")
+        : Cesium.Color.fromHsl(0.05 + altT * 0.5, 0.85, 0.6, 1.0);
       const cartesian = Cesium.Cartesian3.fromDegrees(a.lon, a.lat, alt);
       const rotationRad = -((a.headingDeg || 0) * Math.PI / 180);
       const existing = byIcao.get(a.icao24);
