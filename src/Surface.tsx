@@ -416,22 +416,56 @@ export default function Surface({
     });
   }, [selectedAircraft]);
 
-  // ===== Aircraft click → select =====
+  // ===== Aircraft click → select + hover tooltip =====
   useEffect(() => {
     const viewer = viewerRef.current;
-    if (!viewer || !onSelectAircraft) return;
+    if (!viewer) return;
     const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
-    handler.setInputAction((click: Cesium.ScreenSpaceEventHandler.PositionedEvent) => {
-      const picked = viewer.scene.pick(click.position);
+
+    // Build a tooltip DOM element overlaid on the canvas. Cheaper than
+    // rendering as a Cesium label (which would require allocating an
+    // entity per hover); we just position-update on mouse-move.
+    const tooltip = document.createElement("div");
+    tooltip.className = "cesiumAircraftTooltip";
+    tooltip.style.cssText = "position:absolute;pointer-events:none;padding:6px 10px;border-radius:8px;border:1px solid #2a3349;background:rgba(8,14,26,.95);backdrop-filter:blur(6px);color:#f1f4f8;font:600 11px Inter,sans-serif;box-shadow:0 4px 12px rgba(0,0,0,.35);z-index:99;display:none;white-space:nowrap;letter-spacing:.04em;";
+    viewer.container.appendChild(tooltip);
+
+    if (onSelectAircraft) {
+      handler.setInputAction((click: Cesium.ScreenSpaceEventHandler.PositionedEvent) => {
+        const picked = viewer.scene.pick(click.position);
+        if (picked && picked.primitive instanceof Cesium.Billboard) {
+          const icao = aircraftBillboardIndexRef.current.get(picked.primitive);
+          if (icao) onSelectAircraft(icao);
+        }
+      }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    }
+
+    handler.setInputAction((move: Cesium.ScreenSpaceEventHandler.MotionEvent) => {
+      const picked = viewer.scene.pick(move.endPosition);
       if (picked && picked.primitive instanceof Cesium.Billboard) {
         const icao = aircraftBillboardIndexRef.current.get(picked.primitive);
-        if (icao) {
-          onSelectAircraft(icao);
+        if (icao && aircraft) {
+          const a = aircraft.find((x) => x.icao24 === icao);
+          if (a) {
+            const altFt = Math.round(a.altitudeM / 0.3048).toLocaleString();
+            tooltip.textContent = `${a.callsign || a.icao24.toUpperCase()} · ${altFt} ft`;
+            tooltip.style.left = `${move.endPosition.x + 14}px`;
+            tooltip.style.top = `${move.endPosition.y + 14}px`;
+            tooltip.style.display = "block";
+            viewer.scene.canvas.style.cursor = "pointer";
+            return;
+          }
         }
       }
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
-    return () => handler.destroy();
-  }, [onSelectAircraft]);
+      tooltip.style.display = "none";
+      viewer.scene.canvas.style.cursor = "default";
+    }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+
+    return () => {
+      handler.destroy();
+      tooltip.remove();
+    };
+  }, [onSelectAircraft, aircraft]);
 
   // ===== Real-time-sun toggle: when on, lock the Cesium clock to actual UTC =====
   useEffect(() => {

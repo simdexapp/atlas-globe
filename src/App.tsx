@@ -116,6 +116,7 @@ type LayerVisibility = {
   launches: boolean;
   worldDigest: boolean;
   noonMeridian: boolean;
+  buildings3D: boolean;
 };
 
 type GlobeSettings = {
@@ -172,7 +173,7 @@ type PersistedState = {
   pins?: Pin[];
 };
 
-const STORAGE_KEY = "atlas-globe-state-v14";
+const STORAGE_KEY = "atlas-globe-state-v15";
 const EARTH_RADIUS_KM = 6371;
 const MIN_DISTANCE = 1.0008;        // ~5 km above surface (texture-pixelated, but real zoom)
 const MAX_DISTANCE = 12;            // far view from space
@@ -210,7 +211,8 @@ const defaultLayers: LayerVisibility = {
   dayInfo: false,
   launches: false,
   worldDigest: false,
-  noonMeridian: false
+  noonMeridian: false,
+  buildings3D: true
 };
 
 const FAMOUS_VOLCANOES: { id: string; name: string; lat: number; lon: number }[] = [
@@ -1927,7 +1929,7 @@ function App() {
                     : radarManifest.past[Math.min(radarFrameIndex, radarManifest.past.length - 1)].path)
                 : undefined}
               weatherOpacity={radarOpacity}
-              show3DBuildings={true}
+              show3DBuildings={layers.buildings3D !== false}
               selectedAircraft={selectedAircraftId && aircraftSnapshot ? (() => {
                 const a = aircraftSnapshot.aircraft.find((x) => x.icao24 === selectedAircraftId);
                 return a ? { icao24: a.icao24, lat: a.lat, lon: a.lon, altitudeM: a.altitudeM, headingDeg: a.headingDeg, velocityMs: a.velocityMs } : null;
@@ -2203,6 +2205,7 @@ function App() {
             { id: "layerAurora", label: layers.aurora ? "Hide aurora forecast" : "Show aurora forecast (NOAA OVATION)", group: "Layers", icon: Sparkles, run: () => toggleLayer("aurora") },
             { id: "layerLaunches", label: layers.launches ? "Hide rocket launches" : "Show upcoming rocket launches", group: "Layers", icon: Telescope, run: () => toggleLayer("launches") },
             { id: "layerNoon", label: layers.noonMeridian ? "Hide solar-noon meridian" : "Show solar-noon meridian", group: "Layers", icon: SunIcon, run: () => toggleLayer("noonMeridian") },
+            { id: "layerBuildings", label: layers.buildings3D ? "Hide 3D buildings (Surface)" : "Show 3D buildings (Surface)", group: "Layers", icon: Mountain, run: () => toggleLayer("buildings3D") },
             { id: "layerTerminator", label: layers.terminator ? "Hide day/night terminator" : "Show day/night terminator", group: "Layers", icon: Compass, run: () => toggleLayer("terminator") },
             { id: "layerSubsolar", label: layers.subsolar ? "Hide subsolar point" : "Show subsolar point (sun overhead)", group: "Layers", icon: SunIcon, run: () => toggleLayer("subsolar") },
             { id: "widgetNeo", label: layers.neoWatch ? "Hide asteroid watch" : "Show asteroid watch (NASA NeoWS)", group: "Widgets", icon: Telescope, run: () => toggleLayer("neoWatch") },
@@ -2957,6 +2960,7 @@ function LayersPanel({ layers, onToggle, bordersLoading }: { layers: LayerVisibi
     { key: "moon", label: "Visible moon (in space)", icon: Globe2 },
     { key: "terminator", label: "Day/night terminator line", icon: Compass },
     { key: "noonMeridian", label: "Solar-noon meridian (where sun is overhead)", icon: SunIcon },
+    { key: "buildings3D", label: "Cesium 3D buildings (Surface mode)", icon: Mountain },
     { key: "subsolar", label: "Subsolar point (sun overhead)", icon: SunIcon },
     { key: "constellations", label: "Constellation lines (Orion etc)", icon: Sparkles },
     { key: "compass", label: "Compass / heading widget", icon: Navigation },
