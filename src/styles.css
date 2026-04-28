@@ -2219,6 +2219,56 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
 .atlasNeoMiss { font-family: ui-monospace, monospace; font-size: 10px; color: var(--gray-9); }
 .atlasNeoEmpty { color: var(--gray-9); font-style: italic; padding: var(--s-2); }
 
+/* Sunrise/sunset for the camera's current lat/lon */
+.atlasDayInfoWidget {
+  position: fixed;
+  top: 130px;
+  left: 64px;
+  z-index: 5;
+  width: 280px;
+  padding: var(--s-3);
+  border-radius: var(--r-3);
+  border: 1px solid var(--border);
+  background: rgba(10, 16, 28, 0.86);
+  backdrop-filter: blur(14px);
+  box-shadow: var(--shadow-2);
+  color: var(--gray-10);
+  font-size: var(--text-xs);
+}
+.atlasDayInfoLabel {
+  font-family: ui-monospace, monospace;
+  font-size: 10.5px;
+  color: var(--gray-9);
+  letter-spacing: 0.06em;
+  margin-bottom: var(--s-2);
+  padding-bottom: var(--s-2);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.atlasDayInfoTimes {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--s-2) var(--s-3);
+}
+.atlasDayInfoTimes > div { display: grid; gap: 1px; }
+.atlasDayInfoTimes span {
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--gray-9);
+}
+.atlasDayInfoTimes strong {
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gray-12);
+  font-variant-numeric: tabular-nums;
+}
+.atlasDayInfoPolar {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--accent);
+}
+
 /* World-clock widget */
 .atlasClockWidget {
   position: fixed;

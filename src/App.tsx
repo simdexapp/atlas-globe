@@ -109,6 +109,7 @@ type LayerVisibility = {
   aurora: boolean;
   neoWatch: boolean;
   timeClock: boolean;
+  dayInfo: boolean;
 };
 
 type GlobeSettings = {
@@ -165,7 +166,7 @@ type PersistedState = {
   pins?: Pin[];
 };
 
-const STORAGE_KEY = "atlas-globe-state-v10";
+const STORAGE_KEY = "atlas-globe-state-v11";
 const EARTH_RADIUS_KM = 6371;
 const MIN_DISTANCE = 1.0008;        // ~5 km above surface (texture-pixelated, but real zoom)
 const MAX_DISTANCE = 12;            // far view from space
@@ -199,7 +200,8 @@ const defaultLayers: LayerVisibility = {
   eonet: false,
   aurora: false,
   neoWatch: false,
-  timeClock: false
+  timeClock: false,
+  dayInfo: false
 };
 
 const FAMOUS_VOLCANOES: { id: string; name: string; lat: number; lon: number }[] = [
@@ -1973,6 +1975,7 @@ function App() {
             { id: "layerAurora", label: layers.aurora ? "Hide aurora forecast" : "Show aurora forecast (NOAA OVATION)", group: "Layers", icon: Sparkles, run: () => toggleLayer("aurora") },
             { id: "widgetNeo", label: layers.neoWatch ? "Hide asteroid watch" : "Show asteroid watch (NASA NeoWS)", group: "Widgets", icon: Telescope, run: () => toggleLayer("neoWatch") },
             { id: "widgetClock", label: layers.timeClock ? "Hide world-clock widget" : "Show world-clock widget", group: "Widgets", icon: Compass, run: () => toggleLayer("timeClock") },
+            { id: "widgetDayInfo", label: layers.dayInfo ? "Hide sunrise/sunset widget" : "Show sunrise/sunset for camera location", group: "Widgets", icon: SunIcon, run: () => toggleLayer("dayInfo") },
             { id: "layerClouds", label: layers.clouds ? "Hide clouds" : "Show clouds", group: "Layers", icon: Cloud, run: () => toggleLayer("clouds") },
             { id: "layerNight", label: layers.nightLights ? "Hide city lights" : "Show city lights", group: "Layers", icon: SunIcon, run: () => toggleLayer("nightLights") },
             { id: "layerAtm", label: layers.atmosphere ? "Hide atmosphere" : "Show atmosphere", group: "Layers", icon: Sparkles, run: () => toggleLayer("atmosphere") },
@@ -2072,6 +2075,43 @@ function App() {
           )}
         </div>
       )}
+
+      {layers.dayInfo && (() => {
+        const times = solarTimes(cameraState.lat, cameraState.lon, new Date());
+        if (times === "polar-day") {
+          return (
+            <div className="atlasDayInfoWidget" role="status">
+              <div className="atlasDayInfoLabel">{formatLat(cameraState.lat)} · {formatLon(cameraState.lon)}</div>
+              <div className="atlasDayInfoPolar">☀ Polar day · sun never sets</div>
+            </div>
+          );
+        }
+        if (times === "polar-night") {
+          return (
+            <div className="atlasDayInfoWidget" role="status">
+              <div className="atlasDayInfoLabel">{formatLat(cameraState.lat)} · {formatLon(cameraState.lon)}</div>
+              <div className="atlasDayInfoPolar">🌑 Polar night · sun never rises</div>
+            </div>
+          );
+        }
+        const fmtUTC = (h: number) => {
+          const hh = Math.floor(h);
+          const mm = Math.round((h - hh) * 60);
+          return `${hh.toString().padStart(2, "0")}:${mm.toString().padStart(2, "0")}`;
+        };
+        const dayLengthH = ((times.sunset - times.sunrise) + 24) % 24;
+        return (
+          <div className="atlasDayInfoWidget" role="status">
+            <div className="atlasDayInfoLabel">{formatLat(cameraState.lat)} · {formatLon(cameraState.lon)}</div>
+            <div className="atlasDayInfoTimes">
+              <div><span>SUNRISE</span><strong>{fmtUTC(times.sunrise)} UTC</strong></div>
+              <div><span>NOON</span><strong>{fmtUTC(times.solarNoon)} UTC</strong></div>
+              <div><span>SUNSET</span><strong>{fmtUTC(times.sunset)} UTC</strong></div>
+              <div><span>DAY</span><strong>{Math.floor(dayLengthH)}h {Math.round((dayLengthH % 1) * 60)}m</strong></div>
+            </div>
+          </div>
+        );
+      })()}
 
       {layers.timeClock && (() => {
         const now = new Date();
