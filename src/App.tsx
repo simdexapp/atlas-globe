@@ -344,6 +344,7 @@ function App() {
 
   const [launches, setLaunches] = useState<RocketLaunch[]>([]);
   const [selectedLaunchId, setSelectedLaunchId] = useState<string | null>(null);
+  const [selectedEarthquakeId, setSelectedEarthquakeId] = useState<string | null>(null);
 
   const [eonetEvents, setEonetEvents] = useState<EonetEvent[]>([]);
   const [eonetLoading, setEonetLoading] = useState(false);
@@ -1784,6 +1785,8 @@ function App() {
             launchList={launches}
             selectedLaunchId={selectedLaunchId}
             onSelectLaunch={setSelectedLaunchId}
+            selectedEarthquakeId={selectedEarthquakeId}
+            onSelectEarthquake={setSelectedEarthquakeId}
             auroraTexture={auroraTexture}
             aircraftHistory={aircraftHistoryRef.current}
             volcanoAlerts={volcanoAlerts}
@@ -2194,6 +2197,39 @@ function App() {
                 <strong>{fmt(c.tz)}</strong>
               </div>
             ))}
+          </div>
+        );
+      })()}
+
+      {selectedEarthquakeId && (() => {
+        const q = earthquakes.find((x) => x.id === selectedEarthquakeId);
+        if (!q) return null;
+        const ageHrs = Math.max(0, (Date.now() - q.time) / 3_600_000);
+        const ageLabel = ageHrs < 1 ? `${Math.round(ageHrs * 60)} min ago`
+                        : ageHrs < 24 ? `${ageHrs.toFixed(1)} hr ago`
+                        : `${Math.round(ageHrs / 24)} d ago`;
+        const tag = q.mag >= 5 ? "MAJOR" : q.mag >= 3.5 ? "MOD" : "MINOR";
+        const tagColor = q.mag >= 5 ? "#ff5a5a" : q.mag >= 3.5 ? "#ffb84d" : "#ffd66b";
+        return (
+          <div className="atlasEventCard" role="dialog">
+            <div className="atlasEventCardHead">
+              <div className="atlasEventCardTag" style={{ background: tagColor }}>M{q.mag.toFixed(1)} {tag}</div>
+              <div className="atlasEventCardTitle">
+                <strong>{q.place}</strong>
+                <span>USGS · {ageLabel}</span>
+              </div>
+              <button className="atlasIconBtn" onClick={() => setSelectedEarthquakeId(null)} aria-label="Close"><X size={14} /></button>
+            </div>
+            <div className="atlasEventCardBody">
+              <div><span>Magnitude</span><b>{q.mag.toFixed(2)} M</b></div>
+              <div><span>Depth</span><b>{q.depth.toFixed(1)} km</b></div>
+              <div><span>Position</span><b>{formatLat(q.lat)}</b></div>
+              <div><span></span><b>{formatLon(q.lon)}</b></div>
+            </div>
+            <div className="atlasAircraftCardActions">
+              <button className="atlasBtn" onClick={() => setFlyTo((c) => ({ id: c.id + 1, lat: q.lat, lon: q.lon, altKm: 600 }))}>Fly to</button>
+              <a className="atlasBtn" href={`https://earthquake.usgs.gov/earthquakes/eventpage/${q.id}`} target="_blank" rel="noreferrer">USGS ↗</a>
+            </div>
           </div>
         );
       })()}
@@ -3718,6 +3754,8 @@ function GlobeCanvas({
   launchList,
   selectedLaunchId,
   onSelectLaunch,
+  selectedEarthquakeId,
+  onSelectEarthquake,
   auroraTexture,
   aircraftHistory,
   volcanoAlerts,
@@ -3752,6 +3790,8 @@ function GlobeCanvas({
   launchList: RocketLaunch[];
   selectedLaunchId: string | null;
   onSelectLaunch: (id: string | null) => void;
+  selectedEarthquakeId: string | null;
+  onSelectEarthquake: (id: string | null) => void;
   auroraTexture: THREE.Texture | null;
   aircraftHistory?: Map<string, Array<{ lat: number; lon: number; alt: number; t: number }>>;
   volcanoAlerts: Map<string, string>;
@@ -3792,7 +3832,7 @@ function GlobeCanvas({
           {layers.graticule && <Graticule />}
           {layers.cardinals && <Cardinals />}
           {layers.timezones && <TimeZoneBands />}
-          {layers.earthquakes && <EarthquakeMarkers data={earthquakes} />}
+          {layers.earthquakes && <EarthquakeMarkers data={earthquakes} selectedId={selectedEarthquakeId} onSelect={onSelectEarthquake} />}
           {layers.volcanoes && <VolcanoMarkers alerts={volcanoAlerts} />}
           {layers.pinPaths && <PinPaths pins={pins} sunDirection={sunDirection} />}
           {layers.pins && <PinMarkers pins={pins} selectedId={selectedPinId} onSelect={onSelectPin} />}
@@ -4945,14 +4985,21 @@ function LaunchMarkers({ launches, selectedId, onSelect }: {
   );
 }
 
-function EarthquakeMarkers({ data }: { data: Earthquake[] }) {
+function EarthquakeMarkers({ data, selectedId, onSelect }: {
+  data: Earthquake[];
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
+}) {
   const groupRef = useRef<THREE.Group>(null);
   useFrame(({ clock }) => {
     if (!groupRef.current) return;
     const t = clock.elapsedTime;
     groupRef.current.children.forEach((child, i) => {
+      const q = data[i];
+      // Bigger + faster pulse for stronger quakes
+      const intensity = q ? Math.min(1.5, 0.4 + q.mag * 0.18) : 0.6;
       const phase = (t + i * 0.13) % 2;
-      child.scale.setScalar(1 + Math.max(0, 1 - phase) * 1.2);
+      child.scale.setScalar(1 + Math.max(0, 1 - phase) * intensity);
     });
   });
   return (
@@ -4960,11 +5007,16 @@ function EarthquakeMarkers({ data }: { data: Earthquake[] }) {
       {data.map((q) => {
         const pos = latLonToVec3(q.lat, q.lon, 1.003);
         const size = 0.003 + Math.max(0, q.mag) * 0.0035;
+        const isSelected = q.id === selectedId;
         const color = q.mag >= 5 ? "#ff5a5a" : q.mag >= 3.5 ? "#ffb84d" : "#ffd66b";
         return (
-          <mesh key={q.id} position={pos}>
-            <sphereGeometry args={[size, 12, 12]} />
-            <meshBasicMaterial color={color} transparent opacity={0.85} />
+          <mesh
+            key={q.id}
+            position={pos}
+            onPointerDown={(e: any) => { e.stopPropagation(); onSelect(q.id); }}
+          >
+            <sphereGeometry args={[isSelected ? size * 1.5 : size, 16, 16]} />
+            <meshBasicMaterial color={color} transparent opacity={isSelected ? 1 : 0.85} toneMapped={false} />
           </mesh>
         );
       })}
