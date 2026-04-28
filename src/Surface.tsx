@@ -22,6 +22,42 @@ export type SurfaceAircraft = {
   headingDeg: number;
 };
 
+export type SurfaceEonet = {
+  id: string;
+  title: string;
+  lat: number;
+  lon: number;
+  category: string;          // EonetCategory string key
+  color: string;             // hex
+};
+
+export type SurfaceEarthquake = {
+  id: string;
+  lat: number;
+  lon: number;
+  mag: number;
+  depth: number;
+  place: string;
+};
+
+export type SurfaceVolcano = {
+  id: string;
+  name: string;
+  lat: number;
+  lon: number;
+  alertColor: string;        // computed display tint
+  elevated: boolean;
+};
+
+export type SurfaceLaunch = {
+  id: string;
+  name: string;
+  lat: number;
+  lon: number;
+  imminent: boolean;         // <1h
+  soon: boolean;             // <24h
+};
+
 export default function Surface({
   token,
   onCameraChange,
@@ -30,7 +66,13 @@ export default function Surface({
   pins,
   aircraft,
   realTimeSun,
-  initialCamera
+  initialCamera,
+  eonet,
+  earthquakes,
+  volcanoes,
+  launches,
+  weatherTilePath,
+  weatherOpacity
 }: {
   token: string;
   onCameraChange: (lat: number, lon: number, altKm: number) => void;
@@ -39,9 +81,15 @@ export default function Surface({
   pins?: SurfacePin[];
   aircraft?: SurfaceAircraft[];
   realTimeSun?: boolean;
-  // Lat/lon/altKm to position the Cesium camera on first mount, so the
-  // Atlas → Surface handoff doesn't jump to a different part of the globe.
   initialCamera?: { lat: number; lon: number; altKm: number };
+  eonet?: SurfaceEonet[];
+  earthquakes?: SurfaceEarthquake[];
+  volcanoes?: SurfaceVolcano[];
+  launches?: SurfaceLaunch[];
+  // RainViewer tile path like '/v2/radar/...'. When set, layered as a
+  // Cesium URL template imagery provider.
+  weatherTilePath?: string;
+  weatherOpacity?: number;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Cesium.Viewer | null>(null);
@@ -51,6 +99,11 @@ export default function Surface({
   const pinEntitiesRef = useRef<Cesium.Entity[]>([]);
   const aircraftPointsRef = useRef<Cesium.PointPrimitiveCollection | null>(null);
   const aircraftIndexRef = useRef<Map<string, number>>(new Map());
+  const eonetEntitiesRef = useRef<Cesium.Entity[]>([]);
+  const earthquakeEntitiesRef = useRef<Cesium.Entity[]>([]);
+  const volcanoEntitiesRef = useRef<Cesium.Entity[]>([]);
+  const launchEntitiesRef = useRef<Cesium.Entity[]>([]);
+  const weatherImageryLayerRef = useRef<Cesium.ImageryLayer | null>(null);
 
   // Resolve env token if no prop token. Production deploys bake VITE_CESIUM_TOKEN.
   const env = (import.meta as any).env;
@@ -94,6 +147,20 @@ export default function Surface({
       (viewer.scene as any).highDynamicRange = true;
     }
     viewer.scene.globe.maximumScreenSpaceError = 1.5;       // sharper terrain (default is 2)
+    // ===== Perf optimizations =====
+    // Bigger terrain-tile cache so panning a recently-viewed area doesn't
+    // re-fetch (default is 100; bump to 1000 for smoother zoom-out then
+    // zoom-back-in cycles).
+    viewer.scene.globe.tileCacheSize = 1000;
+    // Skip tile rendering when the view hasn't changed — saves GPU cycles
+    // when the camera is idle. Already on by viewer config, but reaffirm.
+    viewer.scene.requestRenderMode = true;
+    viewer.scene.maximumRenderTimeChange = Number.POSITIVE_INFINITY;
+    // Disable order-independent translucency for perf (we don't have many
+    // overlapping translucent surfaces; the cost > benefit on this app).
+    if ("orderIndependentTranslucency" in viewer.scene) {
+      (viewer.scene as any).orderIndependentTranslucency = false;
+    }
 
     // ===== Atmosphere + lighting =====
     viewer.scene.globe.enableLighting = true;            // sun-driven day/night on globe
@@ -219,8 +286,20 @@ export default function Surface({
       removeListener?.();
       handler.destroy();
       pinEntitiesRef.current.forEach((e) => viewer.entities.remove(e));
+      eonetEntitiesRef.current.forEach((e) => viewer.entities.remove(e));
+      earthquakeEntitiesRef.current.forEach((e) => viewer.entities.remove(e));
+      volcanoEntitiesRef.current.forEach((e) => viewer.entities.remove(e));
+      launchEntitiesRef.current.forEach((e) => viewer.entities.remove(e));
       pinEntitiesRef.current = [];
+      eonetEntitiesRef.current = [];
+      earthquakeEntitiesRef.current = [];
+      volcanoEntitiesRef.current = [];
+      launchEntitiesRef.current = [];
       aircraftPointsRef.current?.removeAll();
+      if (weatherImageryLayerRef.current) {
+        viewer.imageryLayers.remove(weatherImageryLayerRef.current, true);
+        weatherImageryLayerRef.current = null;
+      }
       viewer.destroy();
       viewerRef.current = null;
     };
@@ -279,6 +358,170 @@ export default function Surface({
       pinEntitiesRef.current.push(entity);
     }
   }, [pins]);
+
+  // ===== EONET event sync =====
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    for (const e of eonetEntitiesRef.current) viewer.entities.remove(e);
+    eonetEntitiesRef.current = [];
+    if (!eonet) return;
+    for (const ev of eonet) {
+      const entity = viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(ev.lon, ev.lat),
+        point: {
+          pixelSize: 12,
+          color: Cesium.Color.fromCssColorString(ev.color),
+          outlineColor: Cesium.Color.WHITE,
+          outlineWidth: 1,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+        label: {
+          text: ev.title.length > 32 ? ev.title.slice(0, 29) + "…" : ev.title,
+          font: "11px Inter, sans-serif",
+          fillColor: Cesium.Color.fromCssColorString(ev.color),
+          outlineColor: Cesium.Color.fromCssColorString("rgba(0, 0, 0, 0.85)"),
+          outlineWidth: 3,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          pixelOffset: new Cesium.Cartesian2(0, -14),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          // Labels only show when within 4000km of the camera so the globe
+          // doesn't get spammed with text at orbital view.
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 4_000_000),
+        },
+      });
+      eonetEntitiesRef.current.push(entity);
+    }
+  }, [eonet]);
+
+  // ===== Earthquake sync =====
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    for (const e of earthquakeEntitiesRef.current) viewer.entities.remove(e);
+    earthquakeEntitiesRef.current = [];
+    if (!earthquakes) return;
+    for (const q of earthquakes) {
+      const colorHex = q.mag >= 5 ? "#ff5a5a" : q.mag >= 3.5 ? "#ffb84d" : "#ffd66b";
+      const size = 6 + Math.max(0, q.mag) * 2.2;        // px
+      const entity = viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(q.lon, q.lat),
+        point: {
+          pixelSize: size,
+          color: Cesium.Color.fromCssColorString(colorHex).withAlpha(0.85),
+          outlineColor: Cesium.Color.WHITE,
+          outlineWidth: 1,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+        label: {
+          text: `M${q.mag.toFixed(1)}`,
+          font: "10px ui-monospace, monospace",
+          fillColor: Cesium.Color.fromCssColorString(colorHex),
+          outlineColor: Cesium.Color.fromCssColorString("rgba(0,0,0,0.9)"),
+          outlineWidth: 3,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          pixelOffset: new Cesium.Cartesian2(0, -size / 2 - 2),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 2_000_000),
+        },
+      });
+      earthquakeEntitiesRef.current.push(entity);
+    }
+  }, [earthquakes]);
+
+  // ===== Volcano sync (alert-tinted) =====
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    for (const e of volcanoEntitiesRef.current) viewer.entities.remove(e);
+    volcanoEntitiesRef.current = [];
+    if (!volcanoes) return;
+    for (const v of volcanoes) {
+      const entity = viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(v.lon, v.lat),
+        point: {
+          pixelSize: v.elevated ? 14 : 10,
+          color: Cesium.Color.fromCssColorString(v.alertColor),
+          outlineColor: Cesium.Color.WHITE,
+          outlineWidth: 1,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+        label: {
+          text: "△ " + v.name,
+          font: "11px Inter, sans-serif",
+          fillColor: Cesium.Color.fromCssColorString(v.alertColor),
+          outlineColor: Cesium.Color.fromCssColorString("rgba(0,0,0,0.85)"),
+          outlineWidth: 3,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          pixelOffset: new Cesium.Cartesian2(0, -16),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 3_000_000),
+        },
+      });
+      volcanoEntitiesRef.current.push(entity);
+    }
+  }, [volcanoes]);
+
+  // ===== Rocket-launch sync =====
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    for (const e of launchEntitiesRef.current) viewer.entities.remove(e);
+    launchEntitiesRef.current = [];
+    if (!launches) return;
+    for (const l of launches) {
+      const tint = l.imminent ? "#ffd66b" : l.soon ? "#5cb5ff" : "#7a8db5";
+      const entity = viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(l.lon, l.lat),
+        point: {
+          pixelSize: l.imminent ? 14 : 10,
+          color: Cesium.Color.fromCssColorString(tint),
+          outlineColor: Cesium.Color.WHITE,
+          outlineWidth: 1,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+        label: {
+          text: "🚀 " + l.name,
+          font: "11px Inter, sans-serif",
+          fillColor: Cesium.Color.fromCssColorString(tint),
+          outlineColor: Cesium.Color.fromCssColorString("rgba(0,0,0,0.85)"),
+          outlineWidth: 3,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          pixelOffset: new Cesium.Cartesian2(0, -16),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 5_000_000),
+        },
+      });
+      launchEntitiesRef.current.push(entity);
+    }
+  }, [launches]);
+
+  // ===== Weather radar overlay (Cesium ImageryLayer) =====
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    if (weatherImageryLayerRef.current) {
+      viewer.imageryLayers.remove(weatherImageryLayerRef.current, true);
+      weatherImageryLayerRef.current = null;
+    }
+    if (!weatherTilePath) return;
+    const provider = new Cesium.UrlTemplateImageryProvider({
+      url: `https://tilecache.rainviewer.com${weatherTilePath}/256/{z}/{x}/{y}/4/1_1.png`,
+      maximumLevel: 8,
+      credit: new Cesium.Credit("RainViewer", false),
+    });
+    const layer = viewer.imageryLayers.addImageryProvider(provider);
+    layer.alpha = weatherOpacity ?? 0.7;
+    weatherImageryLayerRef.current = layer;
+  }, [weatherTilePath, weatherOpacity]);
 
   // ===== Aircraft sync (efficient point-primitive update) =====
   useEffect(() => {

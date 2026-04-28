@@ -1906,6 +1906,23 @@ function App() {
               aircraft={layers.aircraft ? filteredAircraft.map((a) => ({ icao24: a.icao24, callsign: a.callsign, lat: a.lat, lon: a.lon, altitudeM: a.altitudeM, headingDeg: a.headingDeg })) : []}
               realTimeSun={globe.realTimeSun}
               initialCamera={cameraState}
+              eonet={layers.eonet ? visibleEonetEvents.map((e) => ({ id: e.id, title: e.title, lat: e.lat, lon: e.lon, category: e.category, color: categoryColor(e.category) })) : []}
+              earthquakes={layers.earthquakes ? earthquakes.map((q) => ({ id: q.id, lat: q.lat, lon: q.lon, mag: q.mag, depth: q.depth, place: q.place })) : []}
+              volcanoes={layers.volcanoes ? FAMOUS_VOLCANOES.map((v) => {
+                const c = volcanoAlerts.get(v.name.toLowerCase());
+                const alertColor = c === "red" ? "#ff3a3a" : c === "orange" ? "#ff8a3a" : c === "yellow" ? "#ffd66b" : c === "green" ? "#7cffb1" : "#ff6a3d";
+                return { id: v.id, name: v.name, lat: v.lat, lon: v.lon, alertColor, elevated: !!c && c !== "green" };
+              }) : []}
+              launches={layers.launches ? launches.map((l) => {
+                const hoursOut = Math.max(0, (l.netUnixMs - Date.now()) / 3_600_000);
+                return { id: l.id, name: l.name, lat: l.padLat, lon: l.padLon, imminent: hoursOut < 1, soon: hoursOut < 24 };
+              }) : []}
+              weatherTilePath={layers.weather && radarManifest && radarManifest.past.length > 0
+                ? (radarFrameIndex < 0
+                    ? radarManifest.past[radarManifest.past.length - 1].path
+                    : radarManifest.past[Math.min(radarFrameIndex, radarManifest.past.length - 1)].path)
+                : undefined}
+              weatherOpacity={radarOpacity}
             />
           </Suspense>
         )}
