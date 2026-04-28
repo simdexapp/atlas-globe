@@ -379,6 +379,13 @@ function App() {
   const [eonetEvents, setEonetEvents] = useState<EonetEvent[]>([]);
   const [eonetLoading, setEonetLoading] = useState(false);
   const [selectedEonetId, setSelectedEonetId] = useState<string | null>(null);
+  // Disabled categories (lowercased EonetCategory). Empty = show all.
+  const [eonetHidden, setEonetHidden] = useState<Set<string>>(new Set());
+
+  const visibleEonetEvents = useMemo(() => {
+    if (eonetHidden.size === 0) return eonetEvents;
+    return eonetEvents.filter((e) => !eonetHidden.has(e.category));
+  }, [eonetEvents, eonetHidden]);
 
   // USGS volcano alert color codes (key: lowercase volcano name → color code).
   // Refresh every 10 min. Used to tint markers in VolcanoMarkers when the
@@ -1851,7 +1858,7 @@ function App() {
             selectedAircraftId={selectedAircraftId}
             radarTexture={radarTexture}
             radarOpacity={radarOpacity}
-            eonetEvents={eonetEvents}
+            eonetEvents={visibleEonetEvents}
             selectedEonetId={selectedEonetId}
             onSelectEonet={setSelectedEonetId}
             launchList={launches}
@@ -2448,16 +2455,58 @@ function App() {
       })()}
 
       {layers.eonet && (
-        <div className="atlasEonetPill" role="status">
-          <Sparkles size={11} />
-          {eonetLoading && eonetEvents.length === 0 ? (
-            <span>Loading natural events…</span>
-          ) : (
-            <span>
-              <b>{eonetEvents.length.toLocaleString()}</b> open natural events
-              <span className="atlasFlightMeta"> · NASA EONET · last 30d</span>
-            </span>
-          )}
+        <div className="atlasEonetControls" role="status">
+          <div className="atlasEonetPillInline">
+            <Sparkles size={11} />
+            {eonetLoading && eonetEvents.length === 0 ? (
+              <span>Loading natural events…</span>
+            ) : (
+              <span>
+                <b>{visibleEonetEvents.length.toLocaleString()}</b>
+                {visibleEonetEvents.length !== eonetEvents.length && (
+                  <span className="atlasFlightTotal"> / {eonetEvents.length.toLocaleString()}</span>
+                )}
+                <span className="atlasFlightMeta"> · NASA EONET · last 30d</span>
+              </span>
+            )}
+          </div>
+          {eonetEvents.length > 0 && (() => {
+            // Build category counts so we can hide chips for categories with zero events
+            const counts = new Map<string, number>();
+            for (const e of eonetEvents) counts.set(e.category, (counts.get(e.category) || 0) + 1);
+            const chips: Array<{ key: string; label: string; count: number; color: string }> = [];
+            for (const [key, count] of counts.entries()) {
+              const sample = eonetEvents.find((e) => e.category === key);
+              if (!sample) continue;
+              chips.push({ key, label: sample.categoryTitle, count, color: categoryColor(sample.category) });
+            }
+            chips.sort((a, b) => b.count - a.count);
+            return (
+              <div className="atlasEonetChips">
+                {chips.map((c) => {
+                  const isHidden = eonetHidden.has(c.key);
+                  return (
+                    <button
+                      key={c.key}
+                      type="button"
+                      className={isHidden ? "off" : "on"}
+                      style={{ borderColor: isHidden ? "transparent" : c.color }}
+                      onClick={() => setEonetHidden((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(c.key)) next.delete(c.key);
+                        else next.add(c.key);
+                        return next;
+                      })}
+                      title={`${isHidden ? "Show" : "Hide"} ${c.label}`}
+                    >
+                      <span className="dot" style={{ background: c.color }} />
+                      {c.label} <b>{c.count}</b>
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </div>
       )}
 
@@ -4072,7 +4121,7 @@ function GlobeCanvas({
             <WeatherRadar texture={radarTexture} opacity={radarOpacity} />
           )}
           {layers.eonet && eonetEvents.length > 0 && (
-            <EonetMarkers events={eonetEvents} selectedId={selectedEonetId} onSelect={onSelectEonet} />
+            <EonetMarkers events={visibleEonetEvents} selectedId={selectedEonetId} onSelect={onSelectEonet} />
           )}
           {layers.launches && launchList.length > 0 && (
             <LaunchMarkers launches={launchList} selectedId={selectedLaunchId} onSelect={onSelectLaunch} />
