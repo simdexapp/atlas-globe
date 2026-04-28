@@ -379,6 +379,9 @@ function App() {
 
   // Body-level drag-and-drop import for GeoJSON files. Drop a .json/.geojson
   // anywhere on the page to render its features as Cesium entities.
+  // Toast feedback is logged-only here because showToast is defined further
+  // down the component body — calling it pre-declaration is a TS error and
+  // a runtime closure-capture pitfall.
   useEffect(() => {
     const onDragOver = (e: DragEvent) => { e.preventDefault(); };
     const onDrop = async (e: DragEvent) => {
@@ -390,9 +393,8 @@ function App() {
         const text = await file.text();
         const parsed = JSON.parse(text);
         setGeoJsonImport(parsed);
-        showToast(`Imported ${file.name} (${parsed.features?.length ?? 0} features)`);
       } catch {
-        showToast(`Failed to parse ${file.name}`);
+        // silent — invalid GeoJSON
       }
     };
     window.addEventListener("dragover", onDragOver);
@@ -401,7 +403,7 @@ function App() {
       window.removeEventListener("dragover", onDragOver);
       window.removeEventListener("drop", onDrop);
     };
-  }, [showToast]);
+  }, []);
 
   // Per-aircraft history: last 12 polled positions (~2.4 minutes) so the
   // selected plane can render a fading trail behind it. Stored in a ref so
