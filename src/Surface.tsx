@@ -107,7 +107,8 @@ export default function Surface({
   issPosition,
   tiangongPosition,
   hubblePosition,
-  storms
+  storms,
+  auroraKp
 }: {
   token: string;
   onCameraChange: (lat: number, lon: number, altKm: number) => void;
@@ -172,6 +173,10 @@ export default function Surface({
   // Active tropical cyclones (NOAA NHC). Each renders as a spinning
   // hurricane glyph at the eye location, with a label below.
   storms?: SurfaceStorm[];
+  // Aurora-oval polyline overlay. Pass NOAA SWPC's latest Kp index
+  // (0..9 scale) — radius scales with magnetic activity. null hides
+  // both ovals.
+  auroraKp?: number | null;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Cesium.Viewer | null>(null);
@@ -198,6 +203,7 @@ export default function Surface({
   const volcanoEntitiesRef = useRef<Cesium.Entity[]>([]);
   const launchEntitiesRef = useRef<Cesium.Entity[]>([]);
   const stormEntitiesRef = useRef<Cesium.Entity[]>([]);
+  const auroraOvalEntitiesRef = useRef<Cesium.Entity[]>([]);
   const weatherImageryLayerRef = useRef<Cesium.ImageryLayer | null>(null);
   const terminatorEntityRef = useRef<Cesium.Entity | null>(null);
   const subsolarEntityRef = useRef<Cesium.Entity | null>(null);
@@ -498,6 +504,8 @@ export default function Surface({
       launchEntitiesRef.current.forEach((e) => viewer.entities.remove(e));
       stormEntitiesRef.current.forEach((e) => viewer.entities.remove(e));
       stormEntitiesRef.current = [];
+      auroraOvalEntitiesRef.current.forEach((e) => viewer.entities.remove(e));
+      auroraOvalEntitiesRef.current = [];
       countryLabelsRef.current.forEach((e) => viewer.entities.remove(e));
       countryLabelsRef.current = [];
       if (aircraftCallsignLabelRef.current) viewer.entities.remove(aircraftCallsignLabelRef.current);
@@ -1381,6 +1389,75 @@ export default function Surface({
       launchEntitiesRef.current.push(entity);
     }
   }, [launches]);
+
+  // ===== Aurora oval overlay =====
+  // Two great-circle "small circles" centered on the magnetic poles,
+  // with radius keyed off the current Kp index. Kp 0 (quiet) puts the
+  // oval at ~25° magnetic colatitude; Kp 9 (extreme) brings it down to
+  // ~45°. Approximation — real auroral ovals are asymmetric, but this
+  // gives a useful at-a-glance sense of where you'd see aurora tonight.
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    for (const e of auroraOvalEntitiesRef.current) viewer.entities.remove(e);
+    auroraOvalEntitiesRef.current = [];
+    if (auroraKp === null || auroraKp === undefined) return;
+
+    // Magnetic-pole approximate positions (2026, IGRF-13).
+    const NMP_LAT = 85.5,  NMP_LON = 137;
+    const SMP_LAT = -64.0, SMP_LON = -137;
+    // Kp 0..9 → colatitude 25°..45°. Linear is fine for a viz.
+    const colat = 25 + (auroraKp / 9) * 20;
+    const tintHex =
+      auroraKp >= 7 ? "#ff5fb8" :
+      auroraKp >= 5 ? "#ff8a3a" :
+      auroraKp >= 3 ? "#7cffb1" :
+                       "#5cb5ff";
+    const tint = Cesium.Color.fromCssColorString(tintHex).withAlpha(0.7);
+
+    const buildCircle = (centerLat: number, centerLon: number) => {
+      const positions: Cesium.Cartesian3[] = [];
+      const STEPS = 90;
+      // Walk around the small circle by varying the bearing from the
+      // magnetic pole and stepping out by colat.
+      const lat0 = centerLat * Math.PI / 180;
+      const lon0 = centerLon * Math.PI / 180;
+      const dRad = colat * Math.PI / 180;
+      for (let i = 0; i <= STEPS; i++) {
+        const brg = (i / STEPS) * 2 * Math.PI;
+        const lat = Math.asin(
+          Math.sin(lat0) * Math.cos(dRad) +
+          Math.cos(lat0) * Math.sin(dRad) * Math.cos(brg)
+        );
+        const lon = lon0 + Math.atan2(
+          Math.sin(brg) * Math.sin(dRad) * Math.cos(lat0),
+          Math.cos(dRad) - Math.sin(lat0) * Math.sin(lat)
+        );
+        positions.push(Cesium.Cartesian3.fromDegrees(
+          lon * 180 / Math.PI,
+          lat * 180 / Math.PI,
+          0
+        ));
+      }
+      return positions;
+    };
+
+    for (const [lat, lon] of [[NMP_LAT, NMP_LON], [SMP_LAT, SMP_LON]] as Array<[number, number]>) {
+      const positions = buildCircle(lat, lon);
+      const e = viewer.entities.add({
+        polyline: {
+          positions,
+          width: 3,
+          material: new Cesium.PolylineGlowMaterialProperty({
+            color: tint,
+            glowPower: 0.35,
+          }),
+          clampToGround: true,
+        },
+      });
+      auroraOvalEntitiesRef.current.push(e);
+    }
+  }, [auroraKp]);
 
   // ===== Active tropical cyclones (NOAA NHC) =====
   // Rendered as a 🌀 emoji label + colored point at the storm eye. Wind

@@ -2135,6 +2135,7 @@ function App() {
               tiangongPosition={layers.tiangong ? tiangongPosition : null}
               hubblePosition={layers.hubble ? hubblePosition : null}
               storms={layers.storms ? activeStorms.map((s) => ({ id: s.id, name: s.name, classification: s.classification, intensityKph: s.intensityKph, lat: s.lat, lon: s.lon, movementDir: s.movementDir })) : []}
+              auroraKp={layers.aurora && spaceWeather ? spaceWeather.kpLatest : null}
             />
           </Suspense>
         )}
