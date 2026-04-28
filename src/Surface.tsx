@@ -76,7 +76,8 @@ export default function Surface({
   show3DBuildings,
   selectedAircraft,
   onSelectAircraft,
-  imageryStyle
+  imageryStyle,
+  tiltCommand
 }: {
   token: string;
   onCameraChange: (lat: number, lon: number, altKm: number) => void;
@@ -98,6 +99,9 @@ export default function Surface({
   // Base imagery: 'bing' = Bing Aerial (Cesium ion asset 2),
   // 'esri' = ESRI World Imagery (asset 3812), 'osm' = OpenStreetMap.
   imageryStyle?: "bing" | "esri" | "osm";
+  // Camera tilt command — when id changes, the Surface viewer re-points to
+  // the current lat/lon/alt with the requested pitch (in degrees, 90 = top-down).
+  tiltCommand?: { id: number; pitchDeg: number } | null;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Cesium.Viewer | null>(null);
@@ -743,6 +747,27 @@ export default function Surface({
       aircraftBillboardIndexRef.current.set(bb, a.icao24);
     }
   }, [aircraft]);
+
+  // ===== Tilt command: re-orient camera at current position =====
+  const lastTiltIdRef = useRef(0);
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer || !tiltCommand) return;
+    if (tiltCommand.id === lastTiltIdRef.current) return;
+    lastTiltIdRef.current = tiltCommand.id;
+    if (tiltCommand.id === 0) return;
+    const cart = viewer.camera.positionCartographic;
+    const pitchRad = -tiltCommand.pitchDeg * Math.PI / 180;
+    viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(
+        Cesium.Math.toDegrees(cart.longitude),
+        Cesium.Math.toDegrees(cart.latitude),
+        cart.height
+      ),
+      orientation: { heading: viewer.camera.heading, pitch: pitchRad, roll: 0 },
+      duration: 1.0,
+    });
+  }, [tiltCommand]);
 
   // ===== Fly-to handler: external command to move the camera =====
   useEffect(() => {

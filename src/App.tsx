@@ -364,6 +364,7 @@ function App() {
   // zoom level without thinking about modes.
   const [autoModeSwitch, setAutoModeSwitch] = useState(false);
   const [surfaceImagery, setSurfaceImagery] = useState<"bing" | "esri" | "osm">("bing");
+  const [surfaceTilt, setSurfaceTilt] = useState<{ id: number; pitchDeg: number } | null>(null);
 
   // Per-aircraft history: last 12 polled positions (~2.4 minutes) so the
   // selected plane can render a fading trail behind it. Stored in a ref so
@@ -1932,6 +1933,7 @@ function App() {
               weatherOpacity={radarOpacity}
               show3DBuildings={layers.buildings3D !== false}
               imageryStyle={surfaceImagery}
+              tiltCommand={surfaceTilt}
               selectedAircraft={selectedAircraftId && aircraftSnapshot ? (() => {
                 const a = aircraftSnapshot.aircraft.find((x) => x.icao24 === selectedAircraftId);
                 return a ? { icao24: a.icao24, lat: a.lat, lon: a.lon, altitudeM: a.altitudeM, headingDeg: a.headingDeg, velocityMs: a.velocityMs } : null;
@@ -2233,6 +2235,9 @@ function App() {
             { id: "surfBing", label: "Surface imagery: Bing Aerial", group: "Imagery", icon: Mountain, run: () => setSurfaceImagery("bing") },
             { id: "surfEsri", label: "Surface imagery: ESRI World Imagery", group: "Imagery", icon: Mountain, run: () => setSurfaceImagery("esri") },
             { id: "surfOsm", label: "Surface imagery: OpenStreetMap", group: "Imagery", icon: Mountain, run: () => setSurfaceImagery("osm") },
+            { id: "surfTiltTop", label: "Surface camera: top-down (90°)", group: "Imagery", icon: Mountain, run: () => setSurfaceTilt((c) => ({ id: (c?.id ?? 0) + 1, pitchDeg: 90 })) },
+            { id: "surfTilt45", label: "Surface camera: oblique (45°)", group: "Imagery", icon: Mountain, run: () => setSurfaceTilt((c) => ({ id: (c?.id ?? 0) + 1, pitchDeg: 45 })) },
+            { id: "surfTilt30", label: "Surface camera: low oblique (30°)", group: "Imagery", icon: Mountain, run: () => setSurfaceTilt((c) => ({ id: (c?.id ?? 0) + 1, pitchDeg: 30 })) },
             { id: "imgViirs", label: "Imagery: NASA Live VIIRS true-color", group: "Imagery", icon: Sparkles, run: () => updateImagery({ source: "live", layerId: "viirsTrueColor" }) },
             { id: "imgModis", label: "Imagery: NASA Live MODIS Terra", group: "Imagery", icon: Sparkles, run: () => updateImagery({ source: "live", layerId: "modisTrueColor" }) },
             { id: "imgFires", label: "Imagery: MODIS active fires overlay", group: "Imagery", icon: Sparkles, run: () => updateImagery({ source: "live", layerId: "modisFires" }) },
