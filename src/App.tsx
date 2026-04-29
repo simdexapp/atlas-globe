@@ -3331,6 +3331,35 @@ function App() {
             { id: "layerBuildings", label: layers.buildings3D ? "Hide 3D buildings (Surface)" : "Show 3D buildings (Surface)", group: "Layers", icon: Mountain, run: () => toggleLayer("buildings3D") },
             { id: "layerTerminator", label: layers.terminator ? "Hide day/night terminator" : "Show day/night terminator", group: "Layers", icon: Compass, run: () => toggleLayer("terminator") },
             { id: "layerSubsolar", label: layers.subsolar ? "Hide subsolar point" : "Show subsolar point (sun overhead)", group: "Layers", icon: SunIcon, run: () => toggleLayer("subsolar") },
+            // Reset every layer to its default state — useful after a
+            // user has toggled many things on and wants a clean slate
+            // without losing pins/bookmarks (those don't reset).
+            { id: "layerResetAll", label: "Reset all layers to defaults", group: "Layers", icon: RotateCcw, run: () => {
+              setLayers(defaultLayers);
+              showToast("✨ All layers reset to defaults");
+            }},
+            // Hide everything except imagery — nuclear option for screenshot
+            // mode or a clean view.
+            { id: "layerHideAll", label: "Hide all overlays (imagery only)", group: "Layers", icon: Eye, run: () => {
+              const allOff: LayerVisibility = { ...layers };
+              for (const k of Object.keys(allOff) as Array<keyof LayerVisibility>) allOff[k] = false;
+              setLayers(allOff);
+              showToast("🧹 All overlays hidden");
+            }},
+            // Show essential nav layers only — what most users will want
+            // for orienting themselves: borders, pins, mini-map, compass.
+            { id: "layerEssentialsOnly", label: "Show essentials only (borders, pins, compass, mini-map)", group: "Layers", icon: Compass, run: () => {
+              const allOff: LayerVisibility = { ...layers };
+              for (const k of Object.keys(allOff) as Array<keyof LayerVisibility>) allOff[k] = false;
+              allOff.borders = true;
+              allOff.pins = true;
+              allOff.compass = true;
+              allOff.miniMap = true;
+              allOff.atmosphere = true;
+              allOff.stars = true;
+              setLayers(allOff);
+              showToast("🎯 Essentials only");
+            }},
             { id: "widgetNeo", label: layers.neoWatch ? "Hide asteroid watch" : "Show asteroid watch (NASA NeoWS)", group: "Widgets", icon: Telescope, run: () => toggleLayer("neoWatch") },
             { id: "widgetClock", label: layers.timeClock ? "Hide world-clock widget" : "Show world-clock widget", group: "Widgets", icon: Compass, run: () => toggleLayer("timeClock") },
             { id: "widgetDayInfo", label: layers.dayInfo ? "Hide sunrise/sunset widget" : "Show sunrise/sunset for camera location", group: "Widgets", icon: SunIcon, run: () => toggleLayer("dayInfo") },
