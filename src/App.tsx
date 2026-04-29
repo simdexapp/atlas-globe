@@ -4212,6 +4212,102 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: a.lat, lon: a.lon, altKm: 50 }));
               showToast(`🐢 ${a.callsign || a.icao24} @ ${Math.round(a.velocityMs * 1.94384)} kt`);
             }},
+            { id: "highestAircraft", label: "Find highest aircraft (cruise/military test ceiling)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("Aircraft layer not loaded"); return; }
+              const airborne = aircraftSnapshot.aircraft.filter(a => !a.onGround && a.altitudeM > 0);
+              if (airborne.length === 0) { showToast("No airborne aircraft"); return; }
+              const a = airborne.reduce((max, c) => c.altitudeM > max.altitudeM ? c : max);
+              setSelectedAircraftId(a.icao24);
+              setFlyTo((p) => ({ id: p.id + 1, lat: a.lat, lon: a.lon, altKm: 100 }));
+              const ftK = Math.round(a.altitudeM / 304.8) * 100;
+              showToast(`🚀 ${a.callsign || a.icao24} @ FL${ftK / 100} (${Math.round(a.altitudeM / 0.3048).toLocaleString()} ft)`);
+            }},
+            { id: "fastestClimber", label: "Find aircraft climbing fastest (post-takeoff)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("Aircraft layer not loaded"); return; }
+              const climbing = aircraftSnapshot.aircraft.filter(a => !a.onGround && a.verticalRateMs > 0);
+              if (climbing.length === 0) { showToast("No climbing aircraft right now"); return; }
+              const a = climbing.reduce((max, c) => c.verticalRateMs > max.verticalRateMs ? c : max);
+              setSelectedAircraftId(a.icao24);
+              setFlyTo((p) => ({ id: p.id + 1, lat: a.lat, lon: a.lon, altKm: 50 }));
+              const fpm = Math.round(a.verticalRateMs * 196.85);  // m/s → ft/min
+              showToast(`⬆ ${a.callsign || a.icao24} climbing ${fpm.toLocaleString()} ft/min`);
+            }},
+            { id: "fastestDescender", label: "Find aircraft descending fastest (final approach)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("Aircraft layer not loaded"); return; }
+              const descending = aircraftSnapshot.aircraft.filter(a => !a.onGround && a.verticalRateMs < 0);
+              if (descending.length === 0) { showToast("No descending aircraft right now"); return; }
+              const a = descending.reduce((min, c) => c.verticalRateMs < min.verticalRateMs ? c : min);
+              setSelectedAircraftId(a.icao24);
+              setFlyTo((p) => ({ id: p.id + 1, lat: a.lat, lon: a.lon, altKm: 30 }));
+              const fpm = Math.round(Math.abs(a.verticalRateMs) * 196.85);
+              showToast(`⬇ ${a.callsign || a.icao24} descending ${fpm.toLocaleString()} ft/min`);
+            }},
+            { id: "aircraftNearby", label: "Aircraft within 200km of this view (count + category)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("Aircraft layer not loaded"); return; }
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const nearby = aircraftSnapshot.aircraft.filter(a => haversineKm(c.lat, c.lon, a.lat, a.lon) < 200);
+              if (nearby.length === 0) { showToast("✈ No aircraft within 200km"); return; }
+              // Crude category bucketing using ADS-B emitter category codes:
+              //   A0/A1/A2/A3 = light/small/large fixed wing,
+              //   A4/A5 = heavy & high-vortex,
+              //   A6/A7 = high-perf / rotorcraft,
+              //   B* = balloon/UAV/glider/parachute,
+              //   C* = surface/obstacle.
+              let heli = 0, heavy = 0, jet = 0, light = 0, ground = 0;
+              for (const a of nearby) {
+                if (a.onGround) ground++;
+                else if (a.category === "A7") heli++;
+                else if (a.category === "A5" || a.category === "A4") heavy++;
+                else if (a.category === "A3" || a.category === "A2") jet++;
+                else light++;
+              }
+              const parts: string[] = [];
+              if (heavy) parts.push(`${heavy} heavy`);
+              if (jet) parts.push(`${jet} jet`);
+              if (heli) parts.push(`${heli} heli`);
+              if (light) parts.push(`${light} light`);
+              if (ground) parts.push(`${ground} on ground`);
+              showToast(`✈ ${nearby.length} aircraft within 200km · ${parts.join(", ")}`);
+            }},
+            { id: "aircraftHeadingDist", label: "Aircraft heading distribution (N/E/S/W % globally)", group: "Tools", icon: Compass, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("Aircraft layer not loaded"); return; }
+              const airborne = aircraftSnapshot.aircraft.filter(a => !a.onGround);
+              if (airborne.length === 0) { showToast("No airborne aircraft"); return; }
+              const buckets = { N: 0, E: 0, S: 0, W: 0 };
+              for (const a of airborne) {
+                const h = ((a.headingDeg % 360) + 360) % 360;
+                if (h >= 315 || h < 45) buckets.N++;
+                else if (h < 135) buckets.E++;
+                else if (h < 225) buckets.S++;
+                else buckets.W++;
+              }
+              const tot = airborne.length;
+              const pct = (n: number) => Math.round(n / tot * 100);
+              showToast(`🧭 N ${pct(buckets.N)}% · E ${pct(buckets.E)}% · S ${pct(buckets.S)}% · W ${pct(buckets.W)}% (${tot} airborne)`);
+            }},
+            { id: "topAircraftType", label: "Most common aircraft type in the air right now", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("Aircraft layer not loaded"); return; }
+              const airborne = aircraftSnapshot.aircraft.filter(a => !a.onGround && a.type);
+              if (airborne.length === 0) { showToast("No type data available"); return; }
+              const counts = new Map<string, number>();
+              for (const a of airborne) counts.set(a.type, (counts.get(a.type) ?? 0) + 1);
+              const top = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+              const list = top.map(([t, n]) => {
+                const friendly = aircraftTypeName(t);
+                return `${t}${friendly ? ` (${friendly})` : ""}: ${n}`;
+              }).join(" · ");
+              showToast(`🛩 Top types: ${list}`);
+            }},
+            { id: "aircraftLowestAirborne", label: "Find lowest currently-airborne aircraft (likely on approach)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("Aircraft layer not loaded"); return; }
+              const airborne = aircraftSnapshot.aircraft.filter(a => !a.onGround && a.altitudeM > 50);
+              if (airborne.length === 0) { showToast("No airborne aircraft"); return; }
+              const a = airborne.reduce((min, c) => c.altitudeM < min.altitudeM ? c : min);
+              setSelectedAircraftId(a.icao24);
+              setFlyTo((p) => ({ id: p.id + 1, lat: a.lat, lon: a.lon, altKm: 5 }));
+              showToast(`📉 ${a.callsign || a.icao24} @ ${Math.round(a.altitudeM / 0.3048).toLocaleString()} ft`);
+            }},
             // Bookmark management
             { id: "saveBookmark", label: "Save this view as a bookmark…", group: "Tools", icon: BookmarkPlus, hint: "B", run: saveCurrentBookmark },
             { id: "deleteAllBookmarks", label: bookmarks.length > 0 ? `Delete all ${bookmarks.length} bookmarks` : "Delete all bookmarks (none)", group: "Tools", icon: Bookmark, run: () => {
