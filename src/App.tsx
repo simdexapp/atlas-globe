@@ -4198,6 +4198,37 @@ function App() {
               } catch { showToast("Reverse geocode failed"); }
             }},
             // Elevation lookup
+            // Earthquake-specific commands
+            { id: "quakeStats", label: "Show earthquake stats (count by magnitude band)", group: "Tools", icon: Sparkles, run: () => {
+              if (earthquakes.length === 0) { showToast("Earthquake layer not loaded"); return; }
+              const m7 = earthquakes.filter(q => q.mag >= 7).length;
+              const m6 = earthquakes.filter(q => q.mag >= 6 && q.mag < 7).length;
+              const m5 = earthquakes.filter(q => q.mag >= 5 && q.mag < 6).length;
+              const m4 = earthquakes.filter(q => q.mag >= 4 && q.mag < 5).length;
+              const m3 = earthquakes.filter(q => q.mag >= 3 && q.mag < 4).length;
+              const less = earthquakes.filter(q => q.mag < 3).length;
+              showToast(`💥 24h: ${earthquakes.length} total · M7+: ${m7} · M6: ${m6} · M5: ${m5} · M4: ${m4} · M3: ${m3} · <M3: ${less}`);
+            }},
+            { id: "lastHourQuakes", label: "Show earthquakes from last hour", group: "Tools", icon: Sparkles, run: () => {
+              if (earthquakes.length === 0) { showToast("Earthquake layer not loaded"); return; }
+              const now = Date.now();
+              const recent = earthquakes.filter(q => (now - q.time) < 60 * 60 * 1000);
+              if (recent.length === 0) { showToast("✅ No earthquakes in the last hour"); return; }
+              const biggest = recent.reduce((m, q) => q.mag > m.mag ? q : m);
+              setFlyTo((p) => ({ id: p.id + 1, lat: biggest.lat, lon: biggest.lon, altKm: 100 }));
+              showToast(`💥 Last hour: ${recent.length} quakes · biggest M${biggest.mag.toFixed(1)} @ ${biggest.place}`);
+            }},
+            // EONET commands
+            { id: "eonetStats", label: "Show EONET stats (count by category)", group: "Tools", icon: Sparkles, run: () => {
+              if (eonetEvents.length === 0) { showToast("EONET layer not loaded"); return; }
+              const tally = new Map<string, number>();
+              for (const e of eonetEvents) {
+                tally.set(e.category, (tally.get(e.category) || 0) + 1);
+              }
+              const sorted = [...tally.entries()].sort((a, b) => b[1] - a[1]);
+              const summary = sorted.map(([cat, n]) => `${cat}: ${n}`).join(" · ");
+              showToast(`🌍 ${eonetEvents.length} events · ${summary}`);
+            }},
             { id: "elevationHere", label: "Get elevation at this view (Open-Meteo)", group: "Tools", icon: Mountain, run: async () => {
               const c = cameraStateRef.current;
               if (!c) return;
