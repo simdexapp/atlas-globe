@@ -405,6 +405,29 @@ function App() {
     if (!m) return { id: 0, lat: 0, lon: 0, altKm: 0 };
     return { id: 1, lat: parseFloat(m[1]), lon: parseFloat(m[2]), altKm: parseFloat(m[3]) };
   });
+  // Listen for browser back/forward — fly to whatever the new hash is.
+  // Combined with the live URL hash auto-update, this gives users a
+  // browser-history scrubber over their navigation around the globe.
+  useEffect(() => {
+    const onPopState = () => {
+      const m = window.location.hash.match(/^#@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)(km)?$/);
+      if (!m) return;
+      const lat = parseFloat(m[1]);
+      const lon = parseFloat(m[2]);
+      const altKm = parseFloat(m[3]);
+      // Bypass the throttled hash-write since this fly came FROM history.
+      hashUpdateDeadlineRef.current = performance.now() + 2000;
+      setFlyTo((p) => ({ id: p.id + 1, lat, lon, altKm }));
+    };
+    window.addEventListener("popstate", onPopState);
+    // Also listen for hashchange (some browsers use it instead of popstate
+    // for hash-only navigations).
+    window.addEventListener("hashchange", onPopState);
+    return () => {
+      window.removeEventListener("popstate", onPopState);
+      window.removeEventListener("hashchange", onPopState);
+    };
+  }, []);
   const [toast, setToast] = useState<{ id: number; text: string } | null>(null);
   const [showFps, setShowFps] = useState(false);
   const [paused, setPaused] = useState(false);
