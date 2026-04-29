@@ -320,8 +320,7 @@ export default function Surface({
       sceneModePicker: false,
       selectionIndicator: false,
       infoBox: false,
-      requestRenderMode: true,
-      maximumRenderTimeChange: Infinity,
+      requestRenderMode: false,
       // Async base imagery — we'll swap in Cesium World Imagery (Bing Aerial)
       // below once the ion asset resolves. Until then there's a default plane.
       baseLayer: false,
