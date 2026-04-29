@@ -836,6 +836,92 @@ function App() {
     current?: { temp: number; code: number; wind: number; windDir: number; humidity: number; feels?: number };
     daily?: Array<{ date: string; code: number; tmax: number; tmin: number; precipProb: number; windMax: number }>;
   }>(null);
+  // ===== Tour Creator + Player =====
+  // A user-created sequence of camera positions with optional captions.
+  // Stored in localStorage as `atlas-tours`. Recording mode appends the
+  // current view as a step; player auto-flies through with caption display.
+  type TourStep = { lat: number; lon: number; altKm: number; caption?: string };
+  type SavedTour = { id: string; name: string; steps: TourStep[]; createdAt: number };
+  const [savedTours, setSavedTours] = useState<SavedTour[]>(() => {
+    try {
+      const raw = window.localStorage.getItem("atlas-tours");
+      if (raw) return JSON.parse(raw) as SavedTour[];
+    } catch { /* ignore */ }
+    return [];
+  });
+  const persistTours = useCallback((tours: SavedTour[]) => {
+    setSavedTours(tours);
+    try { window.localStorage.setItem("atlas-tours", JSON.stringify(tours)); } catch { /* ignore */ }
+  }, []);
+  // Recording mode state — null when not recording, else holds the
+  // tour being built up.
+  const [recordingTour, setRecordingTour] = useState<null | { name: string; steps: TourStep[] }>(null);
+  const startRecordingTour = useCallback(() => {
+    const name = window.prompt("Name this tour:", `Tour ${new Date().toLocaleDateString()}`);
+    if (!name) return;
+    setRecordingTour({ name, steps: [] });
+    showToast(`🎬 Recording '${name}' — Cmd+K → 'Add stop' to capture views`);
+  }, []);
+  const addTourStop = useCallback(() => {
+    if (!recordingTour) return;
+    const c = cameraStateRef.current;
+    if (!c) return;
+    const caption = window.prompt("Caption for this stop (optional):", "") || undefined;
+    setRecordingTour((prev) => prev ? {
+      ...prev,
+      steps: [...prev.steps, { lat: c.lat, lon: c.lon, altKm: c.altKm, caption }],
+    } : null);
+    showToast(`📌 Stop ${recordingTour.steps.length + 1} added at ${formatLat(c.lat)} ${formatLon(c.lon)}`);
+  }, [recordingTour]);
+  const finishRecordingTour = useCallback(() => {
+    if (!recordingTour) return;
+    if (recordingTour.steps.length < 2) {
+      showToast("Need at least 2 stops — keep recording or cancel");
+      return;
+    }
+    const tour: SavedTour = {
+      id: `tour-${Date.now()}`,
+      name: recordingTour.name,
+      steps: recordingTour.steps,
+      createdAt: Date.now(),
+    };
+    persistTours([...savedTours, tour]);
+    setRecordingTour(null);
+    showToast(`✓ Saved '${tour.name}' with ${tour.steps.length} stops`);
+  }, [recordingTour, savedTours, persistTours]);
+  const cancelRecordingTour = useCallback(() => {
+    setRecordingTour(null);
+    showToast("Recording cancelled");
+  }, []);
+  // Player state — null when not playing, else the tour + current step.
+  const [playingTour, setPlayingTour] = useState<null | { tour: SavedTour; stepIdx: number }>(null);
+  const tourPlayerTimerRef = useRef<number | null>(null);
+  const stopPlayingTour = useCallback(() => {
+    if (tourPlayerTimerRef.current) { clearTimeout(tourPlayerTimerRef.current); tourPlayerTimerRef.current = null; }
+    setPlayingTour(null);
+  }, []);
+  const playTour = useCallback((tour: SavedTour) => {
+    if (tour.steps.length === 0) return;
+    stopPlayingTour();
+    setPlayingTour({ tour, stepIdx: 0 });
+    let idx = 0;
+    const advance = () => {
+      if (idx >= tour.steps.length) {
+        stopPlayingTour();
+        showToast(`✓ Tour '${tour.name}' complete`);
+        return;
+      }
+      const step = tour.steps[idx];
+      setFlyTo((p) => ({ id: p.id + 1, lat: step.lat, lon: step.lon, altKm: step.altKm }));
+      setPlayingTour({ tour, stepIdx: idx });
+      idx++;
+      tourPlayerTimerRef.current = window.setTimeout(advance, 5000);
+    };
+    advance();
+  }, [stopPlayingTour]);
+  // Cleanup on unmount
+  useEffect(() => () => { if (tourPlayerTimerRef.current) clearTimeout(tourPlayerTimerRef.current); }, []);
+
   // ===== Daily Geo Challenge =====
   // Wordle-style city-guessing game. Same secret city for everyone today
   // (derived from UTC date), 6 guesses, distance + bearing feedback after
@@ -3874,6 +3960,35 @@ function App() {
             // Daily challenge — same secret city for everyone today, 6
             // guesses, Wordle-style emoji share. Persistent streak.
             { id: "geoChallenge", label: geoChallenge ? `🌍 Today's challenge ${geoChallenge.over ? (geoChallenge.won ? "won" : "ended") : `(${geoChallenge.guesses.length}/6 guesses)`}` : `🌍 Today's daily geo challenge ${geoChallengeStats.streak > 0 ? `(streak: ${geoChallengeStats.streak})` : ""}`, group: "Tools", icon: Sparkles, run: () => geoChallenge ? setGeoChallenge(null) : startGeoChallenge() },
+            // ===== Tour creator commands =====
+            ...(recordingTour ? [
+              { id: "tourAddStop" as const, label: `🎬 Add this view as stop ${recordingTour.steps.length + 1} of '${recordingTour.name}'`, group: "Tools" as const, icon: Play, run: addTourStop },
+              { id: "tourFinish" as const, label: `✓ Finish & save tour '${recordingTour.name}' (${recordingTour.steps.length} stops)`, group: "Tools" as const, icon: BookmarkPlus, run: finishRecordingTour },
+              { id: "tourCancel" as const, label: "✗ Cancel tour recording (discard)", group: "Tools" as const, icon: X, run: cancelRecordingTour },
+            ] : [
+              { id: "tourStart" as const, label: "🎬 Start recording a guided tour (sequence of camera views with captions)", group: "Tools" as const, icon: Play, run: startRecordingTour },
+            ]),
+            ...(playingTour ? [
+              { id: "tourStop" as const, label: `🛑 Stop playing '${playingTour.tour.name}' (step ${playingTour.stepIdx + 1}/${playingTour.tour.steps.length})`, group: "Tools" as const, icon: Pause, run: stopPlayingTour },
+            ] : savedTours.length > 0 ? savedTours.map((t) => ({
+              id: `tourPlay-${t.id}`,
+              label: `▶ Play tour '${t.name}' (${t.steps.length} stops)`,
+              group: "Tools" as const,
+              icon: Play,
+              run: () => playTour(t),
+            })) : []),
+            ...(savedTours.length > 0 && !playingTour && !recordingTour ? [{
+              id: "tourDeleteAll" as const,
+              label: `🗑 Delete all ${savedTours.length} saved tours`,
+              group: "Tools" as const,
+              icon: Trash2,
+              run: () => {
+                if (window.confirm(`Delete all ${savedTours.length} saved tours? This cannot be undone.`)) {
+                  persistTours([]);
+                  showToast("All tours deleted");
+                }
+              },
+            }] : []),
             // ===== Random destination explorer =====
             // Curated categories — each picks at random from a subset of
             // existing data sources for surprise inspiration. The toast
@@ -7010,6 +7125,35 @@ function App() {
           </div>
         );
       })()}
+
+      {/* Tour player caption + progress HUD. */}
+      {playingTour && (() => {
+        const step = playingTour.tour.steps[playingTour.stepIdx];
+        if (!step) return null;
+        const progress = ((playingTour.stepIdx + 1) / playingTour.tour.steps.length) * 100;
+        return (
+          <div className="atlasTourPlayer" role="status" aria-live="polite">
+            <div className="atlasTourPlayerHead">
+              <Play size={12} />
+              <strong>{playingTour.tour.name}</strong>
+              <span>{playingTour.stepIdx + 1} / {playingTour.tour.steps.length}</span>
+              <button type="button" className="atlasIconBtn" onClick={stopPlayingTour} aria-label="Stop tour"><X size={11} /></button>
+            </div>
+            {step.caption && <div className="atlasTourPlayerCaption">{step.caption}</div>}
+            <div className="atlasTourPlayerProgress">
+              <div style={{ width: `${progress}%` }} />
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Tour recording badge — top center. */}
+      {recordingTour && (
+        <div className="atlasTourRecording" role="status">
+          <span className="atlasTourRecordDot" aria-hidden />
+          Recording '{recordingTour.name}' · {recordingTour.steps.length} stop{recordingTour.steps.length === 1 ? "" : "s"} · Cmd+K → 'Add this view as stop'
+        </div>
+      )}
 
       {/* Daily Geo Challenge — Wordle-style city guesser */}
       {geoChallenge && (() => {

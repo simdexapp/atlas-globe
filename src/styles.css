@@ -3525,6 +3525,98 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
 
 @media (max-width: 620px) { .atlasWorldClocksWidget { display: none; } }
 
+/* ============= Tour player =============
+   Caption + progress bar shown while a saved tour is auto-flying. */
+.atlasTourPlayer {
+  position: fixed;
+  bottom: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 12;
+  width: min(540px, calc(100vw - 32px));
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-3);
+  background: var(--surface-elevated);
+  backdrop-filter: blur(14px);
+  box-shadow: var(--shadow-3);
+  color: var(--gray-12);
+  display: grid;
+  gap: var(--s-2);
+  animation: scaleIn var(--dur-base) var(--ease-out);
+}
+.atlasTourPlayerHead {
+  display: grid;
+  grid-template-columns: 12px 1fr auto auto;
+  align-items: center;
+  gap: var(--s-2);
+}
+.atlasTourPlayerHead strong {
+  font-size: var(--text-base);
+  font-weight: 700;
+  color: var(--gray-12);
+}
+.atlasTourPlayerHead span {
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  color: var(--gray-9);
+}
+.atlasTourPlayerCaption {
+  padding: var(--s-2) 0;
+  font-size: var(--text-md);
+  color: var(--gray-11);
+  line-height: 1.4;
+  text-align: center;
+}
+.atlasTourPlayerProgress {
+  height: 3px;
+  background: var(--gray-3);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.atlasTourPlayerProgress > div {
+  height: 100%;
+  background: var(--accent);
+  transition: width 4s linear;
+}
+
+/* Recording badge — top centered, pulsing dot. */
+.atlasTourRecording {
+  position: fixed;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 6px 14px;
+  border: 1px solid #ff5a5a;
+  border-radius: 99px;
+  background: var(--surface-elevated);
+  color: var(--gray-12);
+  font-size: 11px;
+  font-weight: 600;
+  box-shadow: 0 4px 16px rgba(255, 90, 90, 0.3);
+}
+.atlasTourRecordDot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ff5a5a;
+  animation: tourRecordPulse 1s ease-in-out infinite;
+}
+@keyframes tourRecordPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.8); }
+}
+
+@media (max-width: 620px) {
+  .atlasTourPlayer { bottom: 240px; width: calc(100vw - 16px); }
+  .atlasTourRecording { top: 8px; font-size: 10px; padding: 4px 10px; }
+}
+
 /* "Right now on Earth" digest widget */
 .atlasDigestWidget {
   position: fixed;
