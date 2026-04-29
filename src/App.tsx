@@ -9532,7 +9532,12 @@ function GlobeControls({
       // 0.0001° lat/lon ≈ 11m — finer than the status bar can display anyway.
       // 0.001 km altitude = 1m — finer than zoom UI cares about.
       const last = lastEmittedRef.current;
-      const moved = Math.abs(lat - last.lat) > 0.0001
+      // Sentinel: NaN initial values mean "never emitted" — must always
+      // fire the first time so the HUD seeds with real values. Without
+      // this guard, Math.abs(x - NaN) = NaN > threshold = false forever.
+      const isFirst = !Number.isFinite(last.lat);
+      const moved = isFirst
+                 || Math.abs(lat - last.lat) > 0.0001
                  || Math.abs(lon - last.lon) > 0.0001
                  || Math.abs(altKm - last.altKm) > 0.001;
       if (moved) {
