@@ -2875,6 +2875,56 @@ function App() {
               const c = cameraStateRef.current;
               if (c) setFlyTo((p) => ({ id: p.id + 1, lat: c.lat, lon: 180, altKm: c.altKm }));
             }},
+            // Live data summary as a single toast — what's loaded right now.
+            { id: "statsSummary", label: "Show live data summary (counts)", group: "Tools", icon: Sparkles, run: () => {
+              const parts: string[] = [];
+              if (aircraftSnapshot) parts.push(`${aircraftSnapshot.aircraft.length.toLocaleString()} aircraft (${aircraftSnapshot.source})`);
+              if (eonetEvents.length > 0) parts.push(`${eonetEvents.length} EONET events`);
+              if (earthquakes.length > 0) parts.push(`${earthquakes.length} earthquakes`);
+              if (launches.length > 0) parts.push(`${launches.length} upcoming launches`);
+              if (activeStorms.length > 0) parts.push(`${activeStorms.length} active storms`);
+              if (pins.length > 0) parts.push(`${pins.length} pins`);
+              if (bookmarks.length > 0) parts.push(`${bookmarks.length} bookmarks`);
+              if (parts.length === 0) showToast("No live data loaded yet");
+              else showToast(`Loaded: ${parts.join(" · ")}`);
+            }},
+            // Flight statistics for the currently-loaded aircraft set.
+            { id: "flightStats", label: "Show flight stats (avg / max altitude, top airline)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) {
+                showToast("Aircraft layer not loaded yet"); return;
+              }
+              const list = aircraftSnapshot.aircraft.filter(a => !a.onGround);
+              const avgAltFt = Math.round(list.reduce((s, a) => s + a.altitudeM / 0.3048, 0) / list.length);
+              const maxAltFt = Math.round(Math.max(...list.map(a => a.altitudeM / 0.3048)));
+              const fastest = list.reduce((best, a) => a.velocityMs > best.velocityMs ? a : best, list[0]);
+              const fastestKt = Math.round(fastest.velocityMs * 1.94384);
+              // Tally airline by 3-letter callsign prefix.
+              const tally = new Map<string, number>();
+              for (const a of list) {
+                const p = (a.callsign || "").slice(0, 3).toUpperCase();
+                if (p.length === 3 && /[A-Z]{3}/.test(p)) tally.set(p, (tally.get(p) || 0) + 1);
+              }
+              const sorted = [...tally.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
+              const top = sorted.map(([k, v]) => `${k}(${v})`).join(", ");
+              showToast(`${list.length.toLocaleString()} airborne · avg ${avgAltFt.toLocaleString()} ft · max ${maxAltFt.toLocaleString()} ft · fastest ${fastest.callsign || fastest.icao24} @ ${fastestKt} kt · top: ${top}`);
+            }},
+            // Distance from current view to a famous landmark ("how far am
+            // I from Mt Everest right now"). Iterates the bookmark list +
+            // landmarks.
+            { id: "distanceToLandmark", label: "Show distance from this view to nearest famous landmark", group: "Tools", icon: Compass, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              let nearest: { name: string; lat: number; lon: number } | null = null;
+              let nearestKm = Infinity;
+              for (const b of bookmarks) {
+                const d = haversineKm(c.lat, c.lon, b.lat, b.lon);
+                if (d < nearestKm) { nearest = { name: b.name, lat: b.lat, lon: b.lon }; nearestKm = d; }
+              }
+              if (!nearest) { showToast("No bookmarks loaded"); return; }
+              const bearing = bearingDeg(c.lat, c.lon, nearest.lat, nearest.lon);
+              const compass = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"][Math.round(bearing / 22.5) % 16];
+              showToast(`Nearest: ${nearest.name} — ${nearestKm.toLocaleString(undefined, { maximumFractionDigits: 0 })} km ${compass}`);
+            }},
             // Geolocation — fly camera to user's actual location. Browser
             // prompts for permission. Coarse accuracy is fine since we're
             // viewing at ~30km altitude anyway.
