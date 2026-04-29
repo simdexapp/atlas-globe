@@ -52,6 +52,7 @@ import { fetchNeoToday, type NearEarthObject } from "./nearEarthObjects";
 import { fetchUpcomingLaunches, timeUntilLaunch, type RocketLaunch } from "./launches";
 import { fetchWikiSummary } from "./wiki";
 import { MAJOR_CITIES } from "./cities";
+import { REGIONAL_CITIES } from "./citiesRegional";
 import { LANDMARKS } from "./landmarks";
 import { AIRPORTS } from "./airports";
 import { COUNTRY_CENTROIDS } from "./countries";
@@ -3586,6 +3587,25 @@ function App() {
                 showToast(`✈ ${city.name} (${(city.population / 1_000_000).toFixed(1)}M people)`);
               },
             })),
+            // Bulk REGIONAL_CITIES fly-to commands (~250 secondary metros).
+            // Hidden behind the 40-row palette cap until the user actually
+            // types a query, so they don't crowd the default view but are
+            // instantly searchable — type "san diego" / "barcelona" / etc.
+            ...REGIONAL_CITIES.map(city => ({
+              id: `regionalFly-${city.country}-${city.name.replace(/\s+/g, "")}`,
+              label: `Fly to ${city.name}, ${city.country}`,
+              group: "View" as const,
+              icon: Navigation,
+              run: () => {
+                // Closer altitude than megacities since these are smaller —
+                // 4km gets the user street-grid level rather than metro view.
+                setFlyTo((p) => ({ id: p.id + 1, lat: city.lat, lon: city.lon, altKm: 4 }));
+                const popLabel = city.population >= 1_000_000
+                  ? `${(city.population / 1_000_000).toFixed(1)}M people`
+                  : `${Math.round(city.population / 1000)}k people`;
+                showToast(`✈ ${city.name} (${popLabel})`);
+              },
+            })),
             // Bulk AIRPORTS fly-to commands. Includes the 25 busiest world
             // airports + a couple of regional standouts, all from the
             // existing AIRPORTS list. Type "LAX" / "JFK" / "Dubai" / etc.
@@ -4121,11 +4141,14 @@ function App() {
               const week = Math.ceil(doy / 7);
               showToast(`📅 Day ${doy} of ${now.getUTCFullYear()} · Week ${week} · ${365 - doy} days remaining`);
             }},
-            // Distance comparisons
-            { id: "distanceToFamous", label: "Distance from this view to all major cities", group: "Tools", icon: Compass, run: () => {
+            // Distance comparisons — combines megacities + regional cities
+            // so this works at any zoom level (orbital → street).
+            { id: "distanceToFamous", label: "Distance from this view to nearest cities", group: "Tools", icon: Compass, run: () => {
               const c = cameraStateRef.current;
               if (!c) return;
-              const top = MAJOR_CITIES.map(city => ({
+              const allCities: Array<{ name: string; lat: number; lon: number }> =
+                [...MAJOR_CITIES, ...REGIONAL_CITIES];
+              const top = allCities.map(city => ({
                 city,
                 km: haversineKm(c.lat, c.lon, city.lat, city.lon),
               })).sort((a, b) => a.km - b.km).slice(0, 5);
@@ -4441,14 +4464,28 @@ function App() {
             { id: "populationNearby", label: "Population estimate within 100km of this view", group: "Tools", icon: Compass, run: () => {
               const c = cameraStateRef.current;
               if (!c) return;
-              const nearby = MAJOR_CITIES.filter(city => haversineKm(c.lat, c.lon, city.lat, city.lon) < 100);
+              // Include both megacities AND regional cities so the estimate
+              // works for any zoom — orbital users get megacities, zoomed-in
+              // users get accurate local figures (e.g. SF Bay Area picks up
+              // San Francisco even though it's in REGIONAL_CITIES).
+              const allCities: Array<{ name: string; population: number; lat: number; lon: number }> =
+                [...MAJOR_CITIES, ...REGIONAL_CITIES];
+              const nearby = allCities.filter(city => haversineKm(c.lat, c.lon, city.lat, city.lon) < 100);
               if (nearby.length === 0) {
-                showToast("🏘 No major metropolitan areas within 100km of this view");
+                showToast("🏘 No metropolitan areas within 100km of this view");
                 return;
               }
               const total = nearby.reduce((s, c) => s + c.population, 0);
-              const cityList = nearby.map(c => `${c.name} (${(c.population / 1_000_000).toFixed(1)}M)`).join(", ");
-              showToast(`🏙 ${(total / 1_000_000).toFixed(1)}M people within 100km · ${cityList}`);
+              // Sort by population so the toast leads with the biggest one
+              const sorted = nearby.sort((a, b) => b.population - a.population);
+              const cityList = sorted.slice(0, 5).map(c => {
+                const popStr = c.population >= 1_000_000
+                  ? `${(c.population / 1_000_000).toFixed(1)}M`
+                  : `${Math.round(c.population / 1000)}k`;
+                return `${c.name} (${popStr})`;
+              }).join(", ");
+              const more = sorted.length > 5 ? ` +${sorted.length - 5} more` : "";
+              showToast(`🏙 ${(total / 1_000_000).toFixed(1)}M people within 100km · ${cityList}${more}`);
             }},
             { id: "easterEggHelp", label: "Easter eggs hint (Konami code lives here…)", group: "Tools", icon: Sparkles, run: () => {
               showToast("🎮 Try ↑↑↓↓←→←→ B A (anywhere on the page)");

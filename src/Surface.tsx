@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import * as Cesium from "cesium";
 import "cesium/Build/Cesium/Widgets/widgets.css";
 import { MAJOR_CITIES } from "./cities";
+import { REGIONAL_CITIES } from "./citiesRegional";
 import { COUNTRY_CENTROIDS } from "./countries";
 import { LANDMARKS } from "./landmarks";
 import { AIRPORTS } from "./airports";
@@ -476,6 +477,54 @@ export default function Surface({
           color: Cesium.Color.fromCssColorString("rgba(255, 230, 130, 0.85)"),
           outlineColor: Cesium.Color.WHITE,
           outlineWidth: 1,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, farKm * 1000),
+        },
+      });
+    }
+
+    // ===== regional/secondary city labels (~250 cities, close-zoom only) =====
+    // These pop in only when the camera is within ~600km altitude so the
+    // orbital view stays uncrowded — but as the user zooms into a region,
+    // local geography fills in. Visibility scales mildly with population so
+    // a 5M-metro shows from ~700km out and a 200k city only at ~250km.
+    // Rendered with a smaller, dimmer style so they read as secondary to
+    // the megacity labels.
+    for (const c of REGIONAL_CITIES) {
+      const popM = c.population / 1_000_000;
+      // 200k city: ~250km. 1M: ~400km. 5M: ~700km. Cap at 800km so they
+      // never compete with the megacity layer.
+      const farKm = Math.min(800, 200 + popM * 100);
+      const flag = cityFlag(c.country);
+      viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(c.lon, c.lat, 0),
+        label: {
+          text: flag ? `${flag} ${c.name}` : c.name,
+          font: "10px Inter, sans-serif",
+          fillColor: Cesium.Color.fromCssColorString("rgba(230, 235, 245, 0.95)"),
+          outlineColor: Cesium.Color.fromCssColorString("rgba(0,0,0,0.8)"),
+          outlineWidth: 2.5,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          pixelOffset: new Cesium.Cartesian2(0, -8),
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, farKm * 1000),
+          // Fade in over the upper third of the visibility range so labels
+          // emerge gracefully rather than popping on/off.
+          translucencyByDistance: new Cesium.NearFarScalar(
+            farKm * 333,        // fully opaque close in
+            1.0,
+            farKm * 1000,       // fully transparent at far cutoff
+            0.0
+          ),
+        },
+        point: {
+          pixelSize: 3,
+          color: Cesium.Color.fromCssColorString("rgba(180, 210, 255, 0.7)"),
+          outlineColor: Cesium.Color.fromCssColorString("rgba(255,255,255,0.9)"),
+          outlineWidth: 0.5,
           heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
           distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, farKm * 1000),
