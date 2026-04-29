@@ -1266,8 +1266,14 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 2px s
   text-align: left;
 }
 
-.atlasSearchResults li button:hover {
+.atlasSearchResults li button:hover,
+.atlasSearchResults li button.active {
   background: color-mix(in srgb, var(--accent), transparent 88%);
+}
+/* When the keyboard active-row coincides with focus, double up the cue
+   with a subtle ring matching the rest of the focus-visible system. */
+.atlasSearchResults li button.active {
+  outline: 1px solid color-mix(in srgb, var(--accent), transparent 50%);
 }
 
 .atlasSearchResults li button div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }

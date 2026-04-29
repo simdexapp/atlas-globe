@@ -7369,9 +7369,32 @@ function SearchModal({
   onSelect: (b: Bookmark) => void;
   onClose: () => void;
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  // Trap Tab focus inside the modal + restore focus to trigger on close.
+  useFocusTrap(true, dialogRef);
+  // Arrow-key navigation through results — pressing ↓ moves through the
+  // result list; Enter selects the highlighted row. Mirrors the Cmd+K
+  // palette UX so muscle memory transfers.
+  const [activeIdx, setActiveIdx] = useState(0);
+  // Reset highlight whenever the result set changes so we never point
+  // past the end of the list.
+  useEffect(() => { setActiveIdx(0); }, [results, query]);
+  const onInputKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveIdx((i) => Math.min(results.length - 1, i + 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveIdx((i) => Math.max(0, i - 1));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const hit = results[activeIdx];
+      if (hit) onSelect(hit);
+    }
+  };
   return (
-    <div className="atlasModalShade" onClick={onClose} role="dialog" aria-modal="true">
-      <div className="atlasSearchModal" onClick={(e) => e.stopPropagation()}>
+    <div className="atlasModalShade" onClick={onClose} role="dialog" aria-modal="true" aria-label="Search a place">
+      <div ref={dialogRef} className="atlasSearchModal" onClick={(e) => e.stopPropagation()}>
         <div className="atlasSearchHead">
           <Search size={16} />
           <input
@@ -7379,8 +7402,10 @@ function SearchModal({
             autoFocus
             value={query}
             onChange={(e) => onQuery(e.target.value)}
+            onKeyDown={onInputKey}
             placeholder="Search any place on Earth…"
             aria-label="Search a place"
+            aria-activedescendant={results[activeIdx] ? `search-r-${results[activeIdx].id}` : undefined}
           />
           {searching && <span className="atlasSearchSpinner" aria-hidden />}
           <button type="button" className="atlasIconBtn" onClick={onClose} aria-label="Close"><X size={14} /></button>
@@ -7400,9 +7425,16 @@ function SearchModal({
             </>
           )}
           {results.length === 0 && !searching && query.trim() && <li className="atlasSearchEmpty">{query.trim().length < 3 ? "Type at least 3 characters…" : "No matches."}</li>}
-          {results.map((r) => (
+          {results.map((r, i) => (
             <li key={r.id}>
-              <button type="button" onClick={() => onSelect(r)}>
+              <button
+                id={`search-r-${r.id}`}
+                type="button"
+                className={i === activeIdx ? "active" : undefined}
+                aria-current={i === activeIdx ? "true" : undefined}
+                onClick={() => onSelect(r)}
+                onMouseEnter={() => setActiveIdx(i)}
+              >
                 <Navigation size={12} />
                 <div>
                   <strong>{r.name}</strong>
@@ -7412,7 +7444,7 @@ function SearchModal({
             </li>
           ))}
         </ul>
-        <div className="atlasSearchFoot">Powered by OpenStreetMap Nominatim</div>
+        <div className="atlasSearchFoot">↑↓ navigate · ↵ select · ESC close · Powered by OpenStreetMap Nominatim</div>
       </div>
     </div>
   );
