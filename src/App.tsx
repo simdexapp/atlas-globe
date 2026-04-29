@@ -415,6 +415,72 @@ const KEYBOARD_HINTS = [
   { keys: "↑↑↓↓←→←→ B A", desc: "🎮 Konami code (cycles all themes)" },
 ];
 
+// Honors prefers-reduced-motion. Returns the live boolean — flips when the
+// user toggles the OS setting without needing a refresh.
+function useReducedMotion() {
+  const [reduce, setReduce] = useState(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return false;
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  });
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const onChange = () => setReduce(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  return reduce;
+}
+
+// Focus trap + restore. Used in Cmd+K palette and shortcuts modal so:
+//   • Tab/Shift+Tab cycle focus inside the modal (never leak to the page)
+//   • When the modal closes, focus returns to whatever element opened it
+// containerRef should point at the modal's outermost focusable container.
+function useFocusTrap(active: boolean, containerRef: React.RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    if (!active) return;
+    const container = containerRef.current;
+    if (!container) return;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+
+    const focusables = () =>
+      Array.from(
+        container.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), textarea, input:not([disabled]), select, [tabindex]:not([tabindex="-1"])'
+        )
+      ).filter((el) => !el.hasAttribute("aria-hidden") && el.offsetParent !== null);
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return;
+      const list = focusables();
+      if (list.length === 0) return;
+      const first = list[0];
+      const last = list[list.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+      if (e.shiftKey) {
+        if (active === first || !container.contains(active)) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (active === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      // Return focus to whoever opened the modal — falls back to body
+      // if the previous focus target is gone (e.g. removed from DOM).
+      if (previouslyFocused && document.contains(previouslyFocused)) {
+        try { previouslyFocused.focus(); } catch { /* ignore */ }
+      }
+    };
+  }, [active, containerRef]);
+}
+
 function App() {
   // Surface (Cesium) is the default now — better data visualization at every
   // zoom, photo-realistic ground imagery, 3D buildings, real terrain.
@@ -504,6 +570,10 @@ function App() {
   // Imperial toggle — when true, distances are shown in miles, elevations
   // in feet, areas in mi². Persisted in localStorage so it survives reloads.
   const [unitsImperial, setUnitsImperial] = useState(false);
+  // Live OS preference for reduced motion. Used to disable camera fly-to
+  // tweens, modal entrance animations, etc. Already kills CSS animations
+  // via the global @media block in styles.css; this covers JS-driven motion.
+  const reducedMotion = useReducedMotion();
 
   // When on, automatically transition Atlas → Surface at low altitudes and
   // Surface → Atlas at high ones, so the user gets the right engine for the
@@ -2517,7 +2587,20 @@ function App() {
 
   return (
     <div className={`atlas${hideUi ? " hideUi" : ""} theme-${uiTheme}`} style={rootStyle}>
-      <div className="globeLayer" aria-label="3D viewport">
+      {/* Skip-to-content link — visually hidden until focused by Tab.
+          Lets keyboard/screen-reader users jump past the UI chrome
+          straight to the command palette trigger. */}
+      <a
+        className="atlasSkipLink"
+        href="#atlasMain"
+        onClick={(e) => {
+          e.preventDefault();
+          setCommandPaletteOpen(true);
+        }}
+      >
+        Skip to command palette
+      </a>
+      <div className="globeLayer" aria-label="3D viewport" id="atlasMain">
         {mode === "atlas" ? (
           <GlobeCanvas
             globe={globe}
@@ -2525,6 +2608,7 @@ function App() {
             paused={paused}
             orbiting={orbiting}
             flyTo={flyTo}
+            reducedMotion={reducedMotion}
             issPosition={issPosition}
             tiangongPosition={tiangongPosition}
             hubblePosition={hubblePosition}
@@ -2595,6 +2679,7 @@ function App() {
               screenshotCommand={surfaceScreenshotCmd}
               measurePoints={measureMode ? measurePoints : undefined}
               measureImperial={unitsImperial}
+              reducedMotion={reducedMotion}
               geoJson={geoJsonImport ?? undefined}
               onScreenshot={(blob) => {
                 // Trigger a download
@@ -6596,10 +6681,17 @@ function CommandPalette({
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
+
+  // Tab/Shift+Tab cycle focus inside the palette; on close, focus returns
+  // to whatever element had focus when the palette opened. Critical for
+  // keyboard-only navigation: prevents Tab from invisibly leaking out
+  // and trapping the user behind the modal shade.
+  useFocusTrap(true, dialogRef);
 
   // Cap the unfiltered list to 40 items so opening the palette with a
   // 700+ item set doesn't render hundreds of DOM rows. As soon as the
@@ -6670,8 +6762,8 @@ function CommandPalette({
   // Compute global linear index for highlighting
   let runningIndex = 0;
   return (
-    <div className="atlasModalShade" onClick={onClose} role="dialog" aria-modal="true">
-      <div className="atlasCmdPalette" onClick={(e) => e.stopPropagation()}>
+    <div className="atlasModalShade" onClick={onClose} role="dialog" aria-modal="true" aria-label="Command palette">
+      <div className="atlasCmdPalette" ref={dialogRef} onClick={(e) => e.stopPropagation()}>
         <div className="atlasCmdHead">
           <Search size={16} />
           <input
@@ -6702,6 +6794,9 @@ function CommandPalette({
                         key={it.id}
                         type="button"
                         className={isActive ? "atlasCmdItem active" : "atlasCmdItem"}
+                        // aria-current marks the keyboard-highlighted row so
+                        // screen readers announce it as the next-Enter target.
+                        aria-current={isActive ? "true" : undefined}
                         onMouseEnter={() => setActiveIndex(idx)}
                         onClick={() => { it.run(); onClose(); }}
                       >
@@ -7250,11 +7345,14 @@ function formatElevM(m: number, imperial: boolean): string {
 }
 
 function ShortcutsModal({ onClose }: { onClose: () => void }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  // Trap Tab/Shift+Tab inside, restore focus to the trigger on close.
+  useFocusTrap(true, dialogRef);
   return (
-    <div className="atlasModalShade" onClick={onClose} role="dialog" aria-modal="true">
-      <div className="atlasShortcutsModal" onClick={(e) => e.stopPropagation()}>
+    <div className="atlasModalShade" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="atlasShortcutsTitle">
+      <div className="atlasShortcutsModal" ref={dialogRef} onClick={(e) => e.stopPropagation()}>
         <div className="atlasModalHead">
-          <strong>Keyboard shortcuts</strong>
+          <strong id="atlasShortcutsTitle">Keyboard shortcuts</strong>
           <button type="button" className="atlasIconBtn" onClick={onClose} aria-label="Close"><X size={14} /></button>
         </div>
         <ul className="atlasShortcutList">
@@ -7275,6 +7373,7 @@ function GlobeCanvas({
   paused,
   orbiting,
   flyTo,
+  reducedMotion,
   issPosition,
   tiangongPosition,
   hubblePosition,
@@ -7313,6 +7412,8 @@ function GlobeCanvas({
   paused: boolean;
   orbiting: boolean;
   flyTo: FlyToTarget;
+  // When true, fly-to camera tweens snap instantly instead of animating.
+  reducedMotion?: boolean;
   issPosition: { lat: number; lon: number } | null;
   tiangongPosition: { lat: number; lon: number } | null;
   hubblePosition: { lat: number; lon: number } | null;
@@ -7405,7 +7506,7 @@ function GlobeCanvas({
         {layers.iss && issPosition && <ISSMarker lat={issPosition.lat} lon={issPosition.lon} />}
         {layers.tiangong && tiangongPosition && <TiangongMarker lat={tiangongPosition.lat} lon={tiangongPosition.lon} />}
         {layers.hubble && hubblePosition && <HubbleMarker lat={hubblePosition.lat} lon={hubblePosition.lon} />}
-        <GlobeControls flyTo={flyTo} onCameraChange={onCameraChange} autoOrbit={orbiting && !paused} />
+        <GlobeControls flyTo={flyTo} onCameraChange={onCameraChange} autoOrbit={orbiting && !paused} reducedMotion={reducedMotion} />
       </Suspense>
     </Canvas>
   );
@@ -8944,11 +9045,13 @@ function Cardinals() {
 function GlobeControls({
   flyTo,
   onCameraChange,
-  autoOrbit
+  autoOrbit,
+  reducedMotion,
 }: {
   flyTo: FlyToTarget;
   onCameraChange: (lat: number, lon: number, altKm: number) => void;
   autoOrbit: boolean;
+  reducedMotion?: boolean;
 }) {
   const { camera } = useThree();
   const controlsRef = useRef<any>(null);
@@ -8956,7 +9059,8 @@ function GlobeControls({
   const tweenRef = useRef<{ from: THREE.Vector3; to: THREE.Vector3; start: number; duration: number } | null>(null);
   const lastEmitRef = useRef(0);
 
-  // Fly-to handling
+  // Fly-to handling — when prefers-reduced-motion is on, we set duration=1
+  // so the lerp completes on the next frame (no perceptible animation).
   useEffect(() => {
     if (flyTo.id === lastIdRef.current) return;
     lastIdRef.current = flyTo.id;
@@ -8967,9 +9071,9 @@ function GlobeControls({
       from: camera.position.clone(),
       to: target,
       start: performance.now(),
-      duration: 1200
+      duration: reducedMotion ? 1 : 1200,
     };
-  }, [camera, flyTo]);
+  }, [camera, flyTo, reducedMotion]);
 
   useFrame((_, delta) => {
     // Tween the camera to flyTo target

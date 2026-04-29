@@ -175,6 +175,39 @@ input:focus-visible,
   box-shadow: 0 0 0 4px var(--accent-glow);
 }
 
+/* Skip-to-content link — visually hidden until keyboard-focused. The
+   classic 1×1px clip pattern keeps it discoverable by screen readers
+   while invisible to mouse users. On Tab focus, it pops back into view
+   so keyboard navigators can use it. */
+.atlasSkipLink {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+  z-index: 10000;
+}
+.atlasSkipLink:focus,
+.atlasSkipLink:focus-visible {
+  width: auto;
+  height: auto;
+  margin: 0;
+  clip: auto;
+  padding: 10px 16px;
+  background: var(--accent);
+  color: var(--bg);
+  font: 600 13px Inter, sans-serif;
+  border-radius: 8px;
+  text-decoration: none;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
 /* Smooth fade for toasts. */
 .atlasToast {
   animation: atlasToastIn 200ms var(--ease-out);

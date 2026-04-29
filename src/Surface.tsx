@@ -116,6 +116,7 @@ export default function Surface({
   onScreenshot,
   measurePoints,
   measureImperial,
+  reducedMotion,
   geoJson,
   followSelectedAircraft,
   aircraftCameraMode,
@@ -176,6 +177,8 @@ export default function Surface({
   measurePoints?: Array<{ lat: number; lon: number }>;
   // When true, in-globe measure labels render distances in miles instead of km.
   measureImperial?: boolean;
+  // When true, fly-to camera animations snap instantly (prefers-reduced-motion).
+  reducedMotion?: boolean;
   // GeoJSON FeatureCollection to render as Cesium entities (drag-drop import).
   geoJson?: any;
   // When true and selectedAircraft is set, the camera locks-on to the plane
@@ -240,6 +243,11 @@ export default function Surface({
   const aircraftBillboardsRef = useRef<Cesium.BillboardCollection | null>(null);
   const aircraftIconRef = useRef<HTMLCanvasElement | null>(null);
   const aircraftBillboardIndexRef = useRef<Map<Cesium.Billboard, string>>(new Map());
+  // Mirror reducedMotion as a ref so click handlers (registered once at
+  // mount inside a useEffect) read the live value without needing the
+  // entire effect to re-run when the OS preference changes.
+  const reducedMotionRef = useRef(reducedMotion ?? false);
+  useEffect(() => { reducedMotionRef.current = reducedMotion ?? false; }, [reducedMotion]);
   // icao24 → Billboard for incremental updates (avoid full BillboardCollection rebuild every snapshot).
   const aircraftBillboardByIcaoRef = useRef<Map<string, Cesium.Billboard>>(new Map());
   // Map icao24 → vertical polyline entity from sea-level to billboard.
@@ -1648,7 +1656,7 @@ export default function Surface({
               1_500_000,
             ),
             orientation: { heading: 0, pitch: -Cesium.Math.PI_OVER_TWO, roll: 0 },
-            duration: 1.6,
+            duration: reducedMotionRef.current ? 0 : 1.6,
           });
           return;
         }
@@ -1660,7 +1668,7 @@ export default function Surface({
               id.properties.landmarkZoom.getValue() * 1000,
             ),
             orientation: { heading: 0, pitch: -Cesium.Math.PI_OVER_TWO, roll: 0 },
-            duration: 1.4,
+            duration: reducedMotionRef.current ? 0 : 1.4,
           });
           return;
         }
@@ -1672,7 +1680,7 @@ export default function Surface({
               3000,
             ),
             orientation: { heading: 0, pitch: -Cesium.Math.PI_OVER_TWO, roll: 0 },
-            duration: 1.4,
+            duration: reducedMotionRef.current ? 0 : 1.4,
           });
           return;
         }
@@ -2595,7 +2603,7 @@ export default function Surface({
         cart.height
       ),
       orientation: { heading: 0, pitch: viewer.camera.pitch, roll: 0 },
-      duration: 0.7,
+      duration: reducedMotionRef.current ? 0 : 0.7,
     });
   }, [resetHeadingCommand]);
 
@@ -2616,7 +2624,7 @@ export default function Surface({
         cart.height
       ),
       orientation: { heading: viewer.camera.heading, pitch: pitchRad, roll: 0 },
-      duration: 1.0,
+      duration: reducedMotionRef.current ? 0 : 1.0,
     });
   }, [tiltCommand]);
 
@@ -2629,7 +2637,7 @@ export default function Surface({
     if (flyTo.id === 0) return;
     viewer.camera.flyTo({
       destination: Cesium.Cartesian3.fromDegrees(flyTo.lon, flyTo.lat, Math.max(500, flyTo.altKm * 1000)),
-      duration: 2.2,
+      duration: reducedMotionRef.current ? 0 : 2.2,
       orientation: { heading: 0, pitch: -Cesium.Math.PI_OVER_TWO, roll: 0 },
     });
   }, [flyTo]);
