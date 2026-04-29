@@ -4007,6 +4007,40 @@ function App() {
                 showToast("Install prompt not available — try the browser menu");
               }
             }},
+            // Reset all aircraft filters in one shot
+            { id: "filterReset", label: "Reset aircraft filters (show all)", group: "Tools", icon: Plane, run: () => {
+              setAircraftCategory("all");
+              setAircraftMinAltFt(0);
+              setAircraftMaxAltFt(50000);
+              setAircraftAirlinePrefix("");
+              showToast("✈ Aircraft filters reset");
+            }},
+            // Filter by ground (taxiing) vs flying
+            { id: "filterFlying", label: "Aircraft filter: airborne only (alt > 0)", group: "Tools", icon: Plane, run: () => {
+              setAircraftMinAltFt(1);
+              setAircraftMaxAltFt(50000);
+              showToast("Filter: airborne only");
+            }},
+            // Find aircraft by destination IATA (using flight route DB
+            // we already cache from adsbdb.com)
+            { id: "findInbound", label: "Aircraft inbound to airport (prompt for IATA)", group: "Tools", icon: Plane, run: async () => {
+              const iata = window.prompt("Find aircraft inbound to this airport (IATA):");
+              if (!iata) return;
+              const airport = AIRPORTS.find((a) => a.iata.toUpperCase() === iata.trim().toUpperCase());
+              if (!airport) { showToast(`Airport ${iata.toUpperCase()} not in our list`); return; }
+              if (!aircraftSnapshot) { showToast("Aircraft layer not loaded"); return; }
+              showToast(`Searching ${aircraftSnapshot.aircraft.length} aircraft for routes to ${iata}…`);
+              // Sample first 30 aircraft with callsigns and check routes
+              const candidates = aircraftSnapshot.aircraft.filter(a => a.callsign && /^[A-Z]{3}\d/.test(a.callsign)).slice(0, 30);
+              let inbound = 0;
+              for (const a of candidates) {
+                try {
+                  const route = await fetchFlightRoute(a.callsign);
+                  if (route?.destination?.iata === airport.iata.toUpperCase()) inbound++;
+                } catch { /* ignore */ }
+              }
+              showToast(`✈ Found ${inbound} aircraft inbound to ${iata.toUpperCase()} (sampled ${candidates.length})`);
+            }},
             { id: "trafficAtAirport", label: "Show traffic count near airport (prompt for IATA)", group: "Tools", icon: Plane, run: () => {
               const iata = window.prompt("Enter airport IATA (e.g. JFK, LHR, DXB)");
               if (!iata) return;
