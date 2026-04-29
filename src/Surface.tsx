@@ -790,17 +790,19 @@ export default function Surface({
       .catch(() => { /* OSM Buildings unavailable on this token tier */ });
   }, [show3DBuildings]);
 
-  // ===== Measure-tool overlay =====
-  // When the App's measure mode collects 1 or 2 points, render them as
-  // dot entities + (if 2) a polyline between with the great-circle distance
-  // as a center label.
+  // ===== Measure-tool overlay (multi-segment) =====
+  // Renders an unlimited-vertex polyline path. Each click adds another
+  // vertex (handled in App.onGlobeClick); we render dots at each vertex,
+  // a dashed great-circle line between consecutive vertices, a leg-
+  // distance label at each midpoint, and a running-total label at the
+  // most recent vertex so the user always sees the current grand total.
   useEffect(() => {
     const viewer = viewerRef.current;
     if (!viewer) return;
     for (const e of measureEntitiesRef.current) viewer.entities.remove(e);
     measureEntitiesRef.current = [];
     if (!measurePoints || measurePoints.length === 0) return;
-    // Endpoint dots
+    // Vertex dots
     for (const p of measurePoints) {
       const dot = viewer.entities.add({
         position: Cesium.Cartesian3.fromDegrees(p.lon, p.lat),
@@ -815,18 +817,25 @@ export default function Surface({
       });
       measureEntitiesRef.current.push(dot);
     }
-    // Connecting line + distance label
-    if (measurePoints.length === 2) {
-      const a = measurePoints[0];
-      const b = measurePoints[1];
-      // Great-circle distance via haversine.
-      const R = 6371;
+    if (measurePoints.length < 2) return;
+
+    // Great-circle leg distances + total.
+    const R = 6371;
+    const legKm = (a: { lat: number; lon: number }, b: { lat: number; lon: number }) => {
       const dLat = (b.lat - a.lat) * Math.PI / 180;
       const dLon = (b.lon - a.lon) * Math.PI / 180;
       const lat1 = a.lat * Math.PI / 180;
       const lat2 = b.lat * Math.PI / 180;
       const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
-      const dist = 2 * R * Math.asin(Math.sqrt(h));
+      return 2 * R * Math.asin(Math.sqrt(h));
+    };
+    let totalKm = 0;
+    for (let i = 1; i < measurePoints.length; i++) {
+      const a = measurePoints[i - 1];
+      const b = measurePoints[i];
+      const dist = legKm(a, b);
+      totalKm += dist;
+      // Connecting line for this leg
       const line = viewer.entities.add({
         polyline: {
           positions: [
@@ -843,27 +852,50 @@ export default function Surface({
         },
       });
       measureEntitiesRef.current.push(line);
-      // Mid-arc label with distance.
+      // Per-leg distance label at midpoint
       const midLat = (a.lat + b.lat) / 2;
       const midLon = (a.lon + b.lon) / 2;
       const label = viewer.entities.add({
         position: Cesium.Cartesian3.fromDegrees(midLon, midLat),
         label: {
           text: `${dist.toLocaleString(undefined, { maximumFractionDigits: 0 })} km`,
-          font: "12px ui-monospace, monospace",
+          font: "11px ui-monospace, monospace",
           fillColor: Cesium.Color.fromCssColorString("#ffd66b"),
           outlineColor: Cesium.Color.fromCssColorString("rgba(0,0,0,0.85)"),
-          outlineWidth: 4,
+          outlineWidth: 3,
           style: Cesium.LabelStyle.FILL_AND_OUTLINE,
           verticalOrigin: Cesium.VerticalOrigin.CENTER,
           horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
           showBackground: true,
           backgroundColor: Cesium.Color.fromCssColorString("rgba(8,14,26,0.92)"),
-          backgroundPadding: new Cesium.Cartesian2(8, 4),
+          backgroundPadding: new Cesium.Cartesian2(6, 3),
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
       });
       measureEntitiesRef.current.push(label);
+    }
+    // Grand-total label at the latest vertex (only when 2+ segments exist).
+    if (measurePoints.length >= 3) {
+      const last = measurePoints[measurePoints.length - 1];
+      const totalLabel = viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(last.lon, last.lat),
+        label: {
+          text: `Total: ${totalKm.toLocaleString(undefined, { maximumFractionDigits: 0 })} km`,
+          font: "700 12px Inter, sans-serif",
+          fillColor: Cesium.Color.fromCssColorString("#ffffff"),
+          outlineColor: Cesium.Color.fromCssColorString("rgba(0,0,0,0.92)"),
+          outlineWidth: 4,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+          pixelOffset: new Cesium.Cartesian2(0, -16),
+          showBackground: true,
+          backgroundColor: Cesium.Color.fromCssColorString("rgba(255, 214, 107, 0.92)"),
+          backgroundPadding: new Cesium.Cartesian2(8, 4),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+      });
+      measureEntitiesRef.current.push(totalLabel);
     }
   }, [measurePoints]);
 

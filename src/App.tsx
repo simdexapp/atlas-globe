@@ -1438,14 +1438,24 @@ function App() {
   //      opt in to pinning via the Pin Tool button or shift-click.
   const onGlobeClick = useCallback((lat: number, lon: number, modifiers?: { shift?: boolean }) => {
     if (measureMode) {
+      // Multi-segment path. Each click appends a new vertex; the toast
+      // shows the leg distance + cumulative total so the user can build
+      // up a route (NYC → London → Tokyo round-the-world style).
+      // To start a new measurement, exit and re-enter measure mode.
       setMeasurePoints((prev) => {
-        const next = prev.length >= 2 ? [{ lat, lon }] : [...prev, { lat, lon }];
-        if (next.length === 2) {
-          const d = haversineKm(next[0].lat, next[0].lon, next[1].lat, next[1].lon);
-          const b = bearingDeg(next[0].lat, next[0].lon, next[1].lat, next[1].lon);
-          showToast(`${d.toLocaleString(undefined, { maximumFractionDigits: 0 })} km · bearing ${b.toFixed(0)}°`);
+        const next = [...prev, { lat, lon }];
+        if (next.length === 1) {
+          showToast(`Measure: vertex 1 at ${formatLat(lat)} ${formatLon(lon)}. Keep clicking to extend.`);
         } else {
-          showToast(`Measure: point A at ${formatLat(lat)} ${formatLon(lon)}. Click again for B.`);
+          const a = next[next.length - 2];
+          const leg = haversineKm(a.lat, a.lon, lat, lon);
+          // Total distance = sum of all leg lengths.
+          let total = 0;
+          for (let i = 1; i < next.length; i++) {
+            total += haversineKm(next[i - 1].lat, next[i - 1].lon, next[i].lat, next[i].lon);
+          }
+          const b = bearingDeg(a.lat, a.lon, lat, lon);
+          showToast(`Leg ${next.length - 1}: ${leg.toLocaleString(undefined, { maximumFractionDigits: 0 })} km · bearing ${b.toFixed(0)}° · total ${total.toLocaleString(undefined, { maximumFractionDigits: 0 })} km`);
         }
         return next;
       });
@@ -2586,7 +2596,41 @@ function App() {
             { id: "themeMono",  label: "Theme: Mono (grayscale)",   group: "View", icon: SunIcon, run: () => setUiTheme("mono") },
             { id: "toggleFps", label: showFps ? "Hide FPS overlay" : "Show FPS overlay", group: "View", icon: Telescope, run: () => setShowFps((v) => !v) },
             { id: "togglePin", label: pinTool ? "Exit pin tool" : "Pin tool", group: "View", icon: BookmarkPlus, run: () => setPinTool((v) => !v) },
-            { id: "toggleMeasure", label: measureMode ? "Exit measure tool" : "Measure distance (click 2 points)", group: "View", icon: Compass, run: () => { setMeasureMode((v) => !v); setMeasurePoints([]); } },
+            { id: "toggleMeasure", label: measureMode ? "Exit measure tool" : "Measure distance (multi-segment path)", group: "View", icon: Compass, run: () => { setMeasureMode((v) => !v); setMeasurePoints([]); } },
+            // Clear path while staying in measure mode (drop the
+            // accumulated points but keep accepting clicks).
+            ...(measureMode && measurePoints.length > 0 ? [{
+              id: "measureClear" as const,
+              label: `Clear measurement path (${measurePoints.length} point${measurePoints.length === 1 ? "" : "s"})`,
+              group: "View" as const,
+              icon: Compass,
+              run: () => setMeasurePoints([]),
+            }] : []),
+            // Compute spherical-excess area when the path has 3+ vertices —
+            // we close the polygon by joining the last vertex back to the
+            // first. Useful for area of a state/lake/island.
+            ...(measureMode && measurePoints.length >= 3 ? [{
+              id: "measureArea" as const,
+              label: `Show area enclosed by ${measurePoints.length} vertices`,
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                // Spherical polygon area via the L'Huilier-style sum of
+                // signed wedge angles. Returns km² assuming WGS84 mean
+                // radius. Sufficient for typical user-drawn polygons.
+                const R = 6371;
+                const toRad = (d: number) => d * Math.PI / 180;
+                let sum = 0;
+                const n = measurePoints.length;
+                for (let i = 0; i < n; i++) {
+                  const a = measurePoints[i];
+                  const b = measurePoints[(i + 1) % n];
+                  sum += toRad(b.lon - a.lon) * (2 + Math.sin(toRad(a.lat)) + Math.sin(toRad(b.lat)));
+                }
+                const areaKm2 = Math.abs(sum * R * R / 2);
+                showToast(`Enclosed area: ${areaKm2.toLocaleString(undefined, { maximumFractionDigits: 0 })} km²`);
+              },
+            }] : []),
             { id: "toggleAutoMode", label: autoModeSwitch ? "Disable auto Atlas/Surface switching" : "Enable auto Atlas/Surface switching", group: "View", icon: Mountain, run: () => setAutoModeSwitch((v) => !v) },
             { id: "dayNightCycle", label: globe.timeAnim ? "Stop day/night cycle" : "Start day/night cycle (24h time-lapse)", group: "View", icon: SunIcon, run: () => updateGlobe({ timeAnim: !globe.timeAnim }) },
             { id: "togglePause", label: paused ? "Resume animation" : "Pause animation", group: "View", icon: paused ? Play : Pause, run: () => setPaused((p) => !p) },
