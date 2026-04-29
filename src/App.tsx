@@ -2932,6 +2932,8 @@ function App() {
             onFly={flyToBookmark}
             onDelete={deleteBookmark}
             onAdd={saveCurrentBookmark}
+            cameraLat={cameraState.lat}
+            cameraLon={cameraState.lon}
           />
         )}
         {inspectorTab === "data" && (
@@ -7010,7 +7012,9 @@ function BookmarksPanel({
   onSearch,
   onFly,
   onDelete,
-  onAdd
+  onAdd,
+  cameraLat,
+  cameraLon
 }: {
   bookmarks: Bookmark[];
   search: string;
@@ -7018,7 +7022,27 @@ function BookmarksPanel({
   onFly: (b: Bookmark) => void;
   onDelete: (id: string) => void;
   onAdd: () => void;
+  cameraLat: number;
+  cameraLon: number;
 }) {
+  type SortKey = "default" | "name" | "nearest" | "recent";
+  const [sort, setSort] = useState<SortKey>("default");
+  // Apply sort. The 'nearest' option uses haversine distance from the
+  // current camera view — most useful for travelers picking a next stop.
+  const sortedBookmarks = useMemo(() => {
+    const list = bookmarks.slice();
+    switch (sort) {
+      case "name":
+        return list.sort((a, b) => a.name.localeCompare(b.name));
+      case "nearest":
+        return list.sort((a, b) => haversineKm(cameraLat, cameraLon, a.lat, a.lon) - haversineKm(cameraLat, cameraLon, b.lat, b.lon));
+      case "recent":
+        // savedAt = 0 for seed bookmarks, > 0 for user-created
+        return list.sort((a, b) => b.savedAt - a.savedAt);
+      default:
+        return list;
+    }
+  }, [bookmarks, sort, cameraLat, cameraLon]);
   return (
     <>
       <PanelSection title="Search" icon={Search}>
@@ -7036,21 +7060,41 @@ function BookmarksPanel({
         <button type="button" className="atlasPrimaryBtn small" onClick={onAdd}>
           <BookmarkPlus size={13} /> Bookmark current view
         </button>
-        <ul className="atlasBookmarkList">
-          {bookmarks.map((b) => (
-            <li key={b.id}>
-              <button type="button" className="atlasBookmarkRow" onClick={() => onFly(b)}>
-                <Navigation size={12} />
-                <div>
-                  <strong>{b.name}</strong>
-                  <span>{formatLat(b.lat)}, {formatLon(b.lon)} · {formatAlt(b.altKm)}</span>
-                </div>
-              </button>
-              <button type="button" className="atlasIconBtn" onClick={() => onDelete(b.id)} title="Delete bookmark" aria-label="Delete bookmark">
-                <Trash2 size={12} />
-              </button>
-            </li>
+        <div className="atlasBookmarkSort" role="radiogroup" aria-label="Sort bookmarks">
+          {([
+            { k: "default", label: "Default" },
+            { k: "name",    label: "A→Z" },
+            { k: "nearest", label: "Nearest" },
+            { k: "recent",  label: "Recent" },
+          ] as const).map((opt) => (
+            <button
+              key={opt.k}
+              type="button"
+              className={sort === opt.k ? "atlasBookmarkSortBtn active" : "atlasBookmarkSortBtn"}
+              role="radio"
+              aria-checked={sort === opt.k}
+              onClick={() => setSort(opt.k)}
+            >{opt.label}</button>
           ))}
+        </div>
+        <ul className="atlasBookmarkList">
+          {sortedBookmarks.map((b) => {
+            const km = haversineKm(cameraLat, cameraLon, b.lat, b.lon);
+            return (
+              <li key={b.id}>
+                <button type="button" className="atlasBookmarkRow" onClick={() => onFly(b)}>
+                  <Navigation size={12} />
+                  <div>
+                    <strong>{b.name}</strong>
+                    <span>{formatLat(b.lat)}, {formatLon(b.lon)} · {sort === "nearest" ? `${Math.round(km).toLocaleString()} km away` : formatAlt(b.altKm)}</span>
+                  </div>
+                </button>
+                <button type="button" className="atlasIconBtn" onClick={() => onDelete(b.id)} title="Delete bookmark" aria-label="Delete bookmark">
+                  <Trash2 size={12} />
+                </button>
+              </li>
+            );
+          })}
         </ul>
       </PanelSection>
     </>
