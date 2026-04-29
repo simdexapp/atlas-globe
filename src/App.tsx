@@ -2551,7 +2551,7 @@ function App() {
           <GlobePanel globe={globe} onUpdate={updateGlobe} onSunPreset={setSunPreset} />
         )}
         {inspectorTab === "layers" && (
-          <LayersPanel layers={layers} onToggle={toggleLayer} bordersLoading={bordersLoading} />
+          <LayersPanel layers={layers} onToggle={toggleLayer} bordersLoading={bordersLoading} mode={mode} />
         )}
         {inspectorTab === "bookmarks" && (
           <BookmarksPanel
@@ -5334,45 +5334,54 @@ function GlobePanel({ globe, onUpdate, onSunPreset }: { globe: GlobeSettings; on
   );
 }
 
-function LayersPanel({ layers, onToggle, bordersLoading }: { layers: LayerVisibility; onToggle: (key: keyof LayerVisibility) => void; bordersLoading: boolean }) {
-  const items: { key: keyof LayerVisibility; label: string; icon: IconComponent; suffix?: string }[] = [
-    { key: "clouds", label: "Cloud cover", icon: Cloud },
-    { key: "nightLights", label: "City lights (night side)", icon: SunIcon },
-    { key: "atmosphere", label: "Atmosphere glow", icon: Sparkles },
-    { key: "stars", label: "Background stars", icon: Sparkles },
-    { key: "borders", label: "Country borders", icon: Compass, suffix: bordersLoading ? "(loading…)" : undefined },
-    { key: "graticule", label: "Lat/lon graticule", icon: Compass },
-    { key: "timezones", label: "Time-zone meridians", icon: Compass },
-    { key: "cardinals", label: "Cardinal markers", icon: Navigation },
-    { key: "pins", label: "Pin markers", icon: Bookmark },
-    { key: "pinPaths", label: "Great-circle pin paths", icon: Compass },
-    { key: "earthquakes", label: "Earthquakes (24h, USGS)", icon: Sparkles },
-    { key: "volcanoes", label: "Notable volcanoes (24)", icon: Sparkles },
+function LayersPanel({ layers, onToggle, bordersLoading, mode }: { layers: LayerVisibility; onToggle: (key: keyof LayerVisibility) => void; bordersLoading: boolean; mode?: Mode }) {
+  // Per-mode applicability — Atlas-only layers are visual effects on
+  // the shader globe; Surface-only ones are Cesium-side primitives.
+  // Layers without a `modes` key apply in both modes.
+  type LayerItem = { key: keyof LayerVisibility; label: string; icon: IconComponent; suffix?: string; modes?: Mode[] };
+  const items: LayerItem[] = [
+    // ===== Both modes =====
     { key: "aircraft", label: "Aircraft — live (every plane)", icon: Plane },
     { key: "weather", label: "Weather radar — live precipitation (RainViewer)", icon: Cloud },
     { key: "eonet", label: "Natural events — fires/storms/volcanoes (NASA EONET)", icon: Sparkles },
     { key: "aurora", label: "Aurora forecast (NOAA OVATION)", icon: Sparkles },
     { key: "launches", label: "Upcoming rocket launches (Launch Library 2)", icon: Telescope },
+    { key: "earthquakes", label: "Earthquakes (24h, USGS)", icon: Sparkles },
+    { key: "volcanoes", label: "Notable volcanoes (24)", icon: Sparkles },
+    { key: "storms", label: "Active tropical cyclones (NOAA NHC)", icon: Cloud },
     { key: "iss", label: "ISS — live position", icon: Telescope },
     { key: "tiangong", label: "Tiangong CSS — live position", icon: Telescope },
     { key: "hubble", label: "Hubble — live position", icon: Telescope },
-    { key: "sun", label: "Visible sun (in space)", icon: SunIcon },
-    { key: "moon", label: "Visible moon (in space)", icon: Globe2 },
-    { key: "terminator", label: "Day/night terminator line", icon: Compass },
-    { key: "noonMeridian", label: "Solar-noon meridian (where sun is overhead)", icon: SunIcon },
-    { key: "buildings3D", label: "Cesium 3D buildings (Surface mode)", icon: Mountain },
-    { key: "storms", label: "Active tropical cyclones (NOAA NHC)", icon: Cloud },
-    { key: "landmarks", label: "Famous landmarks (Cesium Surface)", icon: Mountain },
-    { key: "airports", label: "Major airports (Cesium Surface)", icon: Plane },
-    { key: "subsolar", label: "Subsolar point (sun overhead)", icon: SunIcon },
-    { key: "constellations", label: "Constellation lines (Orion etc)", icon: Sparkles },
+    { key: "borders", label: "Country borders", icon: Compass, suffix: bordersLoading ? "(loading…)" : undefined },
+    { key: "pins", label: "Pin markers", icon: Bookmark },
+    { key: "pinPaths", label: "Great-circle pin paths", icon: Compass },
+    // ===== Atlas-only =====
+    { key: "clouds", label: "Cloud cover", icon: Cloud, modes: ["atlas"] },
+    { key: "nightLights", label: "City lights (night side)", icon: SunIcon, modes: ["atlas"] },
+    { key: "atmosphere", label: "Atmosphere glow", icon: Sparkles, modes: ["atlas"] },
+    { key: "stars", label: "Background stars", icon: Sparkles, modes: ["atlas"] },
+    { key: "graticule", label: "Lat/lon graticule", icon: Compass, modes: ["atlas"] },
+    { key: "timezones", label: "Time-zone meridians", icon: Compass, modes: ["atlas"] },
+    { key: "cardinals", label: "Cardinal markers", icon: Navigation, modes: ["atlas"] },
+    { key: "sun", label: "Visible sun (in space)", icon: SunIcon, modes: ["atlas"] },
+    { key: "moon", label: "Visible moon (in space)", icon: Globe2, modes: ["atlas"] },
+    { key: "terminator", label: "Day/night terminator line", icon: Compass, modes: ["atlas"] },
+    { key: "noonMeridian", label: "Solar-noon meridian (where sun is overhead)", icon: SunIcon, modes: ["atlas"] },
+    { key: "subsolar", label: "Subsolar point (sun overhead)", icon: SunIcon, modes: ["atlas"] },
+    { key: "constellations", label: "Constellation lines (Orion etc)", icon: Sparkles, modes: ["atlas"] },
+    // ===== Surface-only =====
+    { key: "buildings3D", label: "Cesium 3D buildings (Surface mode)", icon: Mountain, modes: ["surface"] },
+    { key: "landmarks", label: "Famous landmarks (Cesium Surface)", icon: Mountain, modes: ["surface"] },
+    { key: "airports", label: "Major airports (Cesium Surface)", icon: Plane, modes: ["surface"] },
+    // ===== Widget toggles (always relevant) =====
     { key: "compass", label: "Compass / heading widget", icon: Navigation },
     { key: "miniMap", label: "Mini-map widget", icon: Compass }
   ];
+  const visibleItems = items.filter(it => !it.modes || !mode || it.modes.includes(mode));
   return (
     <PanelSection title="Visibility" icon={Layers}>
       <div className="atlasLayerList">
-        {items.map(({ key, label, icon: Icon, suffix }) => (
+        {visibleItems.map(({ key, label, icon: Icon, suffix }) => (
           <label key={key} className="atlasLayerRow">
             <Icon size={13} />
             <span>{label}{suffix ? ` ${suffix}` : ""}</span>
