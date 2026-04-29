@@ -53,6 +53,7 @@ import { fetchUpcomingLaunches, timeUntilLaunch, type RocketLaunch } from "./lau
 import { fetchWikiSummary } from "./wiki";
 import { MAJOR_CITIES } from "./cities";
 import { LANDMARKS } from "./landmarks";
+import { AIRPORTS } from "./airports";
 
 const SurfaceMode = lazy(() => import("./Surface"));
 
@@ -2579,6 +2580,15 @@ function App() {
               icon: Navigation,
               run: () => setFlyTo((p) => ({ id: p.id + 1, lat: lm.lat, lon: lm.lon, altKm: lm.zoomKm })),
             })),
+            // One Cmd+K entry per major airport. Search by IATA code or
+            // by the airport name in the palette.
+            ...AIRPORTS.map((ap) => ({
+              id: `airport-${ap.iata}` as const,
+              label: `✈ Fly to ${ap.iata} · ${ap.name} (${ap.city})`,
+              group: "View" as const,
+              icon: Plane,
+              run: () => setFlyTo((p) => ({ id: p.id + 1, lat: ap.lat, lon: ap.lon, altKm: 3 })),
+            })),
             // Pull camera up to ISS altitude (~408km) at the camera-center
             // lat/lon. Useful for seeing what the ISS sees right now.
             { id: "viewISSAlt", label: "View at ISS altitude (408km)", group: "View", icon: Navigation, run: () => {
@@ -2605,6 +2615,17 @@ function App() {
             // Nominatim search — uses the address bar in lieu of a
             // dedicated search UI. The user can type "Search: <query>"
             // and we'll geocode the rest with OSM Nominatim.
+            // Airport fly-to by IATA code. Quick way to get to a specific
+            // hub without scrolling the long airport command list.
+            { id: "iataFlyTo", label: "Fly to airport by IATA code (e.g. JFK, LHR)", group: "Tools", icon: Plane, run: () => {
+              const q = window.prompt("Airport IATA code (3 letters):");
+              if (!q) return;
+              const code = q.trim().toUpperCase();
+              const ap = AIRPORTS.find((a) => a.iata === code);
+              if (!ap) { showToast(`Unknown IATA: ${code}`); return; }
+              setFlyTo((p) => ({ id: p.id + 1, lat: ap.lat, lon: ap.lon, altKm: 3 }));
+              showToast(`✈ ${ap.iata} · ${ap.name}, ${ap.city}`);
+            }},
             { id: "geocodeSearch", label: "Search for a place by name (Nominatim)", group: "Tools", icon: Search, run: async () => {
               const q = window.prompt("Search for a place (city, landmark, address):");
               if (!q || !q.trim()) return;
