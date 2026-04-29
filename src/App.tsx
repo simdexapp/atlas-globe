@@ -2218,6 +2218,38 @@ function App() {
     } catch {/* ignore */}
   }, []);
 
+  // Home location — saved to localStorage. Lets users set a 'home base'
+  // (their city, vacation spot, study area) and quickly fly back or see
+  // distance from anywhere they explore. Survives reloads.
+  const [homeLocation, setHomeLocation] = useState<{ lat: number; lon: number; altKm: number; name: string } | null>(() => {
+    try {
+      const raw = window.localStorage.getItem("atlas-home-location");
+      if (!raw) return null;
+      const v = JSON.parse(raw);
+      if (typeof v?.lat === "number" && typeof v?.lon === "number") return v;
+    } catch {/* ignore */}
+    return null;
+  });
+  const saveHomeLocation = useCallback(() => {
+    const c = cameraStateRef.current;
+    if (!c) { showToast("Camera position unknown"); return; }
+    const name = window.prompt("Name your home location:", "Home") || "Home";
+    const home = { lat: c.lat, lon: c.lon, altKm: c.altKm, name };
+    try { window.localStorage.setItem("atlas-home-location", JSON.stringify(home)); } catch {/* ignore */}
+    setHomeLocation(home);
+    showToast(`🏠 ${name} set at ${formatLat(c.lat)} ${formatLon(c.lon)}`);
+  }, [showToast]);
+  const flyHome = useCallback(() => {
+    if (!homeLocation) { showToast("No home location set yet — use 'Set home location'"); return; }
+    setFlyTo((p) => ({ id: p.id + 1, lat: homeLocation.lat, lon: homeLocation.lon, altKm: homeLocation.altKm }));
+    showToast(`🏠 ${homeLocation.name}`);
+  }, [homeLocation, showToast]);
+  const clearHomeLocation = useCallback(() => {
+    try { window.localStorage.removeItem("atlas-home-location"); } catch {/* ignore */}
+    setHomeLocation(null);
+    showToast("🏠 Home location cleared");
+  }, [showToast]);
+
   // Geolocation — fly to user's real location
   const flyToMyLocation = useCallback(() => {
     if (!navigator.geolocation) {
@@ -3326,6 +3358,34 @@ function App() {
             { id: "tour", label: tourPlaying ? "Stop bookmark tour" : "Start bookmark tour (cycle through pins)", group: "View", icon: Play, run: () => tourPlaying ? stopPinTour() : startPinTour() },
             { id: "saveBookmark", label: "Bookmark current view", group: "View", icon: BookmarkPlus, hint: "B", run: () => saveCurrentBookmark() },
             { id: "myLoc", label: "Fly to my location", group: "View", icon: Navigation, run: () => flyToMyLocation() },
+            // Home location — saved per-user via localStorage. Three commands:
+            //   set / fly / clear / show distance.
+            { id: "homeSet", label: homeLocation ? `Update home location (currently: ${homeLocation.name})` : "Set this view as my home location", group: "View", icon: Bookmark, run: saveHomeLocation },
+            ...(homeLocation ? [{
+              id: "homeFly" as const,
+              label: `Fly home (${homeLocation.name})`,
+              group: "View" as const,
+              icon: Navigation,
+              run: flyHome,
+            }, {
+              id: "homeDistance" as const,
+              label: `Distance from this view to home (${homeLocation.name})`,
+              group: "Tools" as const,
+              icon: Compass,
+              run: () => {
+                const c = cameraStateRef.current;
+                if (!c) return;
+                const km = haversineKm(c.lat, c.lon, homeLocation.lat, homeLocation.lon);
+                const bearing = bearingDeg(c.lat, c.lon, homeLocation.lat, homeLocation.lon);
+                showToast(`🏠 ${formatDistKm(km, unitsImperial)} to ${homeLocation.name} · bearing ${bearing.toFixed(0)}° ${compassDir(bearing)}`);
+              },
+            }, {
+              id: "homeClear" as const,
+              label: `Clear home location (${homeLocation.name})`,
+              group: "View" as const,
+              icon: Trash2,
+              run: clearHomeLocation,
+            }] : []),
             { id: "flyISS", label: issPosition ? "Fly to ISS (live position)" : "ISS position not loaded yet", group: "View", icon: Telescope, run: () => issPosition && setFlyTo((c) => ({ id: c.id + 1, lat: issPosition.lat, lon: issPosition.lon, altKm: 600 })) },
             { id: "flyTiangong", label: tiangongPosition ? "Fly to Tiangong (live position)" : "Tiangong position not loaded yet", group: "View", icon: Telescope, run: () => tiangongPosition && setFlyTo((c) => ({ id: c.id + 1, lat: tiangongPosition.lat, lon: tiangongPosition.lon, altKm: 600 })) },
             { id: "flyHubble", label: hubblePosition ? "Fly to Hubble (live position)" : "Hubble position not loaded yet", group: "View", icon: Telescope, run: () => hubblePosition && setFlyTo((c) => ({ id: c.id + 1, lat: hubblePosition.lat, lon: hubblePosition.lon, altKm: 800 })) },
