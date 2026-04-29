@@ -73,6 +73,11 @@ type Pin = {
   color: string;
   note?: string;
   createdAt: number;
+  // Optional altitude in meters. Renders the pin elevated above the
+  // ground in Surface mode (Cesium clamp removed) and as a 3D-elevated
+  // marker in Atlas mode. Mostly used for pinning aircraft positions
+  // or 'I am here at 36,000ft' style annotations.
+  altitudeM?: number;
 };
 
 const PIN_COLORS = ["#5cb5ff", "#ffd66b", "#ff7be0", "#7cffb1", "#ff8a4d", "#a8a8ff", "#ff5a5a", "#ffffff"];
@@ -2518,7 +2523,7 @@ function App() {
               onCameraChange={onCameraChange}
               onPickLocation={onGlobeClick}
               flyTo={flyTo}
-              pins={pins.map((p) => ({ id: p.id, lat: p.lat, lon: p.lon, label: p.label, color: p.color }))}
+              pins={pins.map((p) => ({ id: p.id, lat: p.lat, lon: p.lon, label: p.label, color: p.color, altitudeM: p.altitudeM }))}
               aircraft={layers.aircraft ? filteredAircraft.map((a) => ({ icao24: a.icao24, callsign: a.callsign, lat: a.lat, lon: a.lon, altitudeM: a.altitudeM, headingDeg: a.headingDeg, squawk: a.squawk, velocityMs: a.velocityMs, verticalRateMs: a.verticalRateMs })) : []}
               realTimeSun={globe.realTimeSun}
               initialCamera={cameraState}
@@ -4487,6 +4492,28 @@ function App() {
                 if (newNote === null) return;       // cancel
                 updatePin(selectedPin, { note: newNote.trim() || undefined });
                 showToast(newNote.trim() ? `📝 Note saved` : `📝 Note cleared`);
+              },
+            }, {
+              id: "pinAltitude" as const,
+              label: "Set selected pin altitude (meters above ground)",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const p = pins.find((x) => x.id === selectedPin);
+                if (!p) return;
+                const cur = p.altitudeM ?? 0;
+                const inp = window.prompt(`Altitude for "${p.label}" (meters above sea level, blank to clear):`, String(cur));
+                if (inp === null) return;
+                const trimmed = inp.trim();
+                if (!trimmed) {
+                  updatePin(selectedPin, { altitudeM: undefined });
+                  showToast("📍 Pin altitude cleared (clamp to ground)");
+                  return;
+                }
+                const m = parseFloat(trimmed);
+                if (!Number.isFinite(m)) { showToast("Couldn't parse altitude"); return; }
+                updatePin(selectedPin, { altitudeM: m });
+                showToast(`📍 Pin altitude set: ${m.toLocaleString()} m`);
               },
             }, {
               id: "pinShare" as const,

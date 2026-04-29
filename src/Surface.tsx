@@ -14,6 +14,7 @@ export type SurfacePin = {
   lon: number;
   label: string;
   color: string;
+  altitudeM?: number;
 };
 
 export type SurfaceAircraft = {
@@ -1722,16 +1723,34 @@ export default function Surface({
     pinEntitiesRef.current = [];
     if (!pins) return;
     for (const p of pins) {
+      // Pins with an altitude float at that height; ground-clamped pins
+      // sit on terrain.
+      const hasAlt = typeof p.altitudeM === "number" && p.altitudeM > 0;
       const entity = viewer.entities.add({
-        position: Cesium.Cartesian3.fromDegrees(p.lon, p.lat),
+        position: hasAlt
+          ? Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.altitudeM!)
+          : Cesium.Cartesian3.fromDegrees(p.lon, p.lat),
         point: {
           pixelSize: 14,
           color: Cesium.Color.fromCssColorString(p.color),
           outlineColor: Cesium.Color.WHITE,
           outlineWidth: 2,
-          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          heightReference: hasAlt ? Cesium.HeightReference.NONE : Cesium.HeightReference.CLAMP_TO_GROUND,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
+        // For elevated pins, draw a thin polyline from ground to pin so
+        // the user can see how high it is.
+        ...(hasAlt ? {
+          polyline: {
+            positions: [
+              Cesium.Cartesian3.fromDegrees(p.lon, p.lat, 0),
+              Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.altitudeM!),
+            ],
+            width: 1.5,
+            material: Cesium.Color.fromCssColorString(p.color).withAlpha(0.55),
+            clampToGround: false,
+          },
+        } : {}),
         label: {
           text: p.label,
           font: "12px Inter, sans-serif",
