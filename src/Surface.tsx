@@ -4,6 +4,7 @@ import "cesium/Build/Cesium/Widgets/widgets.css";
 import { MAJOR_CITIES } from "./cities";
 import { COUNTRY_CENTROIDS } from "./countries";
 import { LANDMARKS } from "./landmarks";
+import { AIRPORTS } from "./airports";
 
 type FlyToTarget = { id: number; lat: number; lon: number; altKm: number };
 
@@ -118,7 +119,8 @@ export default function Surface({
   aircraftAltitudeBars,
   bordersGeoJson,
   resetHeadingCommand,
-  showLandmarks
+  showLandmarks,
+  showAirports
 }: {
   token: string;
   onCameraChange: (lat: number, lon: number, altKm: number) => void;
@@ -206,6 +208,8 @@ export default function Surface({
   // Toggles the famous-landmark layer. Defaults to true; users can
   // hide it via Cmd+K when they want a clean view.
   showLandmarks?: boolean;
+  // Toggles the major-airports layer (~80 hubs).
+  showAirports?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Cesium.Viewer | null>(null);
@@ -238,6 +242,7 @@ export default function Surface({
   const auroraOvalEntitiesRef = useRef<Cesium.Entity[]>([]);
   const bordersDataSourceRef = useRef<Cesium.GeoJsonDataSource | null>(null);
   const landmarkEntitiesRef = useRef<Cesium.Entity[]>([]);
+  const airportEntitiesRef = useRef<Cesium.Entity[]>([]);
   const weatherImageryLayerRef = useRef<Cesium.ImageryLayer | null>(null);
   const terminatorEntityRef = useRef<Cesium.Entity | null>(null);
   const subsolarEntityRef = useRef<Cesium.Entity | null>(null);
@@ -1296,6 +1301,18 @@ export default function Surface({
         });
         return;
       }
+      // Airport label click → fly to ~3km altitude over the airfield.
+      if (picked && picked.id instanceof Cesium.Entity && picked.id.properties?.isAirport?.getValue()) {
+        const props = picked.id.properties;
+        const lon = props.airportLon.getValue();
+        const lat = props.airportLat.getValue();
+        viewer.camera.flyTo({
+          destination: Cesium.Cartesian3.fromDegrees(lon, lat, 3000),
+          orientation: { heading: 0, pitch: -Cesium.Math.PI_OVER_TWO, roll: 0 },
+          duration: 1.4,
+        });
+        return;
+      }
       // Aircraft billboard click → select.
       if (picked && picked.primitive instanceof Cesium.Billboard && onSelectAircraft) {
         const icao = aircraftBillboardIndexRef.current.get(picked.primitive);
@@ -1612,6 +1629,51 @@ export default function Surface({
       landmarkEntitiesRef.current.push(e);
     }
   }, [showLandmarks]);
+
+  // ===== Major airports layer =====
+  // ~80 IATA hub airports as small ✈ markers + labels. Visible inside
+  // ~3000km. Click → fly low to ground level over the runways.
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    for (const e of airportEntitiesRef.current) viewer.entities.remove(e);
+    airportEntitiesRef.current = [];
+    if (!showAirports) return;
+    for (const ap of AIRPORTS) {
+      const e = viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(ap.lon, ap.lat, 0),
+        id: `airport-${ap.iata}`,
+        properties: { isAirport: true, airportLat: ap.lat, airportLon: ap.lon, airportIATA: ap.iata },
+        label: {
+          text: `✈ ${ap.iata}`,
+          font: "600 11px ui-monospace, monospace",
+          fillColor: Cesium.Color.fromCssColorString("rgba(180, 220, 255, 0.95)"),
+          outlineColor: Cesium.Color.fromCssColorString("rgba(0,0,0,0.95)"),
+          outlineWidth: 4,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+          pixelOffset: new Cesium.Cartesian2(0, -10),
+          showBackground: true,
+          backgroundColor: Cesium.Color.fromCssColorString("rgba(8, 14, 26, 0.85)"),
+          backgroundPadding: new Cesium.Cartesian2(6, 3),
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 3_000_000),
+        },
+        point: {
+          pixelSize: 5,
+          color: Cesium.Color.fromCssColorString("#5cb5ff"),
+          outlineColor: Cesium.Color.WHITE,
+          outlineWidth: 1,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 3_000_000),
+        },
+      });
+      airportEntitiesRef.current.push(e);
+    }
+  }, [showAirports]);
 
   // ===== Country borders (GeoJsonDataSource) =====
   // Loads the FeatureCollection passed in (built once by App from

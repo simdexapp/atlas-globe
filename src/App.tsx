@@ -120,6 +120,7 @@ type LayerVisibility = {
   buildings3D: boolean;
   storms: boolean;
   landmarks: boolean;
+  airports: boolean;
 };
 
 type GlobeSettings = {
@@ -253,7 +254,10 @@ const defaultLayers: LayerVisibility = {
   // points), so on by default.
   storms: true,
   // Famous landmarks (~35 sites). Cheap, on by default in Surface.
-  landmarks: true
+  landmarks: true,
+  // Major IATA hub airports (~80). Off by default — they overlap city
+  // labels at typical zooms.
+  airports: false
 };
 
 const FAMOUS_VOLCANOES: { id: string; name: string; lat: number; lon: number }[] = [
@@ -2158,6 +2162,7 @@ function App() {
               bordersGeoJson={layers.borders ? bordersGeoJson : null}
               resetHeadingCommand={resetHeadingCmd}
               showLandmarks={layers.landmarks}
+              showAirports={layers.airports}
             />
           </Suspense>
         )}
@@ -3482,6 +3487,7 @@ function LayersPanel({ layers, onToggle, bordersLoading }: { layers: LayerVisibi
     { key: "buildings3D", label: "Cesium 3D buildings (Surface mode)", icon: Mountain },
     { key: "storms", label: "Active tropical cyclones (NOAA NHC)", icon: Cloud },
     { key: "landmarks", label: "Famous landmarks (Cesium Surface)", icon: Mountain },
+    { key: "airports", label: "Major airports (Cesium Surface)", icon: Plane },
     { key: "subsolar", label: "Subsolar point (sun overhead)", icon: SunIcon },
     { key: "constellations", label: "Constellation lines (Orion etc)", icon: Sparkles },
     { key: "compass", label: "Compass / heading widget", icon: Navigation },
