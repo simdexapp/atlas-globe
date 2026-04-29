@@ -3578,6 +3578,40 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: a.lat, lon: a.lon, altKm: 50 }));
               showToast(`🐢 ${a.callsign || a.icao24} @ ${Math.round(a.velocityMs * 1.94384)} kt`);
             }},
+            // Bookmark management
+            { id: "saveBookmark", label: "Save this view as a bookmark…", group: "Tools", icon: BookmarkPlus, hint: "B", run: saveCurrentBookmark },
+            { id: "deleteAllBookmarks", label: bookmarks.length > 0 ? `Delete all ${bookmarks.length} bookmarks` : "Delete all bookmarks (none)", group: "Tools", icon: Bookmark, run: () => {
+              if (bookmarks.length === 0) { showToast("Nothing to delete"); return; }
+              if (!window.confirm(`Delete all ${bookmarks.length} bookmarks?`)) return;
+              setBookmarks([]);
+              showToast("All bookmarks deleted");
+            }},
+            { id: "exportBookmarksKml", label: bookmarks.length > 0 ? `Export ${bookmarks.length} bookmarks as KML` : "Export bookmarks (none)", group: "Tools", icon: Bookmark, run: () => {
+              if (bookmarks.length === 0) { showToast("No bookmarks"); return; }
+              const placemarks = bookmarks.map((b) => `
+    <Placemark>
+      <name>${escapeXml(b.name)}</name>
+      <Point><coordinates>${b.lon},${b.lat},0</coordinates></Point>
+    </Placemark>`).join("");
+              const kml = `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Atlas bookmarks (${bookmarks.length})</name>${placemarks}
+  </Document>
+</kml>`;
+              const blob = new Blob([kml], { type: "application/vnd.google-earth.kml+xml" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `atlas-bookmarks-${new Date().toISOString().slice(0, 10)}.kml`;
+              document.body.appendChild(a);
+              a.click();
+              a.remove();
+              setTimeout(() => URL.revokeObjectURL(url), 500);
+              showToast(`Exported ${bookmarks.length} bookmarks as KML`);
+            }},
+            // FPS overlay toggle
+            { id: "fpsToggle", label: showFps ? "Hide FPS overlay" : "Show FPS overlay", group: "Tools", icon: Sparkles, run: () => setShowFps((v) => !v) },
             { id: "easterEggHelp", label: "Easter eggs hint (Konami code lives here…)", group: "Tools", icon: Sparkles, run: () => {
               showToast("🎮 Try ↑↑↓↓←→←→ B A (anywhere on the page)");
             }},
