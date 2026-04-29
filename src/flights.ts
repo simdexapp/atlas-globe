@@ -1,14 +1,24 @@
 // Real-time global aircraft tracking.
 //
 // OpenSky's /api/states/all sets `Access-Control-Allow-Origin: https://opensky-network.org`
-// which blocks any third-party site from reading the response. So we use the
-// CORS-friendly community feeders instead. airplanes.live exposes a
-// /v2/point/{lat}/{lon}/{dist_nm} endpoint with `access-control-allow-origin: *`.
+// which blocks third-party browsers from reading it directly. So we use the
+// CORS-friendly community feeders instead.
 //
-// A single point=(0,0), dist=10000nm sweep returns ~7000 aircraft worldwide,
-// covering effectively all current ADS-B-equipped traffic from this network.
+// Both airplanes.live and adsb.fi run forks of the same readsb codebase and
+// expose identical /v2/point/{lat}/{lon}/{dist_nm} JSON. We try them in
+// order with a short timeout so one being down doesn't black out the layer.
+// Community feeders also accept point=(0,0), dist=10000nm to return ~7000
+// aircraft worldwide in a single request.
 
-const PRIMARY_URL = "https://api.airplanes.live/v2/point/0/0/10000";
+const FLIGHT_SOURCES: Array<{ name: FlightSource; url: string }> = [
+  { name: "airplanes.live", url: "https://api.airplanes.live/v2/point/0/0/10000" },
+  { name: "adsb.fi",        url: "https://opendata.adsb.fi/api/v2/lat/0/lon/0/dist/10000" },
+];
+
+// How long to wait on each source before falling through to the next.
+const PER_SOURCE_TIMEOUT_MS = 8000;
+
+export type FlightSource = "airplanes.live" | "adsb.fi";
 
 export type Aircraft = {
   icao24: string;
@@ -29,7 +39,7 @@ export type Aircraft = {
 };
 
 export type FlightSnapshot = {
-  source: "airplanes.live";
+  source: FlightSource;
   fetchedAt: number;       // unix ms
   aircraft: Aircraft[];
 };
@@ -73,11 +83,39 @@ function parseAircraftJson(json: any): Aircraft[] {
 }
 
 export async function fetchAllAircraft(signal?: AbortSignal): Promise<FlightSnapshot> {
-  const res = await fetch(PRIMARY_URL, { signal, cache: "no-store" });
-  if (!res.ok) throw new Error(`airplanes.live ${res.status}`);
-  const json = await res.json();
-  const aircraft = parseAircraftJson(json);
-  return { source: "airplanes.live", fetchedAt: Date.now(), aircraft };
+  const errors: string[] = [];
+  for (const src of FLIGHT_SOURCES) {
+    // Per-source timeout via a child AbortController so one slow source
+    // doesn't block fall-through to the next.
+    const ctrl = new AbortController();
+    const onParentAbort = () => ctrl.abort();
+    signal?.addEventListener("abort", onParentAbort);
+    const timer = window.setTimeout(() => ctrl.abort(), PER_SOURCE_TIMEOUT_MS);
+    try {
+      const res = await fetch(src.url, { signal: ctrl.signal, cache: "no-store" });
+      if (!res.ok) {
+        errors.push(`${src.name} ${res.status}`);
+        continue;
+      }
+      const json = await res.json();
+      const aircraft = parseAircraftJson(json);
+      // adsb.fi sometimes returns a near-empty payload during partial outages
+      // — treat <50 aircraft as a failure and move on so we don't downgrade
+      // the user from 7000 → 20 planes silently.
+      if (aircraft.length < 50) {
+        errors.push(`${src.name} returned only ${aircraft.length} aircraft`);
+        continue;
+      }
+      return { source: src.name, fetchedAt: Date.now(), aircraft };
+    } catch (e) {
+      if ((e as Error).name === "AbortError" && signal?.aborted) throw e;
+      errors.push(`${src.name} ${(e as Error).message}`);
+    } finally {
+      window.clearTimeout(timer);
+      signal?.removeEventListener("abort", onParentAbort);
+    }
+  }
+  throw new Error(`All flight sources failed: ${errors.join(" · ")}`);
 }
 
 // ===== Per-aircraft enrichment via adsbdb.com (free, CORS=*) =====

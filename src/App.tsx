@@ -174,7 +174,7 @@ type PersistedState = {
   layers: LayerVisibility;
   globe: GlobeSettings;
   bookmarks: Bookmark[];
-  uiTheme: "dark" | "light";
+  uiTheme: "dark" | "light" | "oled" | "cyber" | "solar" | "mono";
   imagery?: Imagery;
   pins?: Pin[];
 };
@@ -389,7 +389,11 @@ function App() {
   const [showAbout, setShowAbout] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [uiTheme, setUiTheme] = useState<"dark" | "light">("dark");
+  const [uiTheme, setUiTheme] = useState<"dark" | "light" | "oled" | "cyber" | "solar" | "mono">("dark");
+  // Apply uiTheme to <html data-theme=...> so the CSS overrides take effect.
+  useEffect(() => {
+    document.documentElement.dataset.theme = uiTheme;
+  }, [uiTheme]);
   const [cameraState, setCameraState] = useState<CameraState>({ lat: 25, lon: 0, altKm: distanceToAltKm(SPACE_DISTANCE) });
   // Initial flyTo: if the URL hash contains an `@lat,lon,altKm` token,
   // fly there on mount. Format: `#@29.9,-90.07,8.5km`. Same convention
@@ -1133,10 +1137,25 @@ function App() {
     });
   }, []);
 
-  const flyToBookmark = useCallback((b: Bookmark) => {
+  const flyToBookmark = useCallback((b: Bookmark, opts?: { dropPin?: boolean }) => {
     setFlyTo((current) => ({ id: current.id + 1, lat: b.lat, lon: b.lon, altKm: b.altKm }));
     showToast(`Flying to ${b.name}`);
     recordSearch(b.name);
+    // Address-search hits get a pin dropped automatically — that's
+    // the whole point of typing an address: see it land, see the
+    // marker, click around. Saved bookmarks just fly without pinning.
+    if (opts?.dropPin) {
+      const pin: Pin = {
+        id: `pin-${Date.now()}`,
+        lat: b.lat,
+        lon: b.lon,
+        label: b.name,
+        color: PIN_COLORS[Math.floor(Math.random() * PIN_COLORS.length)],
+        createdAt: Date.now(),
+      };
+      setPins((prev) => [...prev, pin]);
+      setSelectedPin(pin.id);
+    }
   }, [recordSearch, showToast]);
 
   const saveCurrentBookmark = useCallback(() => {
@@ -1221,7 +1240,11 @@ function App() {
   }, [showToast]);
 
   const cycleTheme = useCallback(() => {
-    setUiTheme((t) => (t === "dark" ? "light" : "dark"));
+    // Cycle through all available presets so the existing T shortcut still
+    // works as a "next theme" toggle.
+    const order: Array<"dark" | "light" | "oled" | "cyber" | "solar" | "mono"> =
+      ["dark", "light", "oled", "cyber", "solar", "mono"];
+    setUiTheme((t) => order[(order.indexOf(t) + 1) % order.length]);
   }, []);
 
   // Fetch day + night GIBS composites whenever imagery settings change (debounced)
@@ -2425,7 +2448,14 @@ function App() {
           searching={searching}
           suggestions={initialSearchSuggestions}
           history={searchHistory}
-          onSelect={(b) => { flyToBookmark(b); setShowSearch(false); }}
+          onSelect={(b) => {
+            // Nominatim hits (id prefixed "osm-") are search results — drop
+            // a pin automatically so the user sees where they landed. Saved
+            // bookmarks just fly.
+            const isSearchResult = b.id.startsWith("osm-");
+            flyToBookmark(b, { dropPin: isSearchResult });
+            setShowSearch(false);
+          }}
           onClose={() => setShowSearch(false)}
         />
       )}
@@ -2433,6 +2463,27 @@ function App() {
       {commandPaletteOpen && (
         <CommandPalette
           onClose={() => setCommandPaletteOpen(false)}
+          onGeocodeAndFly={async (q) => {
+            // Geocode via Nominatim, fly to the first hit, drop a pin.
+            // Optimistic toast so the user knows we heard them.
+            showToast(`Searching for "${q}"…`);
+            try {
+              const res = await fetch(
+                `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1`,
+                { headers: { Accept: "application/json" } }
+              );
+              if (!res.ok) { showToast("Geocode failed"); return; }
+              const data = await res.json() as Array<{ lat: string; lon: string; display_name: string }>;
+              if (data.length === 0) { showToast(`No matches for "${q}"`); return; }
+              const hit = data[0];
+              const lat = Number(hit.lat);
+              const lon = Number(hit.lon);
+              const name = hit.display_name.split(",").slice(0, 2).join(",").trim();
+              flyToBookmark({ id: `osm-${Date.now()}`, name, lat, lon, altKm: 5, savedAt: 0 }, { dropPin: true });
+            } catch {
+              showToast("Geocode failed (network)");
+            }
+          }}
           items={[
             // Tools
             { id: "search", label: "Search a place…", group: "Tools", icon: Search, hint: "F", run: () => setShowSearch(true) },
@@ -2443,6 +2494,14 @@ function App() {
             // View
             { id: "reset", label: "Reset view", group: "View", icon: Crosshair, hint: "R", run: () => resetView() },
             { id: "toggleHide", label: hideUi ? "Show UI" : "Hide UI", group: "View", icon: Eye, hint: "H", run: () => setHideUi((v) => !v) },
+            // Direct theme picks. The existing T shortcut cycles, these
+            // jump directly so power users don't have to count taps.
+            { id: "themeDark",  label: "Theme: Dark (default)",  group: "View", icon: SunIcon, run: () => setUiTheme("dark") },
+            { id: "themeLight", label: "Theme: Light",            group: "View", icon: SunIcon, run: () => setUiTheme("light") },
+            { id: "themeOled",  label: "Theme: OLED (true black)", group: "View", icon: SunIcon, run: () => setUiTheme("oled") },
+            { id: "themeCyber", label: "Theme: Cyber (magenta)",   group: "View", icon: SunIcon, run: () => setUiTheme("cyber") },
+            { id: "themeSolar", label: "Theme: Solar (warm orange)", group: "View", icon: SunIcon, run: () => setUiTheme("solar") },
+            { id: "themeMono",  label: "Theme: Mono (grayscale)",   group: "View", icon: SunIcon, run: () => setUiTheme("mono") },
             { id: "toggleFps", label: showFps ? "Hide FPS overlay" : "Show FPS overlay", group: "View", icon: Telescope, run: () => setShowFps((v) => !v) },
             { id: "togglePin", label: pinTool ? "Exit pin tool" : "Pin tool", group: "View", icon: BookmarkPlus, run: () => setPinTool((v) => !v) },
             { id: "toggleMeasure", label: measureMode ? "Exit measure tool" : "Measure distance (click 2 points)", group: "View", icon: Compass, run: () => { setMeasureMode((v) => !v); setMeasurePoints([]); } },
@@ -4319,10 +4378,16 @@ type CommandItem = {
 
 function CommandPalette({
   items,
-  onClose
+  onClose,
+  onGeocodeAndFly,
 }: {
   items: CommandItem[];
   onClose: () => void;
+  // Optional handler for "treat the query as a place name and fly there"
+  // — wired up by the parent when geocoding is supported. Lets the user
+  // type an address ("Brooklyn Bridge", "1600 Pennsylvania Ave") and
+  // pick a synthetic "Fly to X" item at the bottom of the list.
+  onGeocodeAndFly?: (query: string) => void;
 }) {
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
@@ -4334,13 +4399,29 @@ function CommandPalette({
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter((it) =>
+    const matches = q ? items.filter((it) =>
       it.label.toLowerCase().includes(q) ||
       it.group.toLowerCase().includes(q) ||
       (it.hint || "").toLowerCase().includes(q)
-    );
-  }, [items, query]);
+    ) : items;
+    // Append a synthetic "Fly to '{query}'" command when the user has
+    // typed something — even if there are command matches. This lets
+    // them treat the palette as a universal address bar: type the name
+    // of any place and hit Enter to geocode + fly + pin. The synthetic
+    // item lives in the "Geocode" group so it shows distinct from the
+    // command matches above it.
+    if (q && q.length >= 2 && onGeocodeAndFly) {
+      const geocodeItem: CommandItem = {
+        id: "geocode",
+        label: `Fly to "${query.trim()}" (geocode + drop pin)`,
+        group: "Geocode",
+        icon: Navigation,
+        run: () => onGeocodeAndFly(query.trim()),
+      };
+      return [...matches, geocodeItem];
+    }
+    return matches;
+  }, [items, query, onGeocodeAndFly]);
 
   // Reset active index when filter changes
   useEffect(() => { setActiveIndex(0); }, [query]);

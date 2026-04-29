@@ -85,6 +85,84 @@
   color: var(--gray-12);
 }
 
+/* ===== Theme presets =====
+   Override the design tokens above. Set via document.documentElement
+   .dataset.theme = "name" from React. The default :root theme is "dark"
+   so light / oled / cyber / solar / mono override only what differs. */
+
+html[data-theme="light"] {
+  color-scheme: light;
+  --gray-0: #f5f7fb;
+  --gray-1: #eaeef5;
+  --gray-2: #e2e7f0;
+  --gray-3: #d6dceb;
+  --gray-4: #c5cee0;
+  --gray-5: #aebac8;
+  --gray-6: #8a93a8;
+  --gray-7: #5e6779;
+  --gray-8: #404a5c;
+  --gray-9: #2c3445;
+  --gray-10: #1f2535;
+  --gray-11: #131722;
+  --gray-12: #060a14;
+  --surface-bg: linear-gradient(180deg, #f5f7fb 0%, #eaeef5 100%);
+  --surface-panel: linear-gradient(180deg, #ffffff 0%, #f0f3f8 100%);
+  --surface-card: linear-gradient(180deg, #f9fafd 0%, #eef1f7 100%);
+  --surface-elevated: linear-gradient(180deg, #ffffff 0%, #f5f7fb 100%);
+  --border-subtle: #d6dceb;
+  --border: #c5cee0;
+  --border-strong: #aebac8;
+}
+
+html[data-theme="oled"] {
+  --gray-0: #000000;
+  --gray-1: #050505;
+  --gray-2: #080808;
+  --gray-3: #0c0c0c;
+  --gray-4: #121212;
+  --surface-bg: #000000;
+  --surface-panel: linear-gradient(180deg, #060606 0%, #000000 100%);
+  --surface-card: linear-gradient(180deg, #0a0a0a 0%, #050505 100%);
+  --surface-elevated: linear-gradient(180deg, #101010 0%, #080808 100%);
+  --border-subtle: #0a0a0a;
+  --border: #1a1a1a;
+  --border-strong: #2a2a2a;
+}
+
+html[data-theme="cyber"] {
+  --accent: #ff5fd6;
+  --accent-hover: #ff7fde;
+  --accent-glow: rgba(255, 95, 214, 0.34);
+  --warm: #c084ff;
+  --gray-0: #0a0410;
+  --gray-1: #110618;
+  --gray-2: #170a20;
+  --gray-3: #1d0e28;
+  --surface-bg: linear-gradient(180deg, #110618 0%, #0a0410 100%);
+  --surface-panel: linear-gradient(180deg, #1a0a24 0%, #100618 100%);
+  --surface-card: linear-gradient(180deg, #20102a 0%, #160a20 100%);
+}
+
+html[data-theme="solar"] {
+  --accent: #ffb13a;
+  --accent-hover: #ffc566;
+  --accent-glow: rgba(255, 177, 58, 0.34);
+  --warm: #ff7e3a;
+  --gray-0: #0e0a05;
+  --gray-1: #150f08;
+  --gray-2: #1c150c;
+  --surface-bg: linear-gradient(180deg, #150f08 0%, #0e0a05 100%);
+  --surface-panel: linear-gradient(180deg, #1f1610 0%, #16100a 100%);
+  --surface-card: linear-gradient(180deg, #281c14 0%, #1d1410 100%);
+}
+
+html[data-theme="mono"] {
+  --accent: #d4d4d4;
+  --accent-hover: #ffffff;
+  --accent-glow: rgba(255, 255, 255, 0.20);
+  --warm: #b8b8b8;
+}
+
 * { box-sizing: border-box; }
 
 html, body, #root {
