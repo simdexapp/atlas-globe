@@ -2241,6 +2241,21 @@ function App() {
           event.preventDefault();
           setInspectorTab("layers");
           break;
+        case "m":
+          event.preventDefault();
+          setMeasureMode((v) => !v);
+          setMeasurePoints([]);
+          showToast(measureMode ? "Measure tool off" : "Measure tool — click to add path vertices");
+          break;
+        case "p":
+          event.preventDefault();
+          setPinTool((v) => !v);
+          showToast(pinTool ? "Pin tool off" : "Pin tool — click to drop pins");
+          break;
+        case "i":
+          event.preventDefault();
+          setInspectorTab("imagery");
+          break;
         case "t":
           event.preventDefault();
           cycleTheme();
@@ -4023,6 +4038,43 @@ function App() {
             }},
             // Find aircraft by destination IATA (using flight route DB
             // we already cache from adsbdb.com)
+            // Voice search via the Web Speech API. "Fly to <place>" is
+            // parsed and routed to geocoding; bare place names also work.
+            { id: "voiceSearch", label: "Voice search 🎤 (browser SpeechRecognition)", group: "Tools", icon: Search, run: () => {
+              const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+              if (!SpeechRecognition) {
+                showToast("🎤 SpeechRecognition not available in this browser");
+                return;
+              }
+              const rec = new SpeechRecognition();
+              rec.lang = "en-US";
+              rec.interimResults = false;
+              rec.maxAlternatives = 1;
+              showToast("🎤 Listening… (say a place name)");
+              rec.onresult = (event: any) => {
+                const transcript = event.results[0][0].transcript.trim();
+                showToast(`🎤 Heard: "${transcript}"`);
+                // Strip "fly to" / "go to" / "show me" prefixes
+                const cleaned = transcript.replace(/^(fly|go|navigate|take me|show me)\s+(to|towards)?\s*/i, "").trim();
+                if (cleaned) {
+                  // Geocode + fly + drop pin
+                  (async () => {
+                    try {
+                      const r = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(cleaned)}&format=json&limit=1`);
+                      const d = await r.json();
+                      if (d.length === 0) { showToast(`🎤 No matches for "${cleaned}"`); return; }
+                      const hit = d[0];
+                      const lat = Number(hit.lat);
+                      const lon = Number(hit.lon);
+                      const name = hit.display_name.split(",").slice(0, 2).join(",").trim();
+                      flyToBookmark({ id: `osm-${Date.now()}`, name, lat, lon, altKm: 5, savedAt: 0 }, { dropPin: true });
+                    } catch { showToast("🎤 Geocode failed"); }
+                  })();
+                }
+              };
+              rec.onerror = (e: any) => showToast(`🎤 Voice error: ${e.error}`);
+              try { rec.start(); } catch { showToast("🎤 Microphone not available"); }
+            }},
             { id: "findInbound", label: "Aircraft inbound to airport (prompt for IATA)", group: "Tools", icon: Plane, run: async () => {
               const iata = window.prompt("Find aircraft inbound to this airport (IATA):");
               if (!iata) return;
