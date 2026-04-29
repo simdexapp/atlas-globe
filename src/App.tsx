@@ -2191,6 +2191,57 @@ function App() {
           if (mode === "atlas") switchToSurface();
           else switchToAtlas();
           break;
+        case "1":
+          event.preventDefault();
+          // Quick-toggle: aircraft layer
+          setLayers((l) => ({ ...l, aircraft: !l.aircraft }));
+          showToast(layers.aircraft ? "Aircraft hidden" : "Aircraft shown");
+          break;
+        case "2":
+          event.preventDefault();
+          setLayers((l) => ({ ...l, weather: !l.weather }));
+          showToast(layers.weather ? "Weather radar hidden" : "Weather radar shown");
+          break;
+        case "3":
+          event.preventDefault();
+          setLayers((l) => ({ ...l, eonet: !l.eonet }));
+          showToast(layers.eonet ? "EONET hidden" : "EONET events shown");
+          break;
+        case "4":
+          event.preventDefault();
+          setLayers((l) => ({ ...l, earthquakes: !l.earthquakes }));
+          showToast(layers.earthquakes ? "Earthquakes hidden" : "Earthquakes shown");
+          break;
+        case "5":
+          event.preventDefault();
+          setLayers((l) => ({ ...l, volcanoes: !l.volcanoes }));
+          showToast(layers.volcanoes ? "Volcanoes hidden" : "Volcanoes shown");
+          break;
+        case "6":
+          event.preventDefault();
+          setLayers((l) => ({ ...l, launches: !l.launches }));
+          showToast(layers.launches ? "Launches hidden" : "Launches shown");
+          break;
+        case "7":
+          event.preventDefault();
+          setLayers((l) => ({ ...l, iss: !l.iss }));
+          showToast(layers.iss ? "ISS hidden" : "ISS shown");
+          break;
+        case "8":
+          event.preventDefault();
+          setLayers((l) => ({ ...l, borders: !l.borders }));
+          showToast(layers.borders ? "Borders hidden" : "Borders shown");
+          break;
+        case "9":
+          event.preventDefault();
+          setLayers((l) => ({ ...l, aurora: !l.aurora }));
+          showToast(layers.aurora ? "Aurora hidden" : "Aurora shown");
+          break;
+        case "0":
+          event.preventDefault();
+          setLayers((l) => ({ ...l, storms: !l.storms }));
+          showToast(layers.storms ? "Storms hidden" : "Storms shown");
+          break;
         case "?":
         case "/":
           if (event.shiftKey || event.key === "?") {
