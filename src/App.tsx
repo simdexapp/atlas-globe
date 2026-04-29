@@ -2613,6 +2613,25 @@ function App() {
             }},
             // Drone-view: low + oblique. Combines a fly-to with a tilt set.
             { id: "saveBookmarkNamed", label: "Save this view as a bookmark...", group: "Tools", icon: BookmarkPlus, run: () => saveCurrentBookmark() },
+            // Toggle ALL data layers off — helpful for clean screenshots.
+            { id: "hideAllLayers", label: "Hide all data layers (clean view)", group: "Layers", icon: Eye, run: () => {
+              setLayers((prev) => {
+                const next: any = { ...prev };
+                for (const k of Object.keys(next)) next[k] = false;
+                // Always keep the Earth visible (no layer is for the globe itself).
+                return next;
+              });
+              showToast("All layers hidden");
+            }},
+            { id: "showAllLayers", label: "Show all data layers", group: "Layers", icon: Eye, run: () => {
+              setLayers((prev) => {
+                const next: any = { ...prev };
+                for (const k of Object.keys(next)) next[k] = true;
+                return next;
+              });
+              showToast("All layers enabled");
+            }},
+            { id: "resetLayers", label: "Reset layers to defaults", group: "Layers", icon: RotateCcw, run: () => { setLayers(defaultLayers); showToast("Layers reset to defaults"); } },
             { id: "toggleHideUi", label: hideUi ? "Show UI" : "Hide UI (immersive)", group: "View", icon: Eye, run: () => setHideUi((v) => !v) },
             { id: "viewDrone", label: "Drone view (low + oblique)", group: "View", icon: Navigation, run: () => {
               const c = cameraStateRef.current;
