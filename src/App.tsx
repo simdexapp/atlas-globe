@@ -2314,6 +2314,47 @@ function App() {
             showToast("⏯ Real-time UTC clock");
           }
           break;
+        // ===== Arrow-key panning (WASD-style) =====
+        case "arrowup":
+        case "w":
+          event.preventDefault();
+          if (cameraStateRef.current) {
+            const c = cameraStateRef.current;
+            const step = Math.max(0.5, c.altKm * 0.05);
+            setFlyTo((p) => ({ id: p.id + 1, lat: Math.min(89, c.lat + step), lon: c.lon, altKm: c.altKm }));
+          }
+          break;
+        case "arrowdown":
+        case "x":
+          event.preventDefault();
+          if (cameraStateRef.current) {
+            const c = cameraStateRef.current;
+            const step = Math.max(0.5, c.altKm * 0.05);
+            setFlyTo((p) => ({ id: p.id + 1, lat: Math.max(-89, c.lat - step), lon: c.lon, altKm: c.altKm }));
+          }
+          break;
+        case "arrowleft":
+        case "a":
+          event.preventDefault();
+          if (cameraStateRef.current) {
+            const c = cameraStateRef.current;
+            const step = Math.max(0.5, c.altKm * 0.05);
+            let newLon = c.lon - step;
+            if (newLon < -180) newLon += 360;
+            setFlyTo((p) => ({ id: p.id + 1, lat: c.lat, lon: newLon, altKm: c.altKm }));
+          }
+          break;
+        case "arrowright":
+        case "d":
+          event.preventDefault();
+          if (cameraStateRef.current) {
+            const c = cameraStateRef.current;
+            const step = Math.max(0.5, c.altKm * 0.05);
+            let newLon = c.lon + step;
+            if (newLon > 180) newLon -= 360;
+            setFlyTo((p) => ({ id: p.id + 1, lat: c.lat, lon: newLon, altKm: c.altKm }));
+          }
+          break;
         case "t":
           event.preventDefault();
           cycleTheme();
