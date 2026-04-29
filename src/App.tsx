@@ -424,7 +424,15 @@ function App() {
   const [showAbout, setShowAbout] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [uiTheme, setUiTheme] = useState<"dark" | "light" | "oled" | "cyber" | "solar" | "mono">("dark");
+  const [uiTheme, setUiTheme] = useState<"dark" | "light" | "oled" | "cyber" | "solar" | "mono">(() => {
+    // Default: dark unless the OS prefers light. localStorage will
+    // override on next render via the layers/theme persistence load.
+    if (typeof window !== "undefined" && window.matchMedia) {
+      const prefersLight = window.matchMedia("(prefers-color-scheme: light)").matches;
+      return prefersLight ? "light" : "dark";
+    }
+    return "dark";
+  });
   // Apply uiTheme to <html data-theme=...> so the CSS overrides take effect.
   useEffect(() => {
     document.documentElement.dataset.theme = uiTheme;
@@ -3632,6 +3640,25 @@ function App() {
               setBookmarks((prev) => [b, ...prev]);
               showToast(`Quick-saved: ${b.name}`);
             }},
+            // Native share sheet (iOS/Android browsers)
+            { id: "shareNative", label: "Open native share sheet (iOS/Android)", group: "Tools", icon: Share2, run: async () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const url = new URL(window.location.href);
+              url.hash = `#@${c.lat.toFixed(4)},${c.lon.toFixed(4)},${c.altKm.toFixed(1)}km`;
+              if ((navigator as any).share) {
+                try {
+                  await (navigator as any).share({
+                    title: "Atlas Globe view",
+                    text: `${formatLat(c.lat)} ${formatLon(c.lon)}`,
+                    url: url.toString(),
+                  });
+                } catch { /* user cancelled */ }
+              } else {
+                showToast("Native share not available — falling back to clipboard");
+                navigator.clipboard?.writeText(url.toString());
+              }
+            }},
             { id: "shareTwitter", label: "Tweet this view", group: "Tools", icon: Share2, run: () => {
               const c = cameraStateRef.current;
               if (!c) return;
@@ -4070,6 +4097,19 @@ function App() {
               showToast(`⚡ Performance mode toggled`);
             }},
             // Date / time facts
+            // Browser info — useful debug info for support requests
+            { id: "browserInfo", label: "Show browser / device info (toast)", group: "Tools", icon: Sparkles, run: () => {
+              const ua = navigator.userAgent;
+              const platform = (navigator as any).userAgentData?.platform || navigator.platform || "?";
+              const cores = (navigator as any).hardwareConcurrency || "?";
+              const mem = (navigator as any).deviceMemory ? `${(navigator as any).deviceMemory}GB` : "?";
+              const cookies = navigator.cookieEnabled ? "✓" : "✗";
+              const storage = navigator.storage ? "✓" : "✗";
+              const dpr = window.devicePixelRatio || 1;
+              const screen = `${window.innerWidth}×${window.innerHeight}@${dpr}x`;
+              showToast(`💻 ${platform} · ${cores} cores · ${mem} · ${screen} · cookies ${cookies} · storage ${storage}`);
+              console.log("[Atlas Globe] User agent:", ua);
+            }},
             { id: "currentDate", label: "Show current date/time (UTC + ISO)", group: "Tools", icon: Compass, run: () => {
               const now = new Date();
               showToast(`🕐 ${now.toUTCString()} · ISO: ${now.toISOString()}`);
