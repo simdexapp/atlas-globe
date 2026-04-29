@@ -2961,6 +2961,120 @@ function App() {
               const c = cameraStateRef.current;
               if (c) setFlyTo((p) => ({ id: p.id + 1, lat: c.lat, lon: c.lon, altKm: c.altKm }));
             }},
+            // "Where am I" — try the precise navigator.geolocation first
+            // (browser permission prompt), fall back to IP-based estimate.
+            { id: "myLocation", label: "Fly to my location (GPS or IP)", group: "View", icon: Navigation, run: () => {
+              showToast("Getting your location…");
+              const flyTo = (lat: number, lon: number, source: string) => {
+                setFlyTo((p) => ({ id: p.id + 1, lat, lon, altKm: 30 }));
+                onGlobeClick(lat, lon, { shift: true });    // also drop a pin
+                showToast(`📍 You are here (${source})`);
+              };
+              if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                  (pos) => flyTo(pos.coords.latitude, pos.coords.longitude, "GPS"),
+                  async () => {
+                    // GPS denied — fallback to IP geolocation
+                    try {
+                      const r = await fetch("https://ipapi.co/json/", { cache: "no-store" });
+                      if (!r.ok) throw new Error(`${r.status}`);
+                      const d = await r.json();
+                      if (typeof d?.latitude === "number" && typeof d?.longitude === "number") {
+                        flyTo(d.latitude, d.longitude, "IP");
+                      } else {
+                        showToast("Could not determine location");
+                      }
+                    } catch { showToast("Geolocation failed"); }
+                  },
+                  { timeout: 10000 }
+                );
+              } else {
+                showToast("Geolocation not supported");
+              }
+            }},
+            // Quick coord-input parser. Pops a prompt() so user can paste
+            // any of: "37.77, -122.42", "37.77 -122.42", or just numbers.
+            { id: "flyToCoords", label: "Fly to coordinates (prompt for lat/lon)", group: "View", icon: Navigation, run: () => {
+              const input = window.prompt("Enter lat, lon (e.g. 37.77, -122.42)");
+              if (!input) return;
+              const m = input.trim().match(/(-?\d+(?:\.\d+)?)\s*[,\s]\s*(-?\d+(?:\.\d+)?)/);
+              if (!m) { showToast("Could not parse coordinates"); return; }
+              const lat = parseFloat(m[1]);
+              const lon = parseFloat(m[2]);
+              if (Math.abs(lat) > 90 || Math.abs(lon) > 180) { showToast("Out of range"); return; }
+              setFlyTo((p) => ({ id: p.id + 1, lat, lon, altKm: 30 }));
+              showToast(`Flying to ${lat.toFixed(3)}, ${lon.toFixed(3)}`);
+            }},
+            // Subsolar fly-to: jump to where the sun is directly overhead.
+            { id: "flyToSubsolar", label: "Fly to where the sun is overhead right now", group: "Tools", icon: SunIcon, run: () => {
+              const now = new Date();
+              const start = Date.UTC(now.getUTCFullYear(), 0, 0);
+              const doy = Math.floor((now.getTime() - start) / 86400000);
+              const declDeg = 23.45 * Math.sin(2 * Math.PI / 365 * (doy - 81));
+              const utcHours = now.getUTCHours() + now.getUTCMinutes() / 60 + now.getUTCSeconds() / 3600;
+              const subsolarLonDeg = -((utcHours - 12) * 15);
+              setFlyTo((p) => ({ id: p.id + 1, lat: declDeg, lon: subsolarLonDeg, altKm: 8000 }));
+              showToast(`☀ Subsolar point: ${declDeg.toFixed(2)}° N, ${subsolarLonDeg.toFixed(2)}° E`);
+            }},
+            // Antisolar fly-to: directly opposite — midnight at this moment.
+            { id: "flyToAntisolar", label: "Fly to the antisolar point (midnight, opposite of sun)", group: "Tools", icon: SunIcon, run: () => {
+              const now = new Date();
+              const start = Date.UTC(now.getUTCFullYear(), 0, 0);
+              const doy = Math.floor((now.getTime() - start) / 86400000);
+              const declDeg = 23.45 * Math.sin(2 * Math.PI / 365 * (doy - 81));
+              const utcHours = now.getUTCHours() + now.getUTCMinutes() / 60 + now.getUTCSeconds() / 3600;
+              const subsolarLonDeg = -((utcHours - 12) * 15);
+              const antiLat = -declDeg;
+              const antiLon = subsolarLonDeg > 0 ? subsolarLonDeg - 180 : subsolarLonDeg + 180;
+              setFlyTo((p) => ({ id: p.id + 1, lat: antiLat, lon: antiLon, altKm: 8000 }));
+              showToast(`🌑 Antisolar point: ${antiLat.toFixed(2)}° N, ${antiLon.toFixed(2)}° E`);
+            }},
+            // Lunar phase: percent illumination derived from synodic month.
+            { id: "lunarPhase", label: "Show current moon phase", group: "Tools", icon: SunIcon, run: () => {
+              // Approximate lunar age. Reference new moon: 2000-01-06 18:14 UTC.
+              const refMs = Date.UTC(2000, 0, 6, 18, 14, 0);
+              const synodicDays = 29.530588853;
+              const ageDays = ((Date.now() - refMs) / 86400000) % synodicDays;
+              const phase = ageDays / synodicDays;
+              // 0..0.5 = waxing, 0.5..1 = waning
+              const illum = Math.round((1 - Math.cos(phase * 2 * Math.PI)) / 2 * 100);
+              const name =
+                ageDays < 1.0   ? "New Moon" :
+                ageDays < 7.0   ? "Waxing Crescent" :
+                ageDays < 8.5   ? "First Quarter" :
+                ageDays < 14.0  ? "Waxing Gibbous" :
+                ageDays < 15.5  ? "Full Moon" :
+                ageDays < 22.0  ? "Waning Gibbous" :
+                ageDays < 23.5  ? "Last Quarter" :
+                                  "Waning Crescent";
+              const glyph =
+                ageDays < 1.0   ? "🌑" :
+                ageDays < 7.0   ? "🌒" :
+                ageDays < 8.5   ? "🌓" :
+                ageDays < 14.0  ? "🌔" :
+                ageDays < 15.5  ? "🌕" :
+                ageDays < 22.0  ? "🌖" :
+                ageDays < 23.5  ? "🌗" :
+                                  "🌘";
+              showToast(`${glyph} ${name} · ${illum}% illuminated · age ${ageDays.toFixed(1)} days`);
+            }},
+            // Solar elongation — angle between sun and moon as seen from earth.
+            // Useful for knowing when the moon will be visible at night.
+            { id: "moonriseUtc", label: "Show approximate moonrise time at this view (UTC)", group: "Tools", icon: SunIcon, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              // The moon is visible roughly when it's above the horizon. Its
+              // path lags the sun by ~50 min/day. Reference: the moon is at
+              // the same RA as the sun at new moon. Crude approximation:
+              const refMs = Date.UTC(2000, 0, 6, 18, 14, 0);
+              const synodicDays = 29.530588853;
+              const ageDays = ((Date.now() - refMs) / 86400000) % synodicDays;
+              const moonLagHours = (ageDays / synodicDays) * 24.83;     // hours after sun
+              const moonriseHrs = (24 + 6 + moonLagHours - c.lon / 15) % 24;
+              const hh = String(Math.floor(moonriseHrs)).padStart(2, "0");
+              const mm = String(Math.floor((moonriseHrs % 1) * 60)).padStart(2, "0");
+              showToast(`🌙 Approximate moonrise at ${formatLat(c.lat)} ${formatLon(c.lon)}: ${hh}:${mm} UTC (lags sun by ${moonLagHours.toFixed(1)}h today)`);
+            }},
             { id: "distanceToLandmark", label: "Show distance from this view to nearest famous landmark", group: "Tools", icon: Compass, run: () => {
               const c = cameraStateRef.current;
               if (!c) return;
