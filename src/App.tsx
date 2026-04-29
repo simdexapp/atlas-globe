@@ -52,6 +52,7 @@ import { fetchNeoToday, type NearEarthObject } from "./nearEarthObjects";
 import { fetchUpcomingLaunches, timeUntilLaunch, type RocketLaunch } from "./launches";
 import { fetchWikiSummary } from "./wiki";
 import { MAJOR_CITIES } from "./cities";
+import { LANDMARKS } from "./landmarks";
 
 const SurfaceMode = lazy(() => import("./Surface"));
 
@@ -2546,6 +2547,15 @@ function App() {
             { id: "viewSouthPole", label: "View South Pole", group: "View", icon: Navigation, run: () => setFlyTo((p) => ({ id: p.id + 1, lat: -89.99, lon: 0, altKm: 4500 })) },
             // Pull way back to see Earth as a small disk — "Voyager view".
             { id: "viewMars", label: "Mars-view (Earth as a small disk)", group: "View", icon: Navigation, run: () => setFlyTo((p) => ({ id: p.id + 1, lat: 0, lon: 0, altKm: 100_000 })) },
+            // One Cmd+K entry per famous landmark — shows the emoji and
+            // name in the palette, flies the camera to its zoom altitude.
+            ...LANDMARKS.map((lm) => ({
+              id: `landmark-${lm.id}` as const,
+              label: `${lm.emoji} Fly to ${lm.name}`,
+              group: "View" as const,
+              icon: Navigation,
+              run: () => setFlyTo((p) => ({ id: p.id + 1, lat: lm.lat, lon: lm.lon, altKm: lm.zoomKm })),
+            })),
             // Pull camera up to ISS altitude (~408km) at the camera-center
             // lat/lon. Useful for seeing what the ISS sees right now.
             { id: "viewISSAlt", label: "View at ISS altitude (408km)", group: "View", icon: Navigation, run: () => {

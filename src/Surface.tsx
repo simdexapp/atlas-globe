@@ -3,6 +3,7 @@ import * as Cesium from "cesium";
 import "cesium/Build/Cesium/Widgets/widgets.css";
 import { MAJOR_CITIES } from "./cities";
 import { COUNTRY_CENTROIDS } from "./countries";
+import { LANDMARKS } from "./landmarks";
 
 type FlyToTarget = { id: number; lat: number; lon: number; altKm: number };
 
@@ -493,6 +494,44 @@ export default function Surface({
         },
       });
       countryLabelsRef.current.push(entity);
+    }
+
+    // ===== famous landmarks =====
+    // Always-visible markers for ~35 iconic natural + man-made sites.
+    // Smaller than country/city labels and only show inside ~5000km
+    // so they appear once you're zoomed somewhat into a region.
+    for (const lm of LANDMARKS) {
+      viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(lm.lon, lm.lat, 0),
+        id: `landmark-${lm.id}`,
+        properties: { isLandmark: true, landmarkId: lm.id, landmarkLat: lm.lat, landmarkLon: lm.lon, landmarkZoom: lm.zoomKm },
+        label: {
+          text: `${lm.emoji} ${lm.name}`,
+          font: "600 11px Inter, sans-serif",
+          fillColor: Cesium.Color.fromCssColorString(lm.kind === "natural" ? "rgba(160, 230, 175, 0.95)" : "rgba(245, 220, 180, 0.95)"),
+          outlineColor: Cesium.Color.fromCssColorString("rgba(0,0,0,0.95)"),
+          outlineWidth: 4,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+          pixelOffset: new Cesium.Cartesian2(0, -10),
+          showBackground: true,
+          backgroundColor: Cesium.Color.fromCssColorString("rgba(8, 14, 26, 0.85)"),
+          backgroundPadding: new Cesium.Cartesian2(6, 3),
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 5_000_000),
+        },
+        point: {
+          pixelSize: 6,
+          color: Cesium.Color.fromCssColorString(lm.kind === "natural" ? "#7cffb1" : "#ffd66b"),
+          outlineColor: Cesium.Color.WHITE,
+          outlineWidth: 1,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 5_000_000),
+        },
+      });
     }
 
     // ===== aircraft billboards =====
@@ -1274,6 +1313,19 @@ export default function Surface({
           destination: Cesium.Cartesian3.fromDegrees(lon, lat, 1_500_000),
           orientation: { heading: 0, pitch: -Cesium.Math.PI_OVER_TWO, roll: 0 },
           duration: 1.6,
+        });
+        return;
+      }
+      // Landmark label click → fly to its zoom altitude.
+      if (picked && picked.id instanceof Cesium.Entity && picked.id.properties?.isLandmark?.getValue()) {
+        const props = picked.id.properties;
+        const lon = props.landmarkLon.getValue();
+        const lat = props.landmarkLat.getValue();
+        const zoom = props.landmarkZoom.getValue();
+        viewer.camera.flyTo({
+          destination: Cesium.Cartesian3.fromDegrees(lon, lat, zoom * 1000),
+          orientation: { heading: 0, pitch: -Cesium.Math.PI_OVER_TWO, roll: 0 },
+          duration: 1.4,
         });
         return;
       }
