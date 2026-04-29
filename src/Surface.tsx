@@ -358,22 +358,31 @@ export default function Surface({
     // Bigger terrain-tile cache so panning a recently-viewed area doesn't
     // re-fetch. Smaller on mobile to keep RAM in check.
     viewer.scene.globe.tileCacheSize = isLow ? 200 : 1000;
-    // Skip tile rendering when the view hasn't changed — saves GPU cycles
-    // when the camera is idle. Already on by viewer config, but reaffirm.
+    // requestRenderMode + maximumRenderTimeChange=Infinity is supposed to
+    // pause idle frames + only render on user input. Sounds great for
+    // battery, but in Cesium 1.121 it has a fatal flaw: imagery tiles
+    // that arrive AFTER the initial frame don't trigger a re-render
+    // reliably. Result: page loads showing a black globe until the user
+    // moves the camera. Reproduced in-browser via the debug session.
+    //
+    // Fix: keep requestRenderMode on (good for battery), but set
+    // maximumRenderTimeChange to a small finite number so the scene
+    // re-renders at least every N seconds — guarantees imagery shows up
+    // shortly after it loads, with negligible perf cost when idle.
+    // Also explicit requestRender on tile-progress as a belt-and-braces.
     viewer.scene.requestRenderMode = true;
-    viewer.scene.maximumRenderTimeChange = Number.POSITIVE_INFINITY;
-    // BUT: with requestRenderMode + maximumRenderTimeChange=Infinity, the
-    // scene only re-renders on camera change / entity change / explicit
-    // requestRender. Imagery tiles load async; Cesium SHOULD call
-    // requestRender via the tile-progress event but in 1.121 + our config
-    // it doesn't reliably fire. Result: page loads with a black globe
-    // (imagery tiles arrive but never get drawn) until the user moves
-    // the camera. Symptom reproduced via in-browser debug. Fix: listen
-    // for tile-progress and explicitly requestRender — no perf cost when
-    // tiles are quiet.
+    viewer.scene.maximumRenderTimeChange = 1.0;        // re-render at most every 1s when idle
     viewer.scene.globe.tileLoadProgressEvent.addEventListener(() => {
       viewer.scene.requestRender();
     });
+    // Belt and suspenders: kick a render every 250ms for the first 10
+    // seconds after viewer creation while imagery is streaming in.
+    let tilePulses = 40;
+    const tilePulse = window.setInterval(() => {
+      if (--tilePulses <= 0) { window.clearInterval(tilePulse); return; }
+      if (!viewerRef.current) { window.clearInterval(tilePulse); return; }
+      viewer.scene.requestRender();
+    }, 250);
     // (Tried disabling orderIndependentTranslucency for perf, but in this
     // Cesium build it's a getter-only property — assigning it throws. Skip.)
 
