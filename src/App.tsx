@@ -3701,6 +3701,48 @@ function App() {
               const week = Math.ceil(doy / 7);
               showToast(`📅 Day ${doy} of ${now.getUTCFullYear()} · Week ${week} · ${365 - doy} days remaining`);
             }},
+            // Distance comparisons
+            { id: "distanceToFamous", label: "Distance from this view to all major cities", group: "Tools", icon: Compass, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const top = MAJOR_CITIES.map(city => ({
+                city,
+                km: haversineKm(c.lat, c.lon, city.lat, city.lon),
+              })).sort((a, b) => a.km - b.km).slice(0, 5);
+              const list = top.map(({ city, km }) => `${city.name}: ${Math.round(km)}km`).join(" · ");
+              showToast(`🗺 Closest 5 cities: ${list}`);
+            }},
+            { id: "distanceISS", label: "Distance from this view to the ISS right now", group: "Tools", icon: Plane, run: () => {
+              const c = cameraStateRef.current;
+              if (!c || !issPosition) { showToast("ISS layer not loaded"); return; }
+              const groundKm = haversineKm(c.lat, c.lon, issPosition.lat, issPosition.lon);
+              const altKm = 408;
+              const slantKm = Math.sqrt(groundKm * groundKm + altKm * altKm);
+              const visible = groundKm < 2280;     // ISS visible up to ~22° above horizon = ~2280km ground
+              showToast(`🛰 ISS: ${Math.round(slantKm)} km away (${Math.round(groundKm)} km ground) — ${visible ? "above your horizon!" : "below horizon"}`);
+            }},
+            // Aircraft within radius
+            { id: "aircraftNearby", label: "Count aircraft within 500km of this view", group: "Tools", icon: Plane, run: () => {
+              const c = cameraStateRef.current;
+              if (!c || !aircraftSnapshot) { showToast("Aircraft layer not loaded"); return; }
+              const nearby = aircraftSnapshot.aircraft.filter(a => haversineKm(c.lat, c.lon, a.lat, a.lon) < 500);
+              if (nearby.length === 0) { showToast("0 aircraft within 500km"); return; }
+              const avgAlt = Math.round(nearby.reduce((s, a) => s + a.altitudeM / 0.3048, 0) / nearby.length);
+              showToast(`✈ ${nearby.length} aircraft within 500km · avg ${avgAlt.toLocaleString()} ft`);
+            }},
+            // Population estimate
+            { id: "populationNearby", label: "Population estimate within 100km of this view", group: "Tools", icon: Compass, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const nearby = MAJOR_CITIES.filter(city => haversineKm(c.lat, c.lon, city.lat, city.lon) < 100);
+              if (nearby.length === 0) {
+                showToast("🏘 No major metropolitan areas within 100km of this view");
+                return;
+              }
+              const total = nearby.reduce((s, c) => s + c.population, 0);
+              const cityList = nearby.map(c => `${c.name} (${(c.population / 1_000_000).toFixed(1)}M)`).join(", ");
+              showToast(`🏙 ${(total / 1_000_000).toFixed(1)}M people within 100km · ${cityList}`);
+            }},
             { id: "easterEggHelp", label: "Easter eggs hint (Konami code lives here…)", group: "Tools", icon: Sparkles, run: () => {
               showToast("🎮 Try ↑↑↓↓←→←→ B A (anywhere on the page)");
             }},
