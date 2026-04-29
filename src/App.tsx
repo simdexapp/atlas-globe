@@ -3443,6 +3443,45 @@ function App() {
                 setFlyTo((p) => ({ id: p.id + 1, lat: c.lat, lon: newLon, altKm: c.altKm }));
               }
             }},
+            // Fun trivia commands
+            { id: "trivPlanetSize", label: "Trivia: Earth size & dimensions", group: "Tools", icon: Sparkles, run: () => {
+              showToast("🌍 Earth: 12,742 km diameter · 40,075 km equator · 510 million km² surface · 6 sextillion kg");
+            }},
+            { id: "trivOcean", label: "Trivia: Ocean facts", group: "Tools", icon: Sparkles, run: () => {
+              showToast("🌊 Ocean: 71% of surface · 1.3 billion km³ water · avg depth 3,688 m · deepest 10,994 m (Challenger Deep)");
+            }},
+            { id: "trivAtmosphere", label: "Trivia: Atmosphere layers", group: "Tools", icon: Sparkles, run: () => {
+              showToast("☁ Atmosphere: troposphere (0-12km) → stratosphere (12-50km) → mesosphere (50-85km) → thermosphere (ISS!) → exosphere");
+            }},
+            { id: "trivMoon", label: "Trivia: Moon facts", group: "Tools", icon: Sparkles, run: () => {
+              showToast("🌙 Moon: 384,400 km away (avg) · 3,474 km diameter · drifting 3.8 cm/year farther · synodic month 29.5 days");
+            }},
+            { id: "trivSun", label: "Trivia: Sun facts", group: "Tools", icon: Sparkles, run: () => {
+              showToast("☀ Sun: 149.6 million km away · 1.39 million km diameter · 5,778 K surface · 4.6 billion years old · ~5 billion years left");
+            }},
+            { id: "trivISS", label: "Trivia: ISS facts", group: "Tools", icon: Sparkles, run: () => {
+              showToast("🛰 ISS: 400 km altitude · 27,600 km/h · orbits Earth every 92 min · 16 orbits/day · livable since 2000");
+            }},
+            { id: "trivAviation", label: "Trivia: Cruise altitude facts", group: "Tools", icon: Plane, run: () => {
+              showToast("✈ Commercial cruise: 30,000-40,000 ft (9-12 km) · less drag · clear of weather · biz jets up to 51,000 ft");
+            }},
+            // Hot/cold extremes
+            { id: "flyToVostok", label: "Fly to Vostok Station (coldest place on Earth)", group: "View", icon: Mountain, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: -78.464, lon: 106.840, altKm: 100 }));
+              showToast("🥶 Vostok Station — recorded -89.2°C (-128.6°F)");
+            }},
+            { id: "flyToDallol", label: "Fly to Dallol (hottest mean temp on Earth)", group: "View", icon: Mountain, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 14.241, lon: 40.300, altKm: 30 }));
+              showToast("🥵 Dallol, Ethiopia — annual mean 34.4°C, can hit 50°C+");
+            }},
+            { id: "flyToOymyakon", label: "Fly to Oymyakon (coldest inhabited place)", group: "View", icon: Mountain, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 63.4625, lon: 142.7872, altKm: 30 }));
+              showToast("❄ Oymyakon, Russia — coldest inhabited (-67.7°C lowest)");
+            }},
+            { id: "flyToFurnaceCreek", label: "Fly to Death Valley", group: "View", icon: Mountain, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 36.4622, lon: -116.8669, altKm: 30 }));
+              showToast("🏜 Death Valley — 56.7°C (134°F) all-time high (1913)");
+            }},
             { id: "easterEggHelp", label: "Easter eggs hint (Konami code lives here…)", group: "Tools", icon: Sparkles, run: () => {
               showToast("🎮 Try ↑↑↓↓←→←→ B A (anywhere on the page)");
             }},
