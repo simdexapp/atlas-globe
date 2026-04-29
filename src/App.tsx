@@ -2256,6 +2256,64 @@ function App() {
           event.preventDefault();
           setInspectorTab("imagery");
           break;
+        case "g":
+          event.preventDefault();
+          // Toggle graticule (Atlas) or country borders (Surface) since
+          // graticule is Atlas-only.
+          if (mode === "atlas") {
+            setLayers((l) => ({ ...l, graticule: !l.graticule }));
+            showToast(layers.graticule ? "Graticule hidden" : "Graticule shown");
+          } else {
+            setLayers((l) => ({ ...l, borders: !l.borders }));
+            showToast(layers.borders ? "Borders hidden" : "Borders shown");
+          }
+          break;
+        case "+":
+        case "=":
+          event.preventDefault();
+          if (cameraStateRef.current) {
+            const c = cameraStateRef.current;
+            setFlyTo((p) => ({ id: p.id + 1, lat: c.lat, lon: c.lon, altKm: Math.max(0.05, c.altKm / 2) }));
+          }
+          break;
+        case "-":
+        case "_":
+          event.preventDefault();
+          if (cameraStateRef.current) {
+            const c = cameraStateRef.current;
+            setFlyTo((p) => ({ id: p.id + 1, lat: c.lat, lon: c.lon, altKm: Math.min(50000, c.altKm * 2) }));
+          }
+          break;
+        case "[":
+          event.preventDefault();
+          // Step back 1h on the Surface clock
+          if (mode === "surface") {
+            const now = new Date();
+            const hr = now.getUTCHours() - 1 + (now.getUTCMinutes() / 60);
+            updateGlobe({ realTimeSun: false });
+            setSurfaceManualHour((hr + 24) % 24);
+            showToast(`⏪ Clock -1h`);
+          }
+          break;
+        case "]":
+          event.preventDefault();
+          if (mode === "surface") {
+            const now = new Date();
+            const hr = now.getUTCHours() + 1 + (now.getUTCMinutes() / 60);
+            updateGlobe({ realTimeSun: false });
+            setSurfaceManualHour(hr % 24);
+            showToast(`⏩ Clock +1h`);
+          }
+          break;
+        case ".":
+          event.preventDefault();
+          // Reset clock to real-time UTC.
+          if (mode === "surface") {
+            updateGlobe({ realTimeSun: true });
+            setSurfaceManualHour(null);
+            showToast("⏯ Real-time UTC clock");
+          }
+          break;
         case "t":
           event.preventDefault();
           cycleTheme();
