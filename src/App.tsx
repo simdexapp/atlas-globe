@@ -3656,6 +3656,51 @@ function App() {
             { id: "infoTerminator", label: "About: Terminator layer (Surface mode)", group: "Tools", icon: SunIcon, run: () => { showToast("🌗 Terminator: live great-circle marking the day/night boundary. 60s redraw under requestRenderMode."); } },
             { id: "infoCountries", label: "About: Country labels (Surface)", group: "Tools", icon: Compass, run: () => { showToast("🌍 Country labels: 50 curated centroids with flags. Tier-1 visible to 12,000km, tier-2 to 4,000km. Click to fly."); } },
             { id: "infoBuildings", label: "About: 3D Buildings (Surface)", group: "Tools", icon: Mountain, run: () => { showToast("🏢 3D Buildings: Cesium OSM Buildings tileset. Off by default — heavy. Tinted soft-white when enabled."); } },
+            // More dramatic cinematic flights
+            { id: "cinematicAroundWorld", label: "Cinematic: tour 7 wonders of the world (~30s)", group: "View", icon: Film, run: () => {
+              const wonders: Array<{ name: string; emoji: string; lat: number; lon: number; alt: number }> = [
+                { name: "Pyramid of Giza", emoji: "🏛", lat: 29.9792, lon: 31.1342, alt: 4 },
+                { name: "Great Wall of China", emoji: "🧱", lat: 40.4319, lon: 116.5704, alt: 8 },
+                { name: "Petra, Jordan", emoji: "🏛", lat: 30.3285, lon: 35.4444, alt: 4 },
+                { name: "Christ the Redeemer", emoji: "⛪", lat: -22.9519, lon: -43.2105, alt: 2 },
+                { name: "Machu Picchu", emoji: "🏛", lat: -13.1631, lon: -72.5450, alt: 4 },
+                { name: "Chichen Itza", emoji: "🏛", lat: 20.6843, lon: -88.5678, alt: 4 },
+                { name: "Taj Mahal", emoji: "🕌", lat: 27.1751, lon: 78.0421, alt: 1.5 },
+                { name: "Roman Colosseum", emoji: "🏛", lat: 41.8902, lon: 12.4922, alt: 1.5 },
+              ];
+              showToast(`🎬 Tour: 7 Wonders (~${wonders.length * 4}s)`);
+              wonders.forEach((w, i) => {
+                setTimeout(() => {
+                  setFlyTo((p) => ({ id: p.id + 1, lat: w.lat, lon: w.lon, altKm: w.alt }));
+                  showToast(`${w.emoji} ${i + 1}/${wonders.length}: ${w.name}`);
+                }, i * 4000);
+              });
+            }},
+            { id: "cinematicSeasons", label: "Cinematic: equinox-to-solstice sun arc (4s)", group: "View", icon: Film, run: () => {
+              showToast("🌞 Watch the sun move across the seasons");
+              const hours = [0, 3, 6, 9, 12, 15, 18, 21];
+              hours.forEach((h, i) => {
+                setTimeout(() => { updateGlobe({ realTimeSun: false }); setSurfaceManualHour(h); }, i * 500);
+              });
+            }},
+            // Performance / debug
+            { id: "perfMode", label: "Toggle performance mode (lower quality, higher FPS)", group: "Tools", icon: Sparkles, run: () => {
+              // Cesium quality on/off — Surface mode listens via prop
+              setSurfaceFog((v) => !v);
+              showToast(`⚡ Performance mode toggled`);
+            }},
+            // Date / time facts
+            { id: "currentDate", label: "Show current date/time (UTC + ISO)", group: "Tools", icon: Compass, run: () => {
+              const now = new Date();
+              showToast(`🕐 ${now.toUTCString()} · ISO: ${now.toISOString()}`);
+            }},
+            { id: "dayOfYear", label: "Show day of year + week info", group: "Tools", icon: Compass, run: () => {
+              const now = new Date();
+              const start = new Date(Date.UTC(now.getUTCFullYear(), 0, 0));
+              const doy = Math.floor((now.getTime() - start.getTime()) / 86400000);
+              const week = Math.ceil(doy / 7);
+              showToast(`📅 Day ${doy} of ${now.getUTCFullYear()} · Week ${week} · ${365 - doy} days remaining`);
+            }},
             { id: "easterEggHelp", label: "Easter eggs hint (Konami code lives here…)", group: "Tools", icon: Sparkles, run: () => {
               showToast("🎮 Try ↑↑↓↓←→←→ B A (anywhere on the page)");
             }},
