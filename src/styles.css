@@ -1163,9 +1163,11 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 2px s
   padding: 9px 16px;
   border: 1px solid color-mix(in srgb, var(--accent), transparent 50%);
   border-radius: 99px;
-  background: rgba(15, 22, 40, 0.95);
-  color: #fff;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+  /* Theme-aware toast — was a hardcoded dark navy that turned to a
+     near-black pill in light theme. */
+  background: var(--surface-elevated);
+  color: var(--gray-12);
+  box-shadow: var(--shadow-3);
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -1190,9 +1192,9 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 2px s
   padding: 6px 12px;
   border: 1px solid color-mix(in srgb, var(--accent), transparent 50%);
   border-radius: 99px;
-  background: rgba(15, 22, 40, 0.85);
+  background: var(--surface-elevated);
   backdrop-filter: blur(8px);
-  color: #fff;
+  color: var(--gray-12);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -1930,9 +1932,9 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
   display: grid;
   gap: 4px;
   padding: 6px;
-  border: 1px solid #1a2030;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: rgba(10, 15, 28, 0.85);
+  background: var(--surface-elevated);
   backdrop-filter: blur(8px);
 }
 
@@ -1970,7 +1972,8 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
 }
 
 .atlasPinSwatch.active {
-  border-color: #fff;
+  /* Use --gray-12 so the swatch ring contrasts with light theme too */
+  border-color: var(--gray-12);
   box-shadow: 0 0 8px currentColor;
 }
 
@@ -1979,10 +1982,10 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
   min-height: 56px;
   padding: 8px 10px;
   margin-bottom: 10px;
-  border: 1px solid #1a2030;
+  border: 1px solid var(--border);
   border-radius: 5px;
-  background: #0a1120;
-  color: #fff;
+  background: var(--gray-1);
+  color: var(--gray-12);
   font-family: inherit;
   font-size: 11.5px;
   resize: vertical;
@@ -3135,13 +3138,13 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
   gap: 1px;
 }
 .atlasAircraftCardBody span {
-  color: #7a8597;
+  color: var(--gray-9);
   font-size: 9.5px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
 .atlasAircraftCardBody b {
-  color: #e8eef5;
+  color: var(--gray-12);
   font-weight: 700;
 }
 .atlasAircraftCardActions {
@@ -3237,18 +3240,18 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
   flex-direction: column;
   gap: 4px;
   font-size: 11px;
-  color: #b8c2d2;
+  color: var(--gray-11);
 }
 .timelapseGrid label span {
   font-size: 10.5px;
   letter-spacing: 0.04em;
-  color: #7a8597;
+  color: var(--gray-9);
 }
 .timelapseGrid select,
 .timelapseGrid input[type="date"] {
-  background: #0b121f;
-  color: #e8eef5;
-  border: 1px solid #1a2030;
+  background: var(--gray-1);
+  color: var(--gray-12);
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 6px 8px;
   font: inherit;
@@ -3263,7 +3266,7 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
   flex-direction: column;
   gap: 6px;
   font-size: 11px;
-  color: #b8c2d2;
+  color: var(--gray-11);
 }
 
 .timelapsePlayer {
@@ -3271,15 +3274,15 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
   align-items: center;
   gap: 8px;
   padding: 8px;
-  background: rgba(10, 16, 28, 0.6);
-  border: 1px solid #1a2030;
+  background: var(--gray-1);
+  border: 1px solid var(--border);
   border-radius: 8px;
 }
 .timelapsePlayer input[type="range"] { accent-color: var(--accent); }
 .timelapseFrameLabel {
   font-family: ui-monospace, monospace;
   font-size: 11px;
-  color: #5cb5ff;
+  color: var(--accent);
   min-width: 84px;
   text-align: right;
   letter-spacing: 0.04em;
