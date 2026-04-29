@@ -3398,6 +3398,31 @@ function App() {
                 showToast(`✈ ${city.name} (${(city.population / 1_000_000).toFixed(1)}M people)`);
               },
             })),
+            // Bulk AIRPORTS fly-to commands. Includes the 25 busiest world
+            // airports + a couple of regional standouts, all from the
+            // existing AIRPORTS list. Type "LAX" / "JFK" / "Dubai" / etc.
+            ...AIRPORTS.map(airport => ({
+              id: `airportFly-${airport.iata}`,
+              label: `✈ Fly to ${airport.iata} · ${airport.name} (${airport.city})`,
+              group: "View" as const,
+              icon: Plane,
+              run: () => {
+                setFlyTo((p) => ({ id: p.id + 1, lat: airport.lat, lon: airport.lon, altKm: 5 }));
+                showToast(`✈ ${airport.iata} (${airport.icao}) — ${airport.city}, ${airport.country}`);
+              },
+            })),
+            // Bulk LANDMARKS fly-to commands. Pulls from the curated
+            // landmark list with their preferred zoom altitudes.
+            ...LANDMARKS.map(lm => ({
+              id: `landmarkFly-${lm.id}`,
+              label: `${lm.emoji} Fly to ${lm.name}`,
+              group: "View" as const,
+              icon: Mountain,
+              run: () => {
+                setFlyTo((p) => ({ id: p.id + 1, lat: lm.lat, lon: lm.lon, altKm: lm.zoomKm }));
+                showToast(`${lm.emoji} ${lm.name}`);
+              },
+            })),
             // Quick-save: turn the URL hash into a bookmark with auto-naming.
             { id: "saveQuickBookmark", label: "Quick-save current view as bookmark (auto-name)", group: "Tools", icon: BookmarkPlus, run: () => {
               const c = cameraStateRef.current;
