@@ -2555,6 +2555,21 @@ function App() {
             // Pole quick-views.
             { id: "viewNorthPole", label: "View North Pole", group: "View", icon: Navigation, run: () => setFlyTo((p) => ({ id: p.id + 1, lat: 89.99, lon: 0, altKm: 4500 })) },
             { id: "viewSouthPole", label: "View South Pole", group: "View", icon: Navigation, run: () => setFlyTo((p) => ({ id: p.id + 1, lat: -89.99, lon: 0, altKm: 4500 })) },
+            // Geolocation — fly camera to user's actual location. Browser
+            // prompts for permission. Coarse accuracy is fine since we're
+            // viewing at ~30km altitude anyway.
+            { id: "flyToMyLocation", label: "Fly to my location (uses geolocation)", group: "View", icon: Crosshair, run: () => {
+              if (!navigator.geolocation) { showToast("Geolocation not supported"); return; }
+              showToast("Asking browser for your location…");
+              navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                  setFlyTo((p) => ({ id: p.id + 1, lat: pos.coords.latitude, lon: pos.coords.longitude, altKm: 30 }));
+                  showToast(`📍 Flying to ${pos.coords.latitude.toFixed(2)}, ${pos.coords.longitude.toFixed(2)} (±${Math.round(pos.coords.accuracy)}m)`);
+                },
+                (err) => showToast(`Location denied: ${err.message}`),
+                { enableHighAccuracy: false, timeout: 8000, maximumAge: 5 * 60_000 }
+              );
+            }},
             // Pull way back to see Earth as a small disk — "Voyager view".
             { id: "viewMars", label: "Mars-view (Earth as a small disk)", group: "View", icon: Navigation, run: () => setFlyTo((p) => ({ id: p.id + 1, lat: 0, lon: 0, altKm: 100_000 })) },
             // Landmark of the day — deterministic by date so the same
@@ -2712,6 +2727,32 @@ function App() {
                 () => showToast(`Copied: ${link.length > 60 ? link.slice(0, 57) + "..." : link}`),
                 () => showToast(link)
               );
+            }},
+            // Fly to the subsolar point — where the sun is directly
+            // overhead right now. Earth's noon spot.
+            { id: "flyToSubsolar", label: "Fly to subsolar point (where sun is overhead)", group: "View", icon: SunIcon, run: () => {
+              const now = new Date();
+              const start = Date.UTC(now.getUTCFullYear(), 0, 0);
+              const doy = Math.floor((now.getTime() - start) / 86400000);
+              const declDeg = 23.45 * Math.sin(2 * Math.PI / 365 * (doy - 81));
+              const utcHours = now.getUTCHours() + now.getUTCMinutes() / 60;
+              const subsolarLonDeg = -((utcHours - 12) * 15);
+              setFlyTo((p) => ({ id: p.id + 1, lat: declDeg, lon: subsolarLonDeg, altKm: 8000 }));
+              showToast(`☀ Subsolar point: ${declDeg.toFixed(1)}°, ${subsolarLonDeg.toFixed(1)}°`);
+            }},
+            // Antisolar — opposite of the subsolar point, where it's
+            // local midnight everywhere on the meridian.
+            { id: "flyToAntisolar", label: "Fly to antisolar point (midnight zone)", group: "View", icon: Compass, run: () => {
+              const now = new Date();
+              const start = Date.UTC(now.getUTCFullYear(), 0, 0);
+              const doy = Math.floor((now.getTime() - start) / 86400000);
+              const declDeg = 23.45 * Math.sin(2 * Math.PI / 365 * (doy - 81));
+              const utcHours = now.getUTCHours() + now.getUTCMinutes() / 60;
+              const subsolarLonDeg = -((utcHours - 12) * 15);
+              const antiLat = -declDeg;
+              const antiLon = subsolarLonDeg > 0 ? subsolarLonDeg - 180 : subsolarLonDeg + 180;
+              setFlyTo((p) => ({ id: p.id + 1, lat: antiLat, lon: antiLon, altKm: 8000 }));
+              showToast(`🌑 Antisolar point: ${antiLat.toFixed(1)}°, ${antiLon.toFixed(1)}°`);
             }},
             { id: "sunInfo", label: "Show local sun info (sunrise/sunset/elevation) for this view", group: "Tools", icon: SunIcon, run: () => {
               const c = cameraStateRef.current;
