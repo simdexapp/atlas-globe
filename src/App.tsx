@@ -3336,6 +3336,46 @@ function App() {
               url.hash = `#@${c.lat.toFixed(4)},${c.lon.toFixed(4)},${c.altKm.toFixed(1)}km`;
               window.open(`https://tinyurl.com/create.php?url=${encodeURIComponent(url.toString())}`, "_blank");
             }},
+            // Open this view in lots of mapping services
+            { id: "openInBing", label: "Open in Bing Maps", group: "Tools", icon: Share2, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const lvl = Math.max(1, Math.min(20, Math.round(20 - Math.log2(c.altKm + 1))));
+              window.open(`https://www.bing.com/maps?cp=${c.lat}~${c.lon}&lvl=${lvl}`, "_blank");
+            }},
+            { id: "openInAppleMaps", label: "Open in Apple Maps", group: "Tools", icon: Share2, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              window.open(`https://maps.apple.com/?ll=${c.lat},${c.lon}&z=${Math.max(1, Math.min(20, Math.round(20 - Math.log2(c.altKm + 1))))}`, "_blank");
+            }},
+            { id: "openInGoogleEarth", label: "Open in Google Earth (web)", group: "Tools", icon: Share2, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              window.open(`https://earth.google.com/web/@${c.lat},${c.lon},${(c.altKm * 1000).toFixed(0)}a,0d`, "_blank");
+            }},
+            { id: "openInWindy", label: "Open this view in Windy.com (winds + radar)", group: "Tools", icon: Share2, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const z = Math.max(3, Math.min(15, Math.round(20 - Math.log2(c.altKm + 1))));
+              window.open(`https://www.windy.com/?${c.lat},${c.lon},${z}`, "_blank");
+            }},
+            { id: "openInFlightradar", label: "Open this view in Flightradar24", group: "Tools", icon: Plane, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const z = Math.max(2, Math.min(15, Math.round(20 - Math.log2(c.altKm + 1))));
+              window.open(`https://www.flightradar24.com/${c.lat.toFixed(2)},${c.lon.toFixed(2)}/${z}`, "_blank");
+            }},
+            { id: "openInMarineTraffic", label: "Open this view in MarineTraffic (ships)", group: "Tools", icon: Share2, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const z = Math.max(2, Math.min(17, Math.round(20 - Math.log2(c.altKm + 1))));
+              window.open(`https://www.marinetraffic.com/en/ais/home/centerx:${c.lon.toFixed(2)}/centery:${c.lat.toFixed(2)}/zoom:${z}`, "_blank");
+            }},
+            { id: "openInWeatherUnderground", label: "Open Weather Underground at this view", group: "Tools", icon: Cloud, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              window.open(`https://www.wunderground.com/weather/${c.lat.toFixed(3)},${c.lon.toFixed(3)}`, "_blank");
+            }},
             // Quick-save: turn the URL hash into a bookmark with auto-naming.
             { id: "saveQuickBookmark", label: "Quick-save current view as bookmark (auto-name)", group: "Tools", icon: BookmarkPlus, run: () => {
               const c = cameraStateRef.current;
