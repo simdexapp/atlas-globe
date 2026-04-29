@@ -4032,6 +4032,93 @@ function App() {
             }},
             // Compare current view's weather to another location. Useful
             // for trip planning: "is it warmer in Sydney right now than NYC?"
+            // ===== Personal Atlas stats =====
+            // Comprehensive "your atlas" report. Combines pin/bookmark
+            // metrics, geographic extents, distance coverage, etc. into
+            // one console-printed report + summary toast.
+            { id: "myAtlasStats", label: "📊 My Atlas — personal stats report (pins, bookmarks, coverage)", group: "Tools", icon: Sparkles, run: () => {
+              const allPoints = [...pins.map(p => ({ lat: p.lat, lon: p.lon, name: p.label })), ...bookmarks.filter(b => b.savedAt > 0).map(b => ({ lat: b.lat, lon: b.lon, name: b.name }))];
+              if (allPoints.length === 0) {
+                showToast("📊 No pins or user-saved bookmarks yet — drop some pins to build your atlas!");
+                return;
+              }
+              const userBookmarks = bookmarks.filter(b => b.savedAt > 0).length;
+              // Bounding box
+              let minLat = 90, maxLat = -90, minLon = 180, maxLon = -180;
+              for (const p of allPoints) {
+                if (p.lat < minLat) minLat = p.lat;
+                if (p.lat > maxLat) maxLat = p.lat;
+                if (p.lon < minLon) minLon = p.lon;
+                if (p.lon > maxLon) maxLon = p.lon;
+              }
+              // Centroid (mean)
+              const cLat = allPoints.reduce((s, p) => s + p.lat, 0) / allPoints.length;
+              const cLon = allPoints.reduce((s, p) => s + p.lon, 0) / allPoints.length;
+              // Total connecting distance (sum of pin pairs in creation order)
+              let totalKm = 0;
+              for (let i = 1; i < pins.length; i++) {
+                totalKm += haversineKm(pins[i-1].lat, pins[i-1].lon, pins[i].lat, pins[i].lon);
+              }
+              // Hemisphere coverage
+              const hemis = { N: 0, S: 0, E: 0, W: 0 };
+              for (const p of allPoints) {
+                if (p.lat >= 0) hemis.N++; else hemis.S++;
+                if (p.lon >= 0) hemis.E++; else hemis.W++;
+              }
+              // Compass-rose extremes
+              const northmost = allPoints.reduce((max, p) => p.lat > max.lat ? p : max, allPoints[0]);
+              const southmost = allPoints.reduce((min, p) => p.lat < min.lat ? p : min, allPoints[0]);
+              const eastmost  = allPoints.reduce((max, p) => p.lon > max.lon ? p : max, allPoints[0]);
+              const westmost  = allPoints.reduce((min, p) => p.lon < min.lon ? p : min, allPoints[0]);
+              // Build full report
+              const report = [
+                `📊 Your Atlas Globe statistics`,
+                ``,
+                `  Pins:               ${pins.length}`,
+                `  Bookmarks (saved):  ${userBookmarks}`,
+                `  Total points:       ${allPoints.length}`,
+                ``,
+                `  Bounding box:       ${formatLat(minLat)} ↔ ${formatLat(maxLat)}, ${formatLon(minLon)} ↔ ${formatLon(maxLon)}`,
+                `  Spans:              ${(maxLat - minLat).toFixed(1)}° lat × ${(maxLon - minLon).toFixed(1)}° lon`,
+                `  Centroid:           ${formatLat(cLat)} ${formatLon(cLon)}`,
+                ``,
+                `  Total path distance (pins in order):  ${formatDistKm(totalKm, unitsImperial)}`,
+                ``,
+                `  Hemisphere coverage:`,
+                `    Northern: ${hemis.N}   Southern: ${hemis.S}`,
+                `    Eastern:  ${hemis.E}   Western:  ${hemis.W}`,
+                ``,
+                `  Compass rose extremes:`,
+                `    Northmost: ${northmost.name} (${formatLat(northmost.lat)})`,
+                `    Southmost: ${southmost.name} (${formatLat(southmost.lat)})`,
+                `    Eastmost:  ${eastmost.name} (${formatLon(eastmost.lon)})`,
+                `    Westmost:  ${westmost.name} (${formatLon(westmost.lon)})`,
+              ].join("\n");
+              console.log(report);
+              showToast(`📊 ${pins.length} pins · ${userBookmarks} bookmarks · ${formatDistKm(totalKm, unitsImperial)} total path · spans ${(maxLat - minLat).toFixed(0)}° lat — full report in console`);
+            }},
+            // Visualisation: fly through your bounding box with auto-zoom
+            // to fit all your points.
+            { id: "atlasFitAll", label: "🎯 Frame all my pins + bookmarks", group: "View", icon: Crosshair, run: () => {
+              const allPoints = [...pins.map(p => ({ lat: p.lat, lon: p.lon })), ...bookmarks.filter(b => b.savedAt > 0).map(b => ({ lat: b.lat, lon: b.lon }))];
+              if (allPoints.length === 0) {
+                showToast("No pins or user bookmarks to frame");
+                return;
+              }
+              let minLat = 90, maxLat = -90, minLon = 180, maxLon = -180;
+              for (const p of allPoints) {
+                if (p.lat < minLat) minLat = p.lat;
+                if (p.lat > maxLat) maxLat = p.lat;
+                if (p.lon < minLon) minLon = p.lon;
+                if (p.lon > maxLon) maxLon = p.lon;
+              }
+              const cLat = (minLat + maxLat) / 2;
+              const cLon = (minLon + maxLon) / 2;
+              const diagKm = haversineKm(minLat, minLon, maxLat, maxLon);
+              const altKm = Math.max(50, Math.min(20000, diagKm * 1.5));
+              setFlyTo((p) => ({ id: p.id + 1, lat: cLat, lon: cLon, altKm }));
+              showToast(`🎯 Framed ${allPoints.length} points (~${Math.round(diagKm)} km diagonal)`);
+            }},
             { id: "compareWeather", label: "🌡 Compare weather: this view vs another major city", group: "Tools", icon: Cloud, run: async () => {
               const c = cameraStateRef.current;
               if (!c) return;
