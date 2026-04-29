@@ -2785,6 +2785,146 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
   font-weight: 600;
 }
 
+/* ============= weather forecast card =============
+   Floating 7-day forecast card triggered from Cmd+K. Centered above the
+   footer; sized to comfortably show all 7 days side-by-side without
+   wrapping on a desktop. On mobile we fall back to horizontal scroll. */
+.atlasWeatherCard {
+  position: fixed;
+  bottom: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 12;
+  width: min(640px, calc(100vw - 32px));
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-4);
+  background: var(--surface-elevated);
+  backdrop-filter: blur(14px);
+  box-shadow: var(--shadow-3);
+  color: var(--gray-12);
+  display: grid;
+  gap: var(--s-3);
+  animation: scaleIn var(--dur-base) var(--ease-out);
+}
+.atlasWeatherHead {
+  display: grid;
+  grid-template-columns: 14px 1fr auto;
+  align-items: center;
+  gap: var(--s-2);
+  padding-bottom: var(--s-2);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.atlasWeatherHead strong {
+  font-size: var(--text-base);
+  color: var(--gray-12);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.atlasWeatherLoading {
+  padding: var(--s-4);
+  text-align: center;
+  color: var(--gray-9);
+  font-size: var(--text-xs);
+}
+.atlasWeatherCurrent {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-2);
+  border-radius: var(--r-2);
+  background: color-mix(in srgb, var(--accent), transparent 92%);
+}
+.atlasWeatherEmoji {
+  font-size: 36px;
+  line-height: 1;
+}
+.atlasWeatherTemp {
+  display: grid;
+  gap: 2px;
+}
+.atlasWeatherTemp strong {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--gray-12);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+.atlasWeatherTemp span {
+  font-size: var(--text-xs);
+  color: var(--gray-10);
+}
+.atlasWeatherMeta {
+  display: grid;
+  gap: 2px;
+  text-align: right;
+  font-size: 11px;
+  color: var(--gray-10);
+  font-family: ui-monospace, monospace;
+}
+.atlasWeatherDaily {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: var(--s-1);
+}
+.atlasWeatherDay {
+  display: grid;
+  gap: 2px;
+  justify-items: center;
+  padding: var(--s-2) 4px;
+  border-radius: var(--r-2);
+  background: var(--gray-1);
+}
+.atlasWeatherDay:hover { background: var(--gray-2); }
+.atlasWeatherDayName {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--gray-9);
+}
+.atlasWeatherDayEmoji {
+  font-size: 22px;
+  line-height: 1.1;
+}
+.atlasWeatherDayTemps {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-family: ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+.atlasWeatherDayTemps strong {
+  font-size: 13px;
+  color: var(--gray-12);
+  font-weight: 700;
+}
+.atlasWeatherDayTemps em {
+  font-size: 11px;
+  color: var(--gray-9);
+  font-style: normal;
+}
+.atlasWeatherDayPrecip {
+  font-size: 9.5px;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Mobile: tighten the grid + allow horizontal scroll if too narrow. */
+@media (max-width: 620px) {
+  .atlasWeatherCard {
+    bottom: 240px; /* avoid the bottom inspector */
+    width: calc(100vw - 16px);
+  }
+  .atlasWeatherDaily {
+    grid-template-columns: repeat(7, minmax(48px, 1fr));
+    overflow-x: auto;
+  }
+  .atlasWeatherCurrent { grid-template-columns: auto 1fr; }
+  .atlasWeatherMeta { display: none; }
+}
+
 /* "Right now on Earth" digest widget */
 .atlasDigestWidget {
   position: fixed;

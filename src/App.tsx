@@ -815,6 +815,56 @@ function App() {
   const [tourPlaying, setTourPlaying] = useState(false);
   const tourIndexRef = useRef(0);
   const tourTimerRef = useRef<number | null>(null);
+  // Weather forecast card — full 7-day at any lat/lon. Triggered via the
+  // 'Weather forecast at this view' Cmd+K command. Lives in component
+  // state so the card can be dismissed.
+  const [weatherCard, setWeatherCard] = useState<null | {
+    lat: number;
+    lon: number;
+    locName: string;
+    loading: boolean;
+    error?: string;
+    current?: { temp: number; code: number; wind: number; windDir: number; humidity: number; feels?: number };
+    daily?: Array<{ date: string; code: number; tmax: number; tmin: number; precipProb: number; windMax: number }>;
+  }>(null);
+  const fetchWeatherCard = useCallback(async (lat: number, lon: number, locName: string) => {
+    setWeatherCard({ lat, lon, locName, loading: true });
+    try {
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(3)}&longitude=${lon.toFixed(3)}` +
+        `&current=temperature_2m,weather_code,wind_speed_10m,wind_direction_10m,relative_humidity_2m,apparent_temperature` +
+        `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max` +
+        `&timezone=auto&forecast_days=7`;
+      const r = await fetch(url, { cache: "no-store" });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const j = await r.json() as any;
+      if (!j?.current || !j?.daily) throw new Error("malformed");
+      const cur = j.current;
+      const d = j.daily;
+      const days = (d.time as string[]).map((t, i) => ({
+        date: t,
+        code: d.weather_code[i] as number,
+        tmax: d.temperature_2m_max[i] as number,
+        tmin: d.temperature_2m_min[i] as number,
+        precipProb: d.precipitation_probability_max?.[i] ?? 0,
+        windMax: d.wind_speed_10m_max?.[i] ?? 0,
+      }));
+      setWeatherCard({
+        lat, lon, locName,
+        loading: false,
+        current: {
+          temp: cur.temperature_2m,
+          code: cur.weather_code,
+          wind: cur.wind_speed_10m,
+          windDir: cur.wind_direction_10m,
+          humidity: cur.relative_humidity_2m,
+          feels: cur.apparent_temperature,
+        },
+        daily: days,
+      });
+    } catch (e) {
+      setWeatherCard((prev) => prev ? { ...prev, loading: false, error: (e as Error).message } : null);
+    }
+  }, []);
   const [coordFormat, setCoordFormat] = useState<"decimal" | "dms">("decimal");
   const [searchHistory, setSearchHistory] = useState<string[]>([]);
   const [timelapse, setTimelapse] = useState<{ active: boolean; from: string; to: string; days: number; fps: number; recording: boolean }>({ active: false, from: "", to: "", days: 30, fps: 6, recording: false });
@@ -3512,6 +3562,19 @@ function App() {
                 showToast(`☁ ${cur.temperature_2m}°C · wind ${cur.wind_speed_10m} kph @ ${Math.round(cur.wind_direction_10m)}° · RH ${cur.relative_humidity_2m}%`);
               } catch { showToast("Weather: fetch failed"); }
             }},
+            // Full 7-day forecast card — Open-Meteo daily endpoint. Renders
+            // a floating card with day-by-day weather code, high/low,
+            // precipitation probability, max wind. Closeable. Useful for
+            // 'should I travel here' planning.
+            { id: "weatherForecast", label: "📅 7-day weather forecast at this view", group: "Tools", icon: Cloud, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              fetchWeatherCard(c.lat, c.lon, `${formatLat(c.lat)} ${formatLon(c.lon)}`);
+            }},
+            { id: "weatherForecastNYC",   label: "📅 7-day forecast: New York City",   group: "Tools", icon: Cloud, run: () => fetchWeatherCard(40.7128, -74.0060,  "New York") },
+            { id: "weatherForecastLondon",label: "📅 7-day forecast: London",         group: "Tools", icon: Cloud, run: () => fetchWeatherCard(51.5074, -0.1278,    "London") },
+            { id: "weatherForecastTokyo", label: "📅 7-day forecast: Tokyo",          group: "Tools", icon: Cloud, run: () => fetchWeatherCard(35.6762, 139.6503,   "Tokyo") },
+            { id: "weatherForecastSyd",   label: "📅 7-day forecast: Sydney",         group: "Tools", icon: Cloud, run: () => fetchWeatherCard(-33.8688, 151.2093, "Sydney") },
             // Open-Meteo air quality at camera-center. Returns PM2.5/10 + EU AQI.
             // Closest aircraft to the camera-center point. Useful for
             // identifying "what's that plane right above me" — set the
@@ -6038,6 +6101,56 @@ function App() {
         );
       })()}
 
+      {/* 7-day weather forecast card. Triggered via Cmd+K — shows
+          current conditions plus a 7-day strip with WMO weather codes
+          mapped to emoji/labels. Closes with the X button. */}
+      {weatherCard && (
+        <div className="atlasWeatherCard" role="dialog" aria-label="Weather forecast">
+          <div className="atlasWeatherHead">
+            <Cloud size={14} />
+            <strong>Weather · {weatherCard.locName}</strong>
+            <button type="button" className="atlasIconBtn" onClick={() => setWeatherCard(null)} aria-label="Close weather card"><X size={11} /></button>
+          </div>
+          {weatherCard.loading && <div className="atlasWeatherLoading">Fetching forecast…</div>}
+          {weatherCard.error && <div className="atlasWeatherLoading">Forecast failed: {weatherCard.error}</div>}
+          {weatherCard.current && weatherCard.daily && (() => {
+            const cur = weatherCard.current!;
+            const w = wmoLabel(cur.code);
+            return (
+              <>
+                <div className="atlasWeatherCurrent">
+                  <span className="atlasWeatherEmoji" aria-hidden>{w.emoji}</span>
+                  <div className="atlasWeatherTemp">
+                    <strong>{Math.round(cur.temp)}°C</strong>
+                    <span>{w.label}{cur.feels !== undefined ? ` · feels ${Math.round(cur.feels)}°` : ""}</span>
+                  </div>
+                  <div className="atlasWeatherMeta">
+                    <span>💨 {Math.round(cur.wind)} km/h {compassDir(cur.windDir)}</span>
+                    <span>💧 {cur.humidity}%</span>
+                  </div>
+                </div>
+                <div className="atlasWeatherDaily">
+                  {weatherCard.daily.map((d, i) => {
+                    const dw = wmoLabel(d.code);
+                    return (
+                      <div key={d.date} className="atlasWeatherDay">
+                        <span className="atlasWeatherDayName">{dayLabel(d.date, i)}</span>
+                        <span className="atlasWeatherDayEmoji" title={dw.label}>{dw.emoji}</span>
+                        <span className="atlasWeatherDayTemps">
+                          <strong>{Math.round(d.tmax)}°</strong>
+                          <em>{Math.round(d.tmin)}°</em>
+                        </span>
+                        {d.precipProb > 0 && <span className="atlasWeatherDayPrecip" title="Precipitation probability">💧 {Math.round(d.precipProb)}%</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            );
+          })()}
+        </div>
+      )}
+
       {layers.worldDigest && (() => {
         // One-stop dashboard. Pulls from: aircraft snapshot, EONET events,
         // space weather, next rocket launch. Each data source is loaded
@@ -8007,6 +8120,34 @@ function bearingDeg(lat1: number, lon1: number, lat2: number, lon2: number) {
 function compassDir(deg: number): string {
   const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
   return dirs[Math.round(((deg % 360) + 360) % 360 / 45) % 8];
+}
+
+// WMO weather-code lookup. Open-Meteo returns these for both current and
+// daily forecasts; we map to a label + emoji for the forecast card. Codes
+// are grouped by category (clear / cloud / fog / drizzle / rain / snow /
+// shower / thunder) and an unknown fallback.
+function wmoLabel(code: number): { emoji: string; label: string } {
+  if (code === 0) return { emoji: "☀️", label: "Clear" };
+  if (code === 1) return { emoji: "🌤", label: "Mainly clear" };
+  if (code === 2) return { emoji: "⛅", label: "Partly cloudy" };
+  if (code === 3) return { emoji: "☁️", label: "Overcast" };
+  if (code === 45 || code === 48) return { emoji: "🌫", label: "Fog" };
+  if (code >= 51 && code <= 57) return { emoji: "🌦", label: "Drizzle" };
+  if (code >= 61 && code <= 67) return { emoji: "🌧", label: "Rain" };
+  if (code >= 71 && code <= 77) return { emoji: "❄️", label: "Snow" };
+  if (code >= 80 && code <= 82) return { emoji: "🌧", label: "Showers" };
+  if (code === 85 || code === 86) return { emoji: "🌨", label: "Snow showers" };
+  if (code >= 95) return { emoji: "⛈", label: "Thunderstorm" };
+  return { emoji: "❓", label: `Code ${code}` };
+}
+
+// Day-of-week label from an ISO date string. "today" / "tomorrow" if those
+// match; otherwise a 3-letter weekday.
+function dayLabel(iso: string, idx: number): string {
+  if (idx === 0) return "Today";
+  if (idx === 1) return "Tomorrow";
+  const d = new Date(iso + "T12:00:00");
+  return d.toLocaleDateString(undefined, { weekday: "short" });
 }
 
 // Distance formatter — uses caller's unit preference. ≥10 unit threshold
