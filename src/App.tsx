@@ -827,6 +827,82 @@ function App() {
     current?: { temp: number; code: number; wind: number; windDir: number; humidity: number; feels?: number };
     daily?: Array<{ date: string; code: number; tmax: number; tmin: number; precipProb: number; windMax: number }>;
   }>(null);
+  // "What's here?" rich info card — combines multiple existing data
+  // sources (reverse-geocode + weather + elevation + sunrise/sunset +
+  // Wikipedia + antipode) into ONE comprehensive card. Triggered via a
+  // single Cmd+K command, this turns the globe into a 'context lookup'
+  // tool: click anywhere, learn everything about it.
+  const [whatsHere, setWhatsHere] = useState<null | {
+    lat: number;
+    lon: number;
+    loading: boolean;
+    place?: { name: string; country: string; countryCode: string; admin?: string };
+    weather?: { temp: number; code: number; humidity: number };
+    elev?: number;
+    sun?: { sunrise: number; sunset: number; dayLengthH: number } | "polar-day" | "polar-night";
+    wiki?: { extract: string; thumbUrl?: string; pageUrl?: string };
+    error?: string;
+  }>(null);
+  const fetchWhatsHere = useCallback(async (lat: number, lon: number) => {
+    setWhatsHere({ lat, lon, loading: true });
+    // Fire all four lookups in parallel (geocode, weather, elevation, wiki).
+    // Each one is best-effort — if any fails, we just skip its section.
+    const fetchGeocode = async () => {
+      try {
+        const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10`, { headers: { Accept: "application/json" } });
+        if (!r.ok) return undefined;
+        const j = await r.json();
+        const a = j?.address || {};
+        return {
+          name: a.city || a.town || a.village || a.hamlet || a.county || a.state || a.country || "Unknown",
+          country: a.country || "",
+          countryCode: (a.country_code || "").toUpperCase(),
+          admin: a.state || a.region || a.county,
+        };
+      } catch { return undefined; }
+    };
+    const fetchWeather = async () => {
+      try {
+        const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,relative_humidity_2m`, { cache: "no-store" });
+        if (!r.ok) return undefined;
+        const j = await r.json();
+        const c = j?.current;
+        if (!c) return undefined;
+        return { temp: c.temperature_2m, code: c.weather_code, humidity: c.relative_humidity_2m };
+      } catch { return undefined; }
+    };
+    const fetchElev = async () => {
+      try {
+        const r = await fetch(`https://api.open-meteo.com/v1/elevation?latitude=${lat}&longitude=${lon}`);
+        if (!r.ok) return undefined;
+        const j = await r.json();
+        return typeof j?.elevation?.[0] === "number" ? j.elevation[0] : undefined;
+      } catch { return undefined; }
+    };
+    const fetchWiki = async (placeName: string) => {
+      if (!placeName || placeName === "Unknown") return undefined;
+      try {
+        const r = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(placeName)}`);
+        if (!r.ok) return undefined;
+        const j = await r.json();
+        if (!j?.extract) return undefined;
+        return {
+          extract: j.extract.length > 280 ? j.extract.slice(0, 280) + "…" : j.extract,
+          thumbUrl: j.thumbnail?.source,
+          pageUrl: j.content_urls?.desktop?.page,
+        };
+      } catch { return undefined; }
+    };
+    const [place, weather, elev] = await Promise.all([fetchGeocode(), fetchWeather(), fetchElev()]);
+    const wiki = place ? await fetchWiki(place.name) : undefined;
+    // Sunrise/sunset using the existing solarTimes() helper (synchronous).
+    const sun = solarTimes(lat, lon, new Date());
+    const sunData = (sun === "polar-day" || sun === "polar-night")
+      ? sun
+      : { sunrise: sun.sunrise, sunset: sun.sunset, dayLengthH: ((sun.sunset - sun.sunrise) + 24) % 24 };
+    setWhatsHere({ lat, lon, loading: false, place, weather, elev, sun: sunData, wiki });
+  }, []);
+
   const fetchWeatherCard = useCallback(async (lat: number, lon: number, locName: string) => {
     setWeatherCard({ lat, lon, locName, loading: true });
     try {
@@ -3571,6 +3647,14 @@ function App() {
               if (!c) return;
               fetchWeatherCard(c.lat, c.lon, `${formatLat(c.lat)} ${formatLon(c.lon)}`);
             }},
+            // 'What's here?' rich info card — combines reverse-geocode +
+            // current weather + elevation + sun times + Wikipedia summary
+            // into one comprehensive lookup card. The big new context lookup.
+            { id: "whatsHereRich", label: "ℹ️  What's here? (rich info card — geocode + weather + Wikipedia + facts)", group: "Tools", icon: Sparkles, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              fetchWhatsHere(c.lat, c.lon);
+            }},
             { id: "weatherForecastNYC",   label: "📅 7-day forecast: New York City",   group: "Tools", icon: Cloud, run: () => fetchWeatherCard(40.7128, -74.0060,  "New York") },
             { id: "weatherForecastLondon",label: "📅 7-day forecast: London",         group: "Tools", icon: Cloud, run: () => fetchWeatherCard(51.5074, -0.1278,    "London") },
             { id: "weatherForecastTokyo", label: "📅 7-day forecast: Tokyo",          group: "Tools", icon: Cloud, run: () => fetchWeatherCard(35.6762, 139.6503,   "Tokyo") },
@@ -6097,6 +6181,98 @@ function App() {
             ) : lower ? (
               <div className="atlasAltScaleSingle">{lower.emoji} {(altKm / lower.km).toFixed(0)}× higher than {lower.name}</div>
             ) : null}
+          </div>
+        );
+      })()}
+
+      {/* "What's here?" rich info card — combines reverse-geocode,
+          current weather, elevation, sunrise/sunset, Wikipedia summary,
+          antipode coords. Triggered via Cmd+K. */}
+      {whatsHere && (() => {
+        const flagEmoji = (cc: string) => {
+          if (!cc || cc.length !== 2) return "";
+          const A = 0x41, RI = 0x1F1E6;
+          return String.fromCodePoint(cc.charCodeAt(0) - A + RI, cc.charCodeAt(1) - A + RI);
+        };
+        const aLat = -whatsHere.lat;
+        const aLon = whatsHere.lon > 0 ? whatsHere.lon - 180 : whatsHere.lon + 180;
+        const fmtUTC = (h: number) => {
+          const hh = Math.floor(h);
+          const mm = Math.round((h - hh) * 60);
+          return `${hh.toString().padStart(2, "0")}:${mm.toString().padStart(2, "0")}`;
+        };
+        return (
+          <div className="atlasWhatsHereCard" role="dialog" aria-label="Place information">
+            <div className="atlasWhatsHereHead">
+              <Sparkles size={14} />
+              <strong>What's here?</strong>
+              <button type="button" className="atlasIconBtn" onClick={() => setWhatsHere(null)} aria-label="Close info card"><X size={11} /></button>
+            </div>
+            {whatsHere.loading && <div className="atlasWhatsHereLoading">Looking up place, weather, Wikipedia, elevation…</div>}
+            {!whatsHere.loading && (
+              <div className="atlasWhatsHereBody">
+                {whatsHere.place && (
+                  <div className="atlasWhatsHerePlace">
+                    {flagEmoji(whatsHere.place.countryCode) && <span className="atlasWhatsHereFlag" aria-hidden>{flagEmoji(whatsHere.place.countryCode)}</span>}
+                    <div>
+                      <strong>{whatsHere.place.name}</strong>
+                      <span>{[whatsHere.place.admin, whatsHere.place.country].filter(Boolean).join(" · ")}</span>
+                    </div>
+                  </div>
+                )}
+                {whatsHere.wiki && (
+                  <div className="atlasWhatsHereWiki">
+                    {whatsHere.wiki.thumbUrl && <img src={whatsHere.wiki.thumbUrl} alt="" className="atlasWhatsHereThumb" />}
+                    <p>{whatsHere.wiki.extract}</p>
+                    {whatsHere.wiki.pageUrl && <a href={whatsHere.wiki.pageUrl} target="_blank" rel="noreferrer">Read on Wikipedia →</a>}
+                  </div>
+                )}
+                <div className="atlasWhatsHereFacts">
+                  {whatsHere.weather && (() => {
+                    const w = wmoLabel(whatsHere.weather!.code);
+                    return (
+                      <div className="atlasWhatsHereFact">
+                        <span>WEATHER</span>
+                        <strong>{w.emoji} {Math.round(whatsHere.weather!.temp)}°C</strong>
+                        <em>{w.label} · RH {whatsHere.weather!.humidity}%</em>
+                      </div>
+                    );
+                  })()}
+                  {whatsHere.elev !== undefined && (
+                    <div className="atlasWhatsHereFact">
+                      <span>ELEVATION</span>
+                      <strong>{formatElevM(whatsHere.elev, unitsImperial)}</strong>
+                      <em>{whatsHere.elev < 0 ? "Below sea level" : "Above sea level"}</em>
+                    </div>
+                  )}
+                  {whatsHere.sun && whatsHere.sun !== "polar-day" && whatsHere.sun !== "polar-night" && (
+                    <div className="atlasWhatsHereFact">
+                      <span>DAYLIGHT</span>
+                      <strong>{Math.floor(whatsHere.sun.dayLengthH)}h {Math.round((whatsHere.sun.dayLengthH % 1) * 60)}m</strong>
+                      <em>↑ {fmtUTC(whatsHere.sun.sunrise)} ↓ {fmtUTC(whatsHere.sun.sunset)} UTC</em>
+                    </div>
+                  )}
+                  {whatsHere.sun === "polar-day" && (
+                    <div className="atlasWhatsHereFact"><span>SUN</span><strong>☀ Polar day</strong><em>never sets</em></div>
+                  )}
+                  {whatsHere.sun === "polar-night" && (
+                    <div className="atlasWhatsHereFact"><span>SUN</span><strong>🌑 Polar night</strong><em>never rises</em></div>
+                  )}
+                  <div className="atlasWhatsHereFact">
+                    <span>COORDS</span>
+                    <strong>{formatLat(whatsHere.lat)} {formatLon(whatsHere.lon)}</strong>
+                    <em>Antipode: {formatLat(aLat)} {formatLon(aLon)}</em>
+                  </div>
+                  {homeLocation && (
+                    <div className="atlasWhatsHereFact">
+                      <span>FROM HOME</span>
+                      <strong>{formatDistKm(haversineKm(whatsHere.lat, whatsHere.lon, homeLocation.lat, homeLocation.lon), unitsImperial)}</strong>
+                      <em>{homeLocation.name}</em>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         );
       })()}
