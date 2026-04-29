@@ -2475,6 +2475,22 @@ function App() {
               } catch { showToast("Weather: fetch failed"); }
             }},
             // Open-Meteo air quality at camera-center. Returns PM2.5/10 + EU AQI.
+            // Closest aircraft to the camera-center point. Useful for
+            // identifying "what's that plane right above me" — set the
+            // camera to your location, run this command, get a list.
+            { id: "closestAircraft", label: "Show closest aircraft to this view", group: "Tools", icon: Plane, run: () => {
+              const c = cameraStateRef.current;
+              if (!c || !aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) {
+                showToast("No aircraft loaded — turn the layer on first");
+                return;
+              }
+              const ranked = aircraftSnapshot.aircraft
+                .map((a) => ({ a, d: haversineKm(c.lat, c.lon, a.lat, a.lon) }))
+                .sort((x, y) => x.d - y.d)
+                .slice(0, 5);
+              const list = ranked.map(({ a, d }) => `${(a.callsign || a.icao24.toUpperCase()).trim()}@${Math.round(a.altitudeM/0.3048).toLocaleString()}ft (${d.toFixed(0)}km)`).join(" · ");
+              showToast(`✈ ${list}`);
+            }},
             { id: "currentAQ", label: "Show air quality at this view (Open-Meteo)", group: "Tools", icon: Cloud, run: async () => {
               const c = cameraStateRef.current;
               if (!c) return;
@@ -2538,6 +2554,8 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: c.lat, lon: c.lon, altKm: 408 }));
             }},
             // Drone-view: low + oblique. Combines a fly-to with a tilt set.
+            { id: "saveBookmarkNamed", label: "Save this view as a bookmark...", group: "Tools", icon: BookmarkPlus, run: () => saveCurrentBookmark() },
+            { id: "toggleHideUi", label: hideUi ? "Show UI" : "Hide UI (immersive)", group: "View", icon: Eye, run: () => setHideUi((v) => !v) },
             { id: "viewDrone", label: "Drone view (low + oblique)", group: "View", icon: Navigation, run: () => {
               const c = cameraStateRef.current;
               if (!c) return;
