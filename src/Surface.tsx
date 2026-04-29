@@ -361,8 +361,11 @@ export default function Surface({
 
     // ===== Atmosphere + lighting =====
     // enableLighting samples sun direction per pixel for the day/night
-    // terminator. It's pretty but pricey on mobile GPUs — off there.
-    viewer.scene.globe.enableLighting = !isLow;
+    // terminator. Pretty but it darkens night-side imagery dramatically
+    // and triangulated terrain mesh on the day-night limb can show
+    // sharp shaded patches (the user's dark-olive triangle complaint).
+    // Off by default; user can opt in via the Cmd+K toggle.
+    viewer.scene.globe.enableLighting = false;
     viewer.scene.fog.enabled = true;
     viewer.scene.fog.density = 0.0001;
     if (viewer.scene.skyAtmosphere) {
