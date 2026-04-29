@@ -4842,6 +4842,46 @@ function App() {
             { id: "pinExportKml", label: pins.length > 0 ? `Export all ${pins.length} pin${pins.length === 1 ? "" : "s"} as KML (Google Earth)` : "Export pins as KML (no pins yet)", group: "Tools", icon: BookmarkPlus, run: exportPinsAsKML },
             { id: "pinDeleteAll", label: pins.length > 0 ? `Delete all ${pins.length} pin${pins.length === 1 ? "" : "s"}` : "Delete all pins (none to delete)", group: "Tools", icon: BookmarkPlus, run: deleteAllPins },
             { id: "pinFromClipboard", label: "Drop pin from clipboard coords", group: "Tools", icon: BookmarkPlus, run: pinFromClipboard },
+            // Pin import from GeoJSON file
+            { id: "pinImport", label: "Import pins from GeoJSON file", group: "Tools", icon: BookmarkPlus, run: () => {
+              const input = document.createElement("input");
+              input.type = "file";
+              input.accept = "application/json,.json,.geojson";
+              input.onchange = async () => {
+                const file = input.files?.[0];
+                if (!file) return;
+                try {
+                  const text = await file.text();
+                  const fc = JSON.parse(text);
+                  if (!fc?.features || !Array.isArray(fc.features)) { showToast("Not a GeoJSON FeatureCollection"); return; }
+                  const imported: Pin[] = [];
+                  for (const f of fc.features) {
+                    const g = f.geometry;
+                    if (!g) continue;
+                    let lat = 0, lon = 0;
+                    if (g.type === "Point" && Array.isArray(g.coordinates)) {
+                      lon = g.coordinates[0]; lat = g.coordinates[1];
+                    } else { continue; }
+                    if (typeof lat !== "number" || typeof lon !== "number") continue;
+                    if (Math.abs(lat) > 90 || Math.abs(lon) > 180) continue;
+                    const props = f.properties || {};
+                    imported.push({
+                      id: `pin-imp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+                      lat, lon,
+                      label: typeof props.name === "string" ? props.name : `Imported ${imported.length + 1}`,
+                      color: typeof props.color === "string" ? props.color : PIN_COLORS[Math.floor(Math.random() * PIN_COLORS.length)],
+                      note: typeof props.description === "string" ? props.description : (typeof props.note === "string" ? props.note : undefined),
+                      altitudeM: typeof props.altitudeM === "number" ? props.altitudeM : (typeof props.altitude === "number" ? props.altitude : undefined),
+                      createdAt: typeof props.createdAt === "number" ? props.createdAt : Date.now(),
+                    });
+                  }
+                  if (imported.length === 0) { showToast("No valid Point features in file"); return; }
+                  setPins((prev) => [...prev, ...imported]);
+                  showToast(`📍 Imported ${imported.length} pin${imported.length === 1 ? "" : "s"}`);
+                } catch { showToast("Invalid GeoJSON file"); }
+              };
+              input.click();
+            }},
             { id: "shareView", label: "Copy share-link to current view", group: "Tools", icon: Bookmark, run: () => {
               const c = cameraStateRef.current;
               if (!c) { showToast("Camera position unknown"); return; }
