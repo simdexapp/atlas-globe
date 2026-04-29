@@ -357,21 +357,50 @@ const cityBookmarks: Bookmark[] = [
 const initialSearchSuggestions = cityBookmarks.map((c) => c.name);
 
 const KEYBOARD_HINTS = [
-  { keys: "⌘K / Ctrl+K", desc: "Command palette (search every action / layer / setting)" },
+  // ===== Palette / search =====
+  { keys: "⌘K / Ctrl+K", desc: "Command palette (search every action / layer / setting / city / airport / country)" },
   { keys: "F", desc: "Open place search" },
+  // ===== View / mode =====
   { keys: "R", desc: "Reset view" },
   { keys: "B", desc: "Bookmark current view" },
   { keys: "L", desc: "Toggle Layers panel" },
-  { keys: "T", desc: "Cycle UI theme" },
-  { keys: "H", desc: "Hide / show all UI" },
-  { keys: "S", desc: "Switch to Surface mode" },
+  { keys: "I", desc: "Toggle Imagery panel" },
+  { keys: "T", desc: "Cycle UI theme (dark → light → oled → cyber → solar → mono)" },
+  { keys: "H", desc: "Hide / show all UI (presentation mode)" },
+  { keys: "S", desc: "Switch between Atlas / Surface mode" },
   { keys: "?", desc: "Show shortcuts" },
+  // ===== Tool toggles =====
+  { keys: "M", desc: "Toggle Measure tool" },
+  { keys: "P", desc: "Toggle Pin tool" },
+  { keys: "G", desc: "Toggle Graticule (Atlas) / Borders (Surface)" },
+  // ===== Pan / zoom =====
+  { keys: "↑ ↓ ← → / W X A D", desc: "Pan camera north / south / west / east" },
+  { keys: "+ / =", desc: "Zoom in 2× (halve altitude)" },
+  { keys: "- / _", desc: "Zoom out 2× (double altitude)" },
+  // ===== Time (Surface mode) =====
+  { keys: "[", desc: "Step Surface clock back 1 hour" },
+  { keys: "]", desc: "Step Surface clock forward 1 hour" },
+  { keys: ".", desc: "Reset Surface clock to real-time UTC" },
+  // ===== Layer quick-toggles =====
+  { keys: "1", desc: "Toggle aircraft layer" },
+  { keys: "2", desc: "Toggle weather radar" },
+  { keys: "3", desc: "Toggle EONET events" },
+  { keys: "4", desc: "Toggle earthquakes" },
+  { keys: "5", desc: "Toggle volcanoes" },
+  { keys: "6", desc: "Toggle launches" },
+  { keys: "7", desc: "Toggle ISS" },
+  { keys: "8", desc: "Toggle borders" },
+  { keys: "9", desc: "Toggle aurora" },
+  { keys: "0", desc: "Toggle storms" },
+  // ===== Mouse =====
   { keys: "Drag", desc: "Orbit camera" },
   { keys: "Scroll", desc: "Zoom in / out" },
-  { keys: "Shift / Ctrl + click", desc: "Drop a pin without pin tool" },
+  { keys: "Shift + click", desc: "Drop a pin without pin tool" },
   { keys: "Click an aircraft", desc: "Open flight info card" },
-  { keys: "Click an event", desc: "Open EONET / quake / volcano / launch info" },
+  { keys: "Click a country / landmark / airport label", desc: "Fly to it" },
   { keys: "Esc", desc: "Close any open modal / palette" },
+  // ===== Easter egg =====
+  { keys: "↑↑↓↓←→←→ B A", desc: "🎮 Konami code (cycles all themes)" },
 ];
 
 function App() {
