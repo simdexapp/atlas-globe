@@ -2489,6 +2489,40 @@ function App() {
             // Closest aircraft to the camera-center point. Useful for
             // identifying "what's that plane right above me" — set the
             // camera to your location, run this command, get a list.
+            // Pick a random live aircraft and follow it.
+            { id: "randomAircraft", label: "Pick a random live aircraft to follow", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) {
+                showToast("Aircraft layer not loaded — turn it on first");
+                return;
+              }
+              const list = aircraftSnapshot.aircraft.filter((a) => a.altitudeM > 5000);
+              const a = list[Math.floor(Math.random() * list.length)];
+              if (!a) return;
+              setSelectedAircraftId(a.icao24);
+              setFlyTo((p) => ({ id: p.id + 1, lat: a.lat, lon: a.lon, altKm: 100 }));
+              showToast(`✈ Following ${(a.callsign || a.icao24.toUpperCase()).trim()} at ${Math.round(a.altitudeM/0.3048).toLocaleString()} ft`);
+            }},
+            // Compute the airport with the most live aircraft within
+            // 50km — a rough proxy for "busiest right now". O(N*M) but
+            // both N (aircraft, ~12k) and M (airports, ~80) are bounded.
+            { id: "busiestAirport", label: "Find busiest airport right now (live ADS-B)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) {
+                showToast("Aircraft layer not loaded — turn it on first");
+                return;
+              }
+              let bestCount = 0;
+              let best: typeof AIRPORTS[0] | null = null;
+              for (const ap of AIRPORTS) {
+                let count = 0;
+                for (const a of aircraftSnapshot.aircraft) {
+                  if (haversineKm(ap.lat, ap.lon, a.lat, a.lon) < 50) count++;
+                }
+                if (count > bestCount) { bestCount = count; best = ap; }
+              }
+              if (!best) { showToast("No traffic visible near any major airport"); return; }
+              setFlyTo((p) => ({ id: p.id + 1, lat: best!.lat, lon: best!.lon, altKm: 30 }));
+              showToast(`🏆 ${best.iata} (${best.city}) — ${bestCount} aircraft within 50km`);
+            }},
             { id: "closestAircraft", label: "Show closest aircraft to this view", group: "Tools", icon: Plane, run: () => {
               const c = cameraStateRef.current;
               if (!c || !aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) {
