@@ -1402,57 +1402,84 @@ export default function Surface({
     viewer.container.appendChild(tooltip);
 
     handler.setInputAction((click: Cesium.ScreenSpaceEventHandler.PositionedEvent) => {
-      const picked = viewer.scene.pick(click.position);
-      // Country label click → fly to centroid at 1500km altitude. Trumps
-      // the surface-pick handler so a click on a country label doesn't
-      // also drop a pin at the click point underneath.
-      if (picked && picked.id instanceof Cesium.Entity && picked.id.properties?.isCountry?.getValue()) {
-        const props = picked.id.properties;
-        const lon = props.countryLon.getValue();
-        const lat = props.countryLat.getValue();
-        viewer.camera.flyTo({
-          destination: Cesium.Cartesian3.fromDegrees(lon, lat, 1_500_000),
-          orientation: { heading: 0, pitch: -Cesium.Math.PI_OVER_TWO, roll: 0 },
-          duration: 1.6,
-        });
-        return;
+      // drillPick walks every primitive under the click point, sorted by
+      // depth. We need this because the selected aircraft has overlapping
+      // decor (3D model boxes, pulse ring, callsign label) — a plain
+      // scene.pick() returns whichever of those happens to be frontmost
+      // and the underlying billboard never gets considered. By walking
+      // the full stack we can prefer a Billboard with a registered
+      // icao24, which gives consistent click-to-select behavior even on
+      // the currently-selected plane.
+      const candidates = viewer.scene.drillPick(click.position, 8);
+
+      // First pass: prefer an aircraft billboard.
+      for (const cand of candidates) {
+        if (cand?.primitive instanceof Cesium.Billboard) {
+          const icao = aircraftBillboardIndexRef.current.get(cand.primitive);
+          if (icao && onSelectAircraft) {
+            onSelectAircraft(icao);
+            return;
+          }
+        }
       }
-      // Landmark label click → fly to its zoom altitude.
-      if (picked && picked.id instanceof Cesium.Entity && picked.id.properties?.isLandmark?.getValue()) {
-        const props = picked.id.properties;
-        const lon = props.landmarkLon.getValue();
-        const lat = props.landmarkLat.getValue();
-        const zoom = props.landmarkZoom.getValue();
-        viewer.camera.flyTo({
-          destination: Cesium.Cartesian3.fromDegrees(lon, lat, zoom * 1000),
-          orientation: { heading: 0, pitch: -Cesium.Math.PI_OVER_TWO, roll: 0 },
-          duration: 1.4,
-        });
-        return;
-      }
-      // Airport label click → fly to ~3km altitude over the airfield.
-      if (picked && picked.id instanceof Cesium.Entity && picked.id.properties?.isAirport?.getValue()) {
-        const props = picked.id.properties;
-        const lon = props.airportLon.getValue();
-        const lat = props.airportLat.getValue();
-        viewer.camera.flyTo({
-          destination: Cesium.Cartesian3.fromDegrees(lon, lat, 3000),
-          orientation: { heading: 0, pitch: -Cesium.Math.PI_OVER_TWO, roll: 0 },
-          duration: 1.4,
-        });
-        return;
-      }
-      // Aircraft billboard click → select.
-      if (picked && picked.primitive instanceof Cesium.Billboard && onSelectAircraft) {
-        const icao = aircraftBillboardIndexRef.current.get(picked.primitive);
-        if (icao) onSelectAircraft(icao);
+
+      // Second pass: country / landmark / airport label entities.
+      for (const cand of candidates) {
+        const id = cand?.id;
+        if (!(id instanceof Cesium.Entity)) continue;
+        if (id.properties?.isCountry?.getValue()) {
+          viewer.camera.flyTo({
+            destination: Cesium.Cartesian3.fromDegrees(
+              id.properties.countryLon.getValue(),
+              id.properties.countryLat.getValue(),
+              1_500_000,
+            ),
+            orientation: { heading: 0, pitch: -Cesium.Math.PI_OVER_TWO, roll: 0 },
+            duration: 1.6,
+          });
+          return;
+        }
+        if (id.properties?.isLandmark?.getValue()) {
+          viewer.camera.flyTo({
+            destination: Cesium.Cartesian3.fromDegrees(
+              id.properties.landmarkLon.getValue(),
+              id.properties.landmarkLat.getValue(),
+              id.properties.landmarkZoom.getValue() * 1000,
+            ),
+            orientation: { heading: 0, pitch: -Cesium.Math.PI_OVER_TWO, roll: 0 },
+            duration: 1.4,
+          });
+          return;
+        }
+        if (id.properties?.isAirport?.getValue()) {
+          viewer.camera.flyTo({
+            destination: Cesium.Cartesian3.fromDegrees(
+              id.properties.airportLon.getValue(),
+              id.properties.airportLat.getValue(),
+              3000,
+            ),
+            orientation: { heading: 0, pitch: -Cesium.Math.PI_OVER_TWO, roll: 0 },
+            duration: 1.4,
+          });
+          return;
+        }
       }
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
     handler.setInputAction((move: Cesium.ScreenSpaceEventHandler.MotionEvent) => {
-      const picked = viewer.scene.pick(move.endPosition);
-      if (picked && picked.primitive instanceof Cesium.Billboard) {
-        const icao = aircraftBillboardIndexRef.current.get(picked.primitive);
+      // drillPick so hovering the selected aircraft still resolves to its
+      // billboard (the 3D model boxes / ring / label sit on top otherwise).
+      const candidates = viewer.scene.drillPick(move.endPosition, 8);
+      let billboard: Cesium.Billboard | null = null;
+      for (const cand of candidates) {
+        if (cand?.primitive instanceof Cesium.Billboard
+            && aircraftBillboardIndexRef.current.has(cand.primitive)) {
+          billboard = cand.primitive;
+          break;
+        }
+      }
+      if (billboard) {
+        const icao = aircraftBillboardIndexRef.current.get(billboard);
         if (icao && aircraft) {
           const a = aircraft.find((x) => x.icao24 === icao);
           if (a) {
