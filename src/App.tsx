@@ -3980,6 +3980,33 @@ function App() {
             }},
             // Air traffic at famous airports — counts of aircraft within
             // 50km of a given IATA code.
+            // Fullscreen API
+            { id: "toggleFullscreen", label: "Toggle fullscreen (browser API)", group: "View", icon: Maximize2, run: () => {
+              if (document.fullscreenElement) {
+                document.exitFullscreen?.();
+              } else {
+                document.documentElement.requestFullscreen?.();
+              }
+            }},
+            // Take screenshot of current view
+            { id: "takeScreenshotBig", label: "Capture frame at 2× resolution", group: "Tools", icon: Camera, run: () => {
+              setSurfaceScreenshotCmd({ id: Date.now() });
+              showToast("📸 Capturing… (download starts in a moment)");
+            }},
+            // Open issues / docs
+            { id: "openGithub", label: "Open Atlas Globe source on GitHub", group: "Tools", icon: Share2, run: () => {
+              window.open("https://github.com/simdexapp/atlas-globe", "_blank", "noopener,noreferrer");
+            }},
+            // PWA install prompt — only fires if browser pre-cached one.
+            { id: "installPWA", label: "Install Atlas Globe as a PWA", group: "Tools", icon: Sparkles, run: () => {
+              const ev = (window as any).__atlasInstallPrompt;
+              if (ev) {
+                ev.prompt();
+                showToast("📱 Install prompt opened");
+              } else {
+                showToast("Install prompt not available — try the browser menu");
+              }
+            }},
             { id: "trafficAtAirport", label: "Show traffic count near airport (prompt for IATA)", group: "Tools", icon: Plane, run: () => {
               const iata = window.prompt("Enter airport IATA (e.g. JFK, LHR, DXB)");
               if (!iata) return;
