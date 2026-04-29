@@ -115,6 +115,7 @@ export default function Surface({
   screenshotCommand,
   onScreenshot,
   measurePoints,
+  measureImperial,
   geoJson,
   followSelectedAircraft,
   aircraftCameraMode,
@@ -173,6 +174,8 @@ export default function Surface({
   onScreenshot?: (blob: Blob, dataUrl: string) => void;
   // Live measurement: 1 or 2 points to render as visible polyline + endpoint dots.
   measurePoints?: Array<{ lat: number; lon: number }>;
+  // When true, in-globe measure labels render distances in miles instead of km.
+  measureImperial?: boolean;
   // GeoJSON FeatureCollection to render as Cesium entities (drag-drop import).
   geoJson?: any;
   // When true and selectedAircraft is set, the camera locks-on to the plane
@@ -883,6 +886,17 @@ export default function Surface({
       const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
       return 2 * R * Math.asin(Math.sqrt(h));
     };
+    // Format helper — keeps in-globe labels in sync with the user's
+    // metric/imperial preference set in the main UI.
+    const fmt = (km: number): string => {
+      if (measureImperial) {
+        const mi = km * 0.621371;
+        if (mi < 0.1) return `${Math.round(mi * 5280)} ft`;
+        return mi < 10 ? `${mi.toFixed(1)} mi` : `${mi.toLocaleString(undefined, { maximumFractionDigits: 0 })} mi`;
+      }
+      if (km < 1) return `${Math.round(km * 1000)} m`;
+      return km < 10 ? `${km.toFixed(1)} km` : `${km.toLocaleString(undefined, { maximumFractionDigits: 0 })} km`;
+    };
     let totalKm = 0;
     for (let i = 1; i < measurePoints.length; i++) {
       const a = measurePoints[i - 1];
@@ -912,7 +926,7 @@ export default function Surface({
       const label = viewer.entities.add({
         position: Cesium.Cartesian3.fromDegrees(midLon, midLat),
         label: {
-          text: `${dist.toLocaleString(undefined, { maximumFractionDigits: 0 })} km`,
+          text: fmt(dist),
           font: "11px ui-monospace, monospace",
           fillColor: Cesium.Color.fromCssColorString("#ffd66b"),
           outlineColor: Cesium.Color.fromCssColorString("rgba(0,0,0,0.85)"),
@@ -934,7 +948,7 @@ export default function Surface({
       const totalLabel = viewer.entities.add({
         position: Cesium.Cartesian3.fromDegrees(last.lon, last.lat),
         label: {
-          text: `Total: ${totalKm.toLocaleString(undefined, { maximumFractionDigits: 0 })} km`,
+          text: `Total: ${fmt(totalKm)}`,
           font: "700 12px Inter, sans-serif",
           fillColor: Cesium.Color.fromCssColorString("#ffffff"),
           outlineColor: Cesium.Color.fromCssColorString("rgba(0,0,0,0.92)"),
@@ -951,7 +965,7 @@ export default function Surface({
       });
       measureEntitiesRef.current.push(totalLabel);
     }
-  }, [measurePoints]);
+  }, [measurePoints, measureImperial]);
 
   // ===== GeoJSON sync =====
   useEffect(() => {

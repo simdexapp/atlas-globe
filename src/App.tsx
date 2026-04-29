@@ -21,6 +21,7 @@ import {
   Film,
   Globe2,
   Layers,
+  MapPin,
   Maximize2,
   MousePointer2,
   Mountain,
@@ -184,6 +185,9 @@ type PersistedState = {
   uiTheme: "dark" | "light" | "oled" | "cyber" | "solar" | "mono";
   imagery?: Imagery;
   pins?: Pin[];
+  // When true, distances render in miles + ft, areas in mi². Default
+  // false (metric) since the rest of the app is geo-scientific.
+  unitsImperial?: boolean;
 };
 
 // Bumped from v15 → v16 to invalidate persisted layer state. Users
@@ -495,6 +499,9 @@ function App() {
   // and we render the great-circle distance + bearing between them.
   const [measureMode, setMeasureMode] = useState(false);
   const [measurePoints, setMeasurePoints] = useState<Array<{ lat: number; lon: number }>>([]);
+  // Imperial toggle — when true, distances are shown in miles, elevations
+  // in feet, areas in mi². Persisted in localStorage so it survives reloads.
+  const [unitsImperial, setUnitsImperial] = useState(false);
 
   // When on, automatically transition Atlas → Surface at low altitudes and
   // Surface → Atlas at high ones, so the user gets the right engine for the
@@ -1134,6 +1141,7 @@ function App() {
         if (data.uiTheme) setUiTheme(data.uiTheme);
         if (data.imagery) setImagery({ ...defaultImagery, ...data.imagery, date: todayUTC() });
         if (Array.isArray(data.pins)) setPins(data.pins);
+        if (typeof data.unitsImperial === "boolean") setUnitsImperial(data.unitsImperial);
       }
     } catch {
       // ignore
@@ -1151,9 +1159,9 @@ function App() {
 
   useEffect(() => {
     if (skipPersistRef.current) return;
-    const payload: PersistedState = { layers, globe, bookmarks, uiTheme, imagery, pins };
+    const payload: PersistedState = { layers, globe, bookmarks, uiTheme, imagery, pins, unitsImperial };
     try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload)); } catch {}
-  }, [layers, globe, bookmarks, uiTheme, imagery, pins]);
+  }, [layers, globe, bookmarks, uiTheme, imagery, pins, unitsImperial]);
 
   const showToast = useCallback((text: string) => {
     setToast({ id: Date.now() + Math.random(), text });
@@ -2469,12 +2477,35 @@ function App() {
             setShowShortcuts((v) => !v);
           }
           break;
+        case "z":
+          // Undo last measure-path vertex when in measure mode. Cheaper
+          // than clearing the whole path and starting over. Inert outside
+          // measure mode so it doesn't conflict with future Cmd+Z.
+          if (measureMode) {
+            event.preventDefault();
+            setMeasurePoints((pts) => {
+              if (pts.length === 0) return pts;
+              const next = pts.slice(0, -1);
+              showToast(next.length === 0 ? "Measure path cleared" : `Removed last point — ${next.length} remaining`);
+              return next;
+            });
+          }
+          break;
+        case "u":
+          // Quick toggle for metric ↔ imperial — shows up across all the
+          // distance/area/elevation displays at once.
+          event.preventDefault();
+          setUnitsImperial((v) => {
+            showToast(v ? "Units: metric (km, m)" : "Units: imperial (mi, ft)");
+            return !v;
+          });
+          break;
         default:
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [cycleTheme, mode, resetView, saveCurrentBookmark, showSearch, showShortcuts, switchToAtlas, switchToSurface]);
+  }, [cycleTheme, mode, resetView, saveCurrentBookmark, showSearch, showShortcuts, switchToAtlas, switchToSurface, measureMode, showToast]);
 
   const rootStyle: CSSProperties = {
     "--accent": "#5cb5ff",
@@ -2561,6 +2592,7 @@ function App() {
               manualUtcHour={surfaceManualHour ?? undefined}
               screenshotCommand={surfaceScreenshotCmd}
               measurePoints={measureMode ? measurePoints : undefined}
+              measureImperial={unitsImperial}
               geoJson={geoJsonImport ?? undefined}
               onScreenshot={(blob) => {
                 // Trigger a download
@@ -2959,9 +2991,84 @@ function App() {
                   sum += toRad(b.lon - a.lon) * (2 + Math.sin(toRad(a.lat)) + Math.sin(toRad(b.lat)));
                 }
                 const areaKm2 = Math.abs(sum * R * R / 2);
-                showToast(`Enclosed area: ${areaKm2.toLocaleString(undefined, { maximumFractionDigits: 0 })} km²`);
+                // Helpful comparisons — picks the closest-magnitude reference
+                // so the user gets intuitive scale ('half of Belgium', etc).
+                const REFS: Array<[string, number]> = [
+                  ["Manhattan", 59], ["Paris", 105], ["Singapore", 728],
+                  ["NYC", 1214], ["LA", 1302], ["Tokyo", 2194],
+                  ["Rhode Island", 4001], ["Belgium", 30689],
+                  ["Switzerland", 41285], ["Iceland", 103000],
+                  ["UK", 243610], ["Texas", 695662], ["Greenland", 2_166_000],
+                ];
+                const ref = REFS.reduce((best, r) => Math.abs(Math.log(r[1] / areaKm2)) < Math.abs(Math.log(best[1] / areaKm2)) ? r : best, REFS[0]);
+                const ratio = areaKm2 / ref[1];
+                const cmp = ratio >= 1.5 ? `≈ ${ratio.toFixed(1)}× ${ref[0]}` :
+                            ratio <= 0.66 ? `≈ ${(1 / ratio).toFixed(1)}× smaller than ${ref[0]}` :
+                            `≈ ${(ratio * 100).toFixed(0)}% of ${ref[0]}`;
+                showToast(`📐 Enclosed area: ${formatAreaKm2(areaKm2, unitsImperial)} (${cmp})`);
               },
             }] : []),
+            // Drop a labeled pin at every measure-path vertex — useful when
+            // the user wants to keep the route they've sketched out and turn
+            // it into named annotations they can edit/note individually.
+            ...(measureMode && measurePoints.length >= 1 ? [{
+              id: "measureToPins" as const,
+              label: `Save measure path as ${measurePoints.length} pin${measurePoints.length === 1 ? "" : "s"}`,
+              group: "Tools" as const,
+              icon: MapPin,
+              run: () => {
+                const stamp = Date.now();
+                const newPins: Pin[] = measurePoints.map((p, i) => ({
+                  id: `measurepin-${stamp}-${i}`,
+                  lat: p.lat,
+                  lon: p.lon,
+                  label: `P${i + 1}`,
+                  // Distinct color so they read as a related set when
+                  // they appear in the bookmark/pin panel.
+                  color: "#ffd66b",
+                  createdAt: stamp + i,
+                }));
+                setPins((prev) => [...prev, ...newPins]);
+                showToast(`📍 Saved ${newPins.length} pin${newPins.length === 1 ? "" : "s"} from measure path`);
+              },
+            }] : []),
+            // Find the last leg's reciprocal bearing — useful for sailors,
+            // pilots, hikers planning a return.
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureReciprocal" as const,
+              label: "Show reciprocal (return) bearing for last leg",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                const last = measurePoints.length - 1;
+                const out = bearingDeg(measurePoints[last-1].lat, measurePoints[last-1].lon, measurePoints[last].lat, measurePoints[last].lon);
+                const back = bearingDeg(measurePoints[last].lat, measurePoints[last].lon, measurePoints[last-1].lat, measurePoints[last-1].lon);
+                showToast(`🧭 Out: ${out.toFixed(0)}° ${compassDir(out)} · Return: ${back.toFixed(0)}° ${compassDir(back)}`);
+              },
+            }] : []),
+            // Straight-line distance from start to end of path — useful for
+            // comparing 'as the crow flies' vs the meandering path total.
+            ...(measureMode && measurePoints.length >= 3 ? [{
+              id: "measureCrowFlies" as const,
+              label: "Compare path distance vs straight-line (start to end)",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                const start = measurePoints[0];
+                const end = measurePoints[measurePoints.length - 1];
+                const direct = haversineKm(start.lat, start.lon, end.lat, end.lon);
+                let path = 0;
+                for (let i = 1; i < measurePoints.length; i++) {
+                  path += haversineKm(measurePoints[i-1].lat, measurePoints[i-1].lon, measurePoints[i].lat, measurePoints[i].lon);
+                }
+                const detour = path - direct;
+                const pct = direct > 0 ? (path / direct - 1) * 100 : 0;
+                showToast(`🛣 Path: ${formatDistKm(path, unitsImperial)} · Direct: ${formatDistKm(direct, unitsImperial)} · Detour: +${formatDistKm(detour, unitsImperial)} (+${pct.toFixed(0)}%)`);
+              },
+            }] : []),
+            // Global metric/imperial unit toggle. Affects the measure pill,
+            // distance commands, area calculations, elevation lookups.
+            { id: "toggleUnits", label: unitsImperial ? "Units → metric (km, m, km²)" : "Units → imperial (mi, ft, mi²)", group: "View", icon: Compass, hint: "U", run: () => setUnitsImperial((v) => { showToast(v ? "Units: metric" : "Units: imperial"); return !v; }) },
             { id: "toggleAutoMode", label: autoModeSwitch ? "Disable auto Atlas/Surface switching" : "Enable auto Atlas/Surface switching", group: "View", icon: Mountain, run: () => setAutoModeSwitch((v) => !v) },
             { id: "dayNightCycle", label: globe.timeAnim ? "Stop day/night cycle" : "Start day/night cycle (24h time-lapse)", group: "View", icon: SunIcon, run: () => updateGlobe({ timeAnim: !globe.timeAnim }) },
             { id: "togglePause", label: paused ? "Resume animation" : "Pause animation", group: "View", icon: paused ? Play : Pause, run: () => setPaused((p) => !p) },
@@ -4152,7 +4259,7 @@ function App() {
                 city,
                 km: haversineKm(c.lat, c.lon, city.lat, city.lon),
               })).sort((a, b) => a.km - b.km).slice(0, 5);
-              const list = top.map(({ city, km }) => `${city.name}: ${Math.round(km)}km`).join(" · ");
+              const list = top.map(({ city, km }) => `${city.name}: ${formatDistKm(km, unitsImperial)}`).join(" · ");
               showToast(`🗺 Closest 5 cities: ${list}`);
             }},
             // ISS pass calculator — when will the ISS be over me next?
@@ -4306,11 +4413,14 @@ function App() {
                 const d = await r.json();
                 const elevM = d?.elevation?.[0];
                 if (typeof elevM !== "number") { showToast("No elevation data"); return; }
-                const elevFt = Math.round(elevM * 3.28084);
+                // Lead with the user's preferred unit; show the other in
+                // parens for cross-reference. formatElevM picks the unit.
+                const primary = formatElevM(Math.abs(elevM), unitsImperial);
+                const secondary = formatElevM(Math.abs(elevM), !unitsImperial);
                 if (elevM < 0) {
-                  showToast(`🌊 Below sea level: ${Math.abs(Math.round(elevM))} m (${Math.abs(elevFt)} ft)`);
+                  showToast(`🌊 Below sea level: ${primary} (${secondary})`);
                 } else {
-                  showToast(`⛰ Elevation: ${Math.round(elevM)} m (${elevFt.toLocaleString()} ft)`);
+                  showToast(`⛰ Elevation: ${primary} (${secondary})`);
                 }
               } catch { showToast("Elevation query failed"); }
             }},
@@ -5449,10 +5559,33 @@ function App() {
           <Compass size={11} />
           {measurePoints.length === 0 && <span>Measure: click point A on the globe</span>}
           {measurePoints.length === 1 && <span>Measure: A set at {formatLat(measurePoints[0].lat)} {formatLon(measurePoints[0].lon)}. Click point B.</span>}
-          {measurePoints.length === 2 && (() => {
-            const d = haversineKm(measurePoints[0].lat, measurePoints[0].lon, measurePoints[1].lat, measurePoints[1].lon);
-            const b = bearingDeg(measurePoints[0].lat, measurePoints[0].lon, measurePoints[1].lat, measurePoints[1].lon);
-            return <span><b>{d.toLocaleString(undefined, { maximumFractionDigits: 0 })} km</b> · bearing {b.toFixed(0)}° · click again to reset</span>;
+          {measurePoints.length >= 2 && (() => {
+            // Compute total path length + last leg + last bearing.
+            // Multi-segment paths show all three so the user sees both
+            // their incremental progress and cumulative distance.
+            let totalKm = 0;
+            for (let i = 1; i < measurePoints.length; i++) {
+              totalKm += haversineKm(
+                measurePoints[i-1].lat, measurePoints[i-1].lon,
+                measurePoints[i].lat, measurePoints[i].lon
+              );
+            }
+            const last = measurePoints.length - 1;
+            const lastKm = haversineKm(
+              measurePoints[last-1].lat, measurePoints[last-1].lon,
+              measurePoints[last].lat, measurePoints[last].lon
+            );
+            const bearing = bearingDeg(
+              measurePoints[last-1].lat, measurePoints[last-1].lon,
+              measurePoints[last].lat, measurePoints[last].lon
+            );
+            // Press Z to undo the last point — surface that hint when
+            // there's more than one point so users discover it.
+            return measurePoints.length === 2 ? (
+              <span><b>{formatDistKm(totalKm, unitsImperial)}</b> · bearing {bearing.toFixed(0)}° {compassDir(bearing)} · Z to undo</span>
+            ) : (
+              <span><b>{formatDistKm(totalKm, unitsImperial)}</b> total · last leg {formatDistKm(lastKm, unitsImperial)} {compassDir(bearing)} · {measurePoints.length} pts · Z to undo</span>
+            );
           })()}
           <button type="button" className="atlasIconBtn" onClick={() => { setMeasureMode(false); setMeasurePoints([]); }} aria-label="Exit measure"><X size={11} /></button>
         </div>
@@ -7076,6 +7209,42 @@ function bearingDeg(lat1: number, lon1: number, lat2: number, lon2: number) {
   const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(λ2 - λ1);
   const θ = Math.atan2(y, x);
   return (θ * 180 / Math.PI + 360) % 360;
+}
+
+// Compass-bearing helper: 0=N, 90=E, 180=S, 270=W. Returns one of 8 cardinal
+// directions for human-readable bearing labels in the measure HUD.
+function compassDir(deg: number): string {
+  const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+  return dirs[Math.round(((deg % 360) + 360) % 360 / 45) % 8];
+}
+
+// Distance formatter — uses caller's unit preference. ≥10 unit threshold
+// switches from sub-unit precision to whole numbers.
+function formatDistKm(km: number, imperial: boolean): string {
+  if (imperial) {
+    const mi = km * 0.621371;
+    if (mi < 0.1) return `${Math.round(mi * 5280)} ft`;
+    if (mi < 10) return `${mi.toFixed(1)} mi`;
+    return `${mi.toLocaleString(undefined, { maximumFractionDigits: 0 })} mi`;
+  }
+  if (km < 1) return `${Math.round(km * 1000)} m`;
+  if (km < 10) return `${km.toFixed(1)} km`;
+  return `${km.toLocaleString(undefined, { maximumFractionDigits: 0 })} km`;
+}
+
+// Area formatter — km² ↔ mi².
+function formatAreaKm2(km2: number, imperial: boolean): string {
+  if (imperial) {
+    const mi2 = km2 * 0.386102;
+    return `${mi2.toLocaleString(undefined, { maximumFractionDigits: mi2 < 10 ? 1 : 0 })} mi²`;
+  }
+  return `${km2.toLocaleString(undefined, { maximumFractionDigits: km2 < 10 ? 1 : 0 })} km²`;
+}
+
+// Elevation formatter — meters ↔ feet.
+function formatElevM(m: number, imperial: boolean): string {
+  if (imperial) return `${Math.round(m * 3.28084).toLocaleString()} ft`;
+  return `${Math.round(m).toLocaleString()} m`;
 }
 
 function ShortcutsModal({ onClose }: { onClose: () => void }) {
