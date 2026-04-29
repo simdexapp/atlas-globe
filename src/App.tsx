@@ -1710,6 +1710,88 @@ function App() {
     setFlyTo((current) => ({ id: current.id + 1, lat: p.lat, lon: p.lon, altKm: 1500 }));
   }, []);
 
+  // Export pins as a downloadable GeoJSON file. Each pin becomes a Point
+  // feature with name + color + createdAt properties so it round-trips
+  // via the matching importer below.
+  const exportPinsAsGeoJSON = useCallback(() => {
+    if (pins.length === 0) { showToast("No pins to export"); return; }
+    const fc = {
+      type: "FeatureCollection",
+      features: pins.map((p) => ({
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [p.lon, p.lat] },
+        properties: { name: p.label, color: p.color, createdAt: p.createdAt },
+      })),
+    };
+    const blob = new Blob([JSON.stringify(fc, null, 2)], { type: "application/geo+json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `atlas-pins-${new Date().toISOString().slice(0, 10)}.geojson`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 500);
+    showToast(`Exported ${pins.length} pin${pins.length === 1 ? "" : "s"}`);
+  }, [pins, showToast]);
+
+  // Export pins as KML — opens directly in Google Earth / Maps.
+  const exportPinsAsKML = useCallback(() => {
+    if (pins.length === 0) { showToast("No pins to export"); return; }
+    const placemarks = pins.map((p) => `
+    <Placemark>
+      <name>${escapeXml(p.label)}</name>
+      <Point><coordinates>${p.lon},${p.lat},0</coordinates></Point>
+    </Placemark>`).join("");
+    const kml = `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Atlas pins (${pins.length})</name>${placemarks}
+  </Document>
+</kml>`;
+    const blob = new Blob([kml], { type: "application/vnd.google-earth.kml+xml" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `atlas-pins-${new Date().toISOString().slice(0, 10)}.kml`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 500);
+    showToast(`Exported ${pins.length} pin${pins.length === 1 ? "" : "s"} as KML`);
+  }, [pins, showToast]);
+
+  // Wipe all pins after a confirm. Cmd+K command — handy when the
+  // user has accidentally peppered the globe testing the click handler.
+  const deleteAllPins = useCallback(() => {
+    if (pins.length === 0) { showToast("Already empty"); return; }
+    if (!window.confirm(`Delete all ${pins.length} pin${pins.length === 1 ? "" : "s"}? This can't be undone.`)) return;
+    setPins([]);
+    setSelectedPin(null);
+    showToast("All pins deleted");
+  }, [pins, showToast]);
+
+  // Drop a pin from text on the clipboard. Accepts:
+  //   "37.77, -122.42"
+  //   "37.77,-122.42"
+  //   "37° 46' N, 122° 25' W"   (basic dms)
+  //   any line ending with two numbers separated by comma
+  const pinFromClipboard = useCallback(async () => {
+    if (!navigator.clipboard?.readText) { showToast("Clipboard not available"); return; }
+    let text = "";
+    try { text = await navigator.clipboard.readText(); }
+    catch { showToast("Could not read clipboard"); return; }
+    text = text.trim();
+    if (!text) { showToast("Clipboard empty"); return; }
+    // Match a "lat, lon" pair (decimal degrees).
+    const m = text.match(/(-?\d+(?:\.\d+)?)\s*[,\s]\s*(-?\d+(?:\.\d+)?)/);
+    if (!m) { showToast(`No coords in clipboard: "${text.slice(0, 40)}"`); return; }
+    const lat = parseFloat(m[1]);
+    const lon = parseFloat(m[2]);
+    if (Math.abs(lat) > 90 || Math.abs(lon) > 180) { showToast(`Out of range: ${lat}, ${lon}`); return; }
+    onGlobeClick(lat, lon, { shift: true });
+  }, [onGlobeClick, showToast]);
+
   // Earthquake feed (USGS, last 24h)
   useEffect(() => {
     if (!layers.earthquakes) return;
@@ -2899,6 +2981,11 @@ function App() {
               const mm = Math.floor((localMs % 3600_000) / 60_000);
               showToast(`Mean solar time at ${formatLat(c.lat)} ${formatLon(c.lon)}: ${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`);
             }},
+            // Pin batch operations
+            { id: "pinExportGeoJson", label: pins.length > 0 ? `Export all ${pins.length} pin${pins.length === 1 ? "" : "s"} as GeoJSON` : "Export pins as GeoJSON (no pins yet)", group: "Tools", icon: BookmarkPlus, run: exportPinsAsGeoJSON },
+            { id: "pinExportKml", label: pins.length > 0 ? `Export all ${pins.length} pin${pins.length === 1 ? "" : "s"} as KML (Google Earth)` : "Export pins as KML (no pins yet)", group: "Tools", icon: BookmarkPlus, run: exportPinsAsKML },
+            { id: "pinDeleteAll", label: pins.length > 0 ? `Delete all ${pins.length} pin${pins.length === 1 ? "" : "s"}` : "Delete all pins (none to delete)", group: "Tools", icon: BookmarkPlus, run: deleteAllPins },
+            { id: "pinFromClipboard", label: "Drop pin from clipboard coords", group: "Tools", icon: BookmarkPlus, run: pinFromClipboard },
             { id: "shareView", label: "Copy share-link to current view", group: "Tools", icon: Bookmark, run: () => {
               const c = cameraStateRef.current;
               if (!c) { showToast("Camera position unknown"); return; }
