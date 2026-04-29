@@ -3612,6 +3612,36 @@ function App() {
             }},
             // FPS overlay toggle
             { id: "fpsToggle", label: showFps ? "Hide FPS overlay" : "Show FPS overlay", group: "Tools", icon: Sparkles, run: () => setShowFps((v) => !v) },
+            // Reset all settings — useful when something gets weird.
+            { id: "resetSettings", label: "Reset all settings + clear localStorage (preserves bookmarks)", group: "Tools", icon: RotateCcw, run: () => {
+              if (!window.confirm("Reset all settings? Layers, theme, sun position, etc. will return to defaults. Bookmarks and pins are preserved.")) return;
+              setLayers(defaultLayers);
+              setGlobe(defaultGlobe);
+              setUiTheme("dark");
+              setAircraftCategory("all");
+              setAircraftAirlinePrefix("");
+              setAircraftMinAltFt(0);
+              setAircraftMaxAltFt(50000);
+              showToast("⚙ Settings reset to defaults");
+            }},
+            { id: "resetEverything", label: "🔥 NUCLEAR RESET (delete everything: settings + pins + bookmarks)", group: "Tools", icon: RotateCcw, run: () => {
+              if (!window.confirm("DELETE EVERYTHING? This wipes all bookmarks, pins, settings, and storage.")) return;
+              localStorage.removeItem(STORAGE_KEY);
+              localStorage.removeItem("atlas-search-history");
+              window.location.reload();
+            }},
+            // Camera lock-on commands
+            { id: "lockCameraNorth", label: "Lock camera heading: due north", group: "View", icon: Compass, run: () => {
+              const c = cameraStateRef.current;
+              if (c) {
+                setSurfaceTilt({ id: Date.now(), pitchDeg: 90 });
+                setFlyTo((p) => ({ id: p.id + 1, lat: c.lat, lon: c.lon, altKm: c.altKm }));
+              }
+            }},
+            // Open documentation / help
+            { id: "openShortcuts", label: "Show keyboard shortcuts cheat sheet", group: "Tools", icon: Wand2, hint: "?", run: () => setShowShortcuts(true) },
+            // Page reload (sometimes useful)
+            { id: "hardReload", label: "Hard reload page (Cmd+Shift+R equivalent)", group: "Tools", icon: RotateCcw, run: () => window.location.reload() },
             { id: "easterEggHelp", label: "Easter eggs hint (Konami code lives here…)", group: "Tools", icon: Sparkles, run: () => {
               showToast("🎮 Try ↑↑↓↓←→←→ B A (anywhere on the page)");
             }},
