@@ -3384,6 +3384,20 @@ function App() {
             { id: "togglePause", label: paused ? "Resume rotation" : "Pause rotation", group: "View", icon: paused ? Play : Pause, run: () => setPaused((v) => !v) },
             // Hide / show UI
             { id: "toggleUiHide", label: hideUi ? "Show UI panels" : "Hide UI panels (presentation mode)", group: "View", icon: Eye, hint: "H", run: () => setHideUi((v) => !v) },
+            // Bulk MAJOR_CITIES fly-to commands (top 50 metros, generated from
+            // the same MAJOR_CITIES list used for the Cesium label overlay).
+            // Lets users type "shanghai" / "lagos" / etc into the palette
+            // and jump immediately.
+            ...MAJOR_CITIES.map(city => ({
+              id: `cityFly-${city.country}-${city.name.replace(/\s+/g, "")}`,
+              label: `Fly to ${city.name}, ${city.country}`,
+              group: "View" as const,
+              icon: Navigation,
+              run: () => {
+                setFlyTo((p) => ({ id: p.id + 1, lat: city.lat, lon: city.lon, altKm: 8 }));
+                showToast(`✈ ${city.name} (${(city.population / 1_000_000).toFixed(1)}M people)`);
+              },
+            })),
             // Quick-save: turn the URL hash into a bookmark with auto-naming.
             { id: "saveQuickBookmark", label: "Quick-save current view as bookmark (auto-name)", group: "Tools", icon: BookmarkPlus, run: () => {
               const c = cameraStateRef.current;
