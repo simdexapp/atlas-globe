@@ -3796,6 +3796,24 @@ function App() {
             { id: "flyMagneticNorth", label: "Fly to North Magnetic Pole (Ellesmere Island vicinity)", group: "View", icon: Compass, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: 86, lon: 137, altKm: 1500 })); showToast("🧲 N Magnetic Pole — drifts ~50 km/year"); } },
             { id: "flySouthMagneticPole", label: "Fly to South Magnetic Pole", group: "View", icon: Compass, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: -64, lon: 137, altKm: 1500 })); showToast("🧲 S Magnetic Pole — Antarctic Ocean off Adélie Land"); } },
             { id: "flyPoleInaccessibility", label: "Fly to oceanic Point Nemo (most isolated point)", group: "View", icon: Navigation, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: -48.8767, lon: -123.3933, altKm: 5000 })); showToast("🌊 Point Nemo — 2,688 km from any land"); } },
+            // Maritime / strait curiosities
+            { id: "flyStrait", label: "Fly to Strait of Gibraltar", group: "View", icon: Navigation, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: 35.97, lon: -5.47, altKm: 50 })); showToast("⚓ Strait of Gibraltar — 14 km wide"); } },
+            { id: "flyBosphorus", label: "Fly to Bosphorus Strait (Istanbul)", group: "View", icon: Navigation, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: 41.06, lon: 29.04, altKm: 50 })); showToast("⚓ Bosphorus — splits Europe & Asia"); } },
+            { id: "flySuez", label: "Fly to Suez Canal", group: "View", icon: Navigation, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: 30.5852, lon: 32.2841, altKm: 100 })); showToast("⚓ Suez Canal — 193 km long"); } },
+            { id: "flyPanama", label: "Fly to Panama Canal", group: "View", icon: Navigation, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: 9.0820, lon: -79.6818, altKm: 50 })); showToast("⚓ Panama Canal — 82 km long"); } },
+            { id: "flyEnglishChannel", label: "Fly over the English Channel", group: "View", icon: Navigation, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: 50.5, lon: 1.0, altKm: 100 })); showToast("⚓ English Channel — Dover-Calais 33 km"); } },
+            { id: "flyMagellan", label: "Fly to Strait of Magellan", group: "View", icon: Navigation, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: -53.5, lon: -71.0, altKm: 200 })); showToast("⚓ Strait of Magellan — Patagonia"); } },
+            // Famous bridges + structures
+            { id: "flyGoldenGate", label: "Fly to Golden Gate Bridge", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: 37.8199, lon: -122.4783, altKm: 2 })); showToast("🌉 Golden Gate Bridge"); } },
+            { id: "flyBrooklynBridge", label: "Fly to Brooklyn Bridge", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: 40.7061, lon: -73.9969, altKm: 1.5 })); showToast("🌉 Brooklyn Bridge"); } },
+            { id: "flyTowerBridge", label: "Fly to Tower Bridge (London)", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: 51.5055, lon: -0.0754, altKm: 1.5 })); showToast("🌉 Tower Bridge"); } },
+            { id: "flyEiffel", label: "Fly to Eiffel Tower", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: 48.8584, lon: 2.2945, altKm: 1.5 })); showToast("🗼 Eiffel Tower"); } },
+            { id: "flyBurjKhalifa", label: "Fly to Burj Khalifa (tallest building)", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: 25.1972, lon: 55.2744, altKm: 2 })); showToast("🏙 Burj Khalifa — 828 m"); } },
+            { id: "flyStatueLiberty", label: "Fly to Statue of Liberty", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: 40.6892, lon: -74.0445, altKm: 1.5 })); showToast("🗽 Statue of Liberty"); } },
+            { id: "flyChristRedeemer", label: "Fly to Christ the Redeemer", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: -22.9519, lon: -43.2105, altKm: 2 })); showToast("⛪ Christ the Redeemer (Rio)"); } },
+            { id: "flySydneyOpera", label: "Fly to Sydney Opera House", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: -33.8568, lon: 151.2153, altKm: 1.5 })); showToast("🎭 Sydney Opera House"); } },
+            { id: "flyStonehenge", label: "Fly to Stonehenge", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: 51.1789, lon: -1.8262, altKm: 2 })); showToast("🪨 Stonehenge"); } },
+            { id: "flyMoai", label: "Fly to Easter Island Moai", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: -27.1212, lon: -109.3676, altKm: 6 })); showToast("🗿 Easter Island Moai"); } },
             { id: "populationNearby", label: "Population estimate within 100km of this view", group: "Tools", icon: Compass, run: () => {
               const c = cameraStateRef.current;
               if (!c) return;
