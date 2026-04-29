@@ -3417,6 +3417,46 @@ function App() {
                 }
               } catch { showToast("Wikipedia query failed"); }
             }},
+            // Pin recolor — cycle the most recently selected pin through
+            // the palette so users can re-color without an inspector edit.
+            ...(selectedPin ? [{
+              id: "pinRecolor" as const,
+              label: "Recolor selected pin (cycle)",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const idx = PIN_COLORS.findIndex((c) => c === pins.find((p) => p.id === selectedPin)?.color);
+                const next = PIN_COLORS[(idx + 1) % PIN_COLORS.length];
+                updatePin(selectedPin, { color: next });
+                showToast(`🎨 Pin → ${next}`);
+              },
+            }, {
+              id: "pinFlyTo" as const,
+              label: "Fly to selected pin",
+              group: "View" as const,
+              icon: Navigation,
+              run: () => {
+                const p = pins.find((x) => x.id === selectedPin);
+                if (p) flyToPin(p);
+              },
+            }, {
+              id: "pinDelete" as const,
+              label: "Delete selected pin",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => deletePin(selectedPin),
+            }, {
+              id: "pinRename" as const,
+              label: "Rename selected pin (prompt)",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const p = pins.find((x) => x.id === selectedPin);
+                if (!p) return;
+                const newName = window.prompt("New pin name:", p.label);
+                if (newName && newName.trim()) updatePin(selectedPin, { label: newName.trim() });
+              },
+            }] : []),
             { id: "solarZenithHere", label: "Show solar zenith time (sun directly overhead) for this view", group: "Tools", icon: SunIcon, run: () => {
               const c = cameraStateRef.current;
               if (!c) return;
