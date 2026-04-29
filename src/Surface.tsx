@@ -250,6 +250,13 @@ export default function Surface({
   const aircraftSelectionRingRef = useRef<Cesium.Entity | null>(null);
   const aircraftFollowEntityRef = useRef<Cesium.Entity | null>(null);
   const aircraftCallsignLabelRef = useRef<Cesium.Entity | null>(null);
+  // 3D selected-aircraft model. Three Cesium entities at the same
+  // position with the same orientation: fuselage (long box along
+  // heading), wings (flat box perpendicular), vertical tail
+  // (thin tall box at rear). Far cheaper than a glTF model and zero
+  // assets shipped. Position + orientation update each frame with
+  // the interpolated billboard position.
+  const aircraftModelEntitiesRef = useRef<Cesium.Entity[]>([]);
   const countryLabelsRef = useRef<Cesium.Entity[]>([]);
   const buildingsTilesetRef = useRef<Cesium.Cesium3DTileset | null>(null);
   const measureEntitiesRef = useRef<Cesium.Entity[]>([]);
@@ -1116,6 +1123,79 @@ export default function Surface({
     };
   }, [issPosition, tiangongPosition, hubblePosition]);
 
+  // ===== Selected-aircraft 3D model =====
+  // Builds a 3D plane shape at the selected aircraft's position by
+  // composing three Cesium box entities (fuselage, wings, vertical
+  // tail) that all share an orientation derived from the aircraft's
+  // heading via headingPitchRollQuaternion. Sized to be visible from
+  // about 50km away — at orbital view it'd disappear into the
+  // billboard layer underneath, which is fine.
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    // Tear down any prior model.
+    for (const e of aircraftModelEntitiesRef.current) viewer.entities.remove(e);
+    aircraftModelEntitiesRef.current = [];
+    if (!selectedAircraft) return;
+
+    // Body-frame box dimensions in meters: (X=length, Y=wingspan, Z=height).
+    // After headingPitchRollQuaternion, X aligns with the heading
+    // direction so the long fuselage axis points where the plane is going.
+    // Sized roughly proportional to a 737 (~38m long, ~35m wingspan).
+    const fuselageDims  = new Cesium.Cartesian3(40, 5, 5);
+    const wingsDims     = new Cesium.Cartesian3(8, 36, 1.5);
+    const tailDims      = new Cesium.Cartesian3(8, 1.5, 6);
+
+    const tint = Cesium.Color.fromCssColorString("#5cb5ff").withAlpha(0.95);
+    const tintWings = Cesium.Color.fromCssColorString("#a4d8ff").withAlpha(0.95);
+
+    // Initial position + orientation. The interpolation loop below
+    // (extended in this effect's dep) updates these each frame.
+    const initialPos = Cesium.Cartesian3.fromDegrees(
+      selectedAircraft.lon,
+      selectedAircraft.lat,
+      Math.max(0, selectedAircraft.altitudeM)
+    );
+    const hpr0 = new Cesium.HeadingPitchRoll(
+      (selectedAircraft.headingDeg || 0) * Math.PI / 180,
+      0,
+      0
+    );
+    const initialOrient = Cesium.Transforms.headingPitchRollQuaternion(initialPos, hpr0);
+
+    // Three boxes at the same position. Cesium clones the position
+    // value, so each entity holds its own; we'll overwrite all three
+    // each interpolation tick.
+    const fuselage = viewer.entities.add({
+      position: initialPos,
+      orientation: initialOrient,
+      box: {
+        dimensions: fuselageDims,
+        material: tint,
+        outline: false,
+      },
+    });
+    const wings = viewer.entities.add({
+      position: initialPos,
+      orientation: initialOrient,
+      box: {
+        dimensions: wingsDims,
+        material: tintWings,
+        outline: false,
+      },
+    });
+    const tail = viewer.entities.add({
+      position: initialPos,
+      orientation: initialOrient,
+      box: {
+        dimensions: tailDims,
+        material: tint,
+        outline: false,
+      },
+    });
+    aircraftModelEntitiesRef.current = [fuselage, wings, tail];
+  }, [selectedAircraft]);
+
   // ===== Selected-aircraft callsign label (DOM-overlay style billboard label) =====
   // Floats just above the billboard with the callsign and altitude. Uses an
   // entity label clamped to the aircraft's altitude (not the ground), so it
@@ -1929,6 +2009,10 @@ export default function Surface({
     const tick = () => {
       const now = performance.now();
       const tmpCart = new Cesium.Cartesian3();
+      // Track selected-aircraft pose so we can also update the 3D model
+      // entities at the same interpolated lat/lon/alt + heading.
+      let selectedPos: Cesium.Cartesian3 | null = null;
+      let selectedHeading = 0;
       // Iterate samples (one per live aircraft). Skip ones with zero
       // velocity — no point doing trig for parked planes.
       samples.forEach((s, icao) => {
@@ -1956,7 +2040,21 @@ export default function Surface({
           const ground = Cesium.Cartesian3.fromRadians(lon2, lat2, 0);
           (bar.polyline.positions as any) = [ground, tmpCart.clone()];
         }
+        if (selectedAircraft && icao === selectedAircraft.icao24) {
+          selectedPos = Cesium.Cartesian3.fromRadians(lon2, lat2, alt2);
+          selectedHeading = s.headingRad;
+        }
       });
+      // Slide the 3D model with the selected aircraft, recomputing
+      // orientation from heading so it banks toward the new heading.
+      if (selectedPos && aircraftModelEntitiesRef.current.length > 0) {
+        const hpr = new Cesium.HeadingPitchRoll(selectedHeading, 0, 0);
+        const orient = Cesium.Transforms.headingPitchRollQuaternion(selectedPos, hpr);
+        for (const e of aircraftModelEntitiesRef.current) {
+          e.position = selectedPos as any;
+          e.orientation = orient as any;
+        }
+      }
       viewer.scene.requestRender();
     };
     viewer.scene.preRender.addEventListener(tick);
@@ -1972,7 +2070,7 @@ export default function Surface({
       viewer.scene.preRender.removeEventListener(tick);
       window.cancelAnimationFrame(raf);
     };
-  }, []);
+  }, [selectedAircraft]);
 
   // ===== Aircraft sync (incremental — diff by icao24) =====
   // Allocating 12k Cartesians + recreating 12k billboards every poll cycle
