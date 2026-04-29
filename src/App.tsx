@@ -1418,6 +1418,7 @@ function App() {
   // (cameraStateRef) is always updated synchronously so internal logic
   // (auto-mode-switch, follow-mode) sees the latest value.
   const cameraEmitDeadlineRef = useRef(0);
+  const hashUpdateDeadlineRef = useRef(0);
   const onCameraChange = useCallback((lat: number, lon: number, altKm: number) => {
     cameraStateRef.current = { lat, lon, altKm };
     // 200ms on desktop, 400ms on mobile — phones can't redraw the status
@@ -1427,6 +1428,19 @@ function App() {
     if (now < cameraEmitDeadlineRef.current) return;
     cameraEmitDeadlineRef.current = now + throttleMs;
     setCameraState({ lat, lon, altKm });
+    // Live URL hash update — throttled to 1s so we don't spam history.
+    // Uses replaceState so the back button doesn't fill with intermediate
+    // positions. Lets the user copy the URL at any moment to share a
+    // permalink to exactly where they're looking.
+    if (now > hashUpdateDeadlineRef.current) {
+      hashUpdateDeadlineRef.current = now + 1000;
+      const newHash = `#@${lat.toFixed(4)},${lon.toFixed(4)},${altKm.toFixed(1)}km`;
+      if (window.location.hash !== newHash) {
+        try {
+          window.history.replaceState(null, "", newHash);
+        } catch { /* some sandboxes block replaceState — ignore */ }
+      }
+    }
   }, []);
 
   // Click-on-globe handler. Three modes based on user state:
@@ -3304,6 +3318,39 @@ function App() {
               });
             }},
             // Quick share — copy URL to clipboard for X/Bluesky/etc.
+            // Permalink commands — useful since the URL hash live-updates.
+            { id: "copyPermalink", label: "Copy permalink to current view", group: "Tools", icon: Share2, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const url = new URL(window.location.href);
+              url.hash = `#@${c.lat.toFixed(4)},${c.lon.toFixed(4)},${c.altKm.toFixed(1)}km`;
+              navigator.clipboard?.writeText(url.toString()).then(
+                () => showToast(`📎 Copied permalink`),
+                () => showToast(url.toString())
+              );
+            }},
+            { id: "openShortlink", label: "Open this view via tinyurl-style permalink", group: "Tools", icon: Share2, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const url = new URL(window.location.href);
+              url.hash = `#@${c.lat.toFixed(4)},${c.lon.toFixed(4)},${c.altKm.toFixed(1)}km`;
+              window.open(`https://tinyurl.com/create.php?url=${encodeURIComponent(url.toString())}`, "_blank");
+            }},
+            // Quick-save: turn the URL hash into a bookmark with auto-naming.
+            { id: "saveQuickBookmark", label: "Quick-save current view as bookmark (auto-name)", group: "Tools", icon: BookmarkPlus, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const b: Bookmark = {
+                id: `bm-${Date.now()}`,
+                name: `${formatLat(c.lat)} ${formatLon(c.lon)}`,
+                lat: c.lat,
+                lon: c.lon,
+                altKm: c.altKm,
+                savedAt: Date.now(),
+              };
+              setBookmarks((prev) => [b, ...prev]);
+              showToast(`Quick-saved: ${b.name}`);
+            }},
             { id: "shareTwitter", label: "Tweet this view", group: "Tools", icon: Share2, run: () => {
               const c = cameraStateRef.current;
               if (!c) return;
