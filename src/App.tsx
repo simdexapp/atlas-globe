@@ -54,6 +54,7 @@ import { fetchWikiSummary } from "./wiki";
 import { MAJOR_CITIES } from "./cities";
 import { LANDMARKS } from "./landmarks";
 import { AIRPORTS } from "./airports";
+import { COUNTRY_CENTROIDS } from "./countries";
 import { aircraftTypeName } from "./aircraftTypes";
 
 const SurfaceMode = lazy(() => import("./Surface"));
@@ -3421,6 +3422,20 @@ function App() {
               run: () => {
                 setFlyTo((p) => ({ id: p.id + 1, lat: lm.lat, lon: lm.lon, altKm: lm.zoomKm }));
                 showToast(`${lm.emoji} ${lm.name}`);
+              },
+            })),
+            // Bulk COUNTRY_CENTROIDS commands. Type a country name in the
+            // palette and fly to its center at an appropriate altitude.
+            ...COUNTRY_CENTROIDS.map(cc => ({
+              id: `countryFly-${cc.code}`,
+              label: `🌍 Fly to ${cc.name} (centroid)`,
+              group: "View" as const,
+              icon: Globe2,
+              run: () => {
+                // Tier-1 countries (huge) get a regional view; tier-2 zoom closer.
+                const altKm = cc.tier === 1 ? 3000 : 800;
+                setFlyTo((p) => ({ id: p.id + 1, lat: cc.lat, lon: cc.lon, altKm }));
+                showToast(`🌍 ${cc.name} (${cc.code})`);
               },
             })),
             // Quick-save: turn the URL hash into a bookmark with auto-naming.
