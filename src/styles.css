@@ -3063,6 +3063,105 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
   }
 }
 
+/* ============= Geography quiz card =============
+   Multiple-choice quiz UI. Pinned to viewport center-bottom by default. */
+.atlasQuizCard {
+  position: fixed;
+  bottom: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 12;
+  width: min(420px, calc(100vw - 32px));
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-4);
+  background: var(--surface-elevated);
+  backdrop-filter: blur(14px);
+  box-shadow: var(--shadow-3);
+  color: var(--gray-12);
+  display: grid;
+  gap: var(--s-3);
+  animation: scaleIn var(--dur-base) var(--ease-out);
+}
+.atlasQuizHead {
+  display: grid;
+  grid-template-columns: 14px 1fr auto auto;
+  align-items: center;
+  gap: var(--s-2);
+  padding-bottom: var(--s-2);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.atlasQuizHead strong {
+  font-size: var(--text-base);
+  font-weight: 700;
+  color: var(--gray-12);
+}
+.atlasQuizScore {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.atlasQuizScore em { font-style: normal; color: var(--warm); }
+.atlasQuizPrompt {
+  margin: 0;
+  font-size: var(--text-md);
+  line-height: 1.4;
+  color: var(--gray-11);
+}
+.atlasQuizPrompt strong { color: var(--gray-12); font-weight: 700; }
+.atlasQuizChoices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-2);
+}
+.atlasQuizChoice {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-2);
+  background: var(--gray-1);
+  color: var(--gray-12);
+  font: 600 12.5px Inter, sans-serif;
+  cursor: pointer;
+  transition: border-color 120ms, background 120ms, color 120ms;
+  text-align: left;
+}
+.atlasQuizChoice:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent), transparent 86%);
+}
+.atlasQuizChoice.correct {
+  border-color: #2ecc71;
+  background: color-mix(in srgb, #2ecc71, transparent 78%);
+  color: var(--gray-12);
+}
+.atlasQuizChoice.wrong {
+  border-color: #ff5a5a;
+  background: color-mix(in srgb, #ff5a5a, transparent 78%);
+  color: var(--gray-12);
+}
+.atlasQuizChoice.dim { opacity: 0.5; }
+.atlasQuizChoice:disabled { cursor: default; }
+.atlasQuizFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  padding-top: var(--s-2);
+  border-top: 1px solid var(--border-subtle);
+}
+.atlasQuizFooter span {
+  font-size: 12px;
+  color: var(--gray-11);
+  font-weight: 600;
+}
+
+@media (max-width: 620px) {
+  .atlasQuizCard { bottom: 240px; width: calc(100vw - 16px); }
+  .atlasQuizChoices { grid-template-columns: 1fr; }
+}
+
 /* "Right now on Earth" digest widget */
 .atlasDigestWidget {
   position: fixed;

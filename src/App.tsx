@@ -827,6 +827,133 @@ function App() {
     current?: { temp: number; code: number; wind: number; windDir: number; humidity: number; feels?: number };
     daily?: Array<{ date: string; code: number; tmax: number; tmin: number; precipProb: number; windMax: number }>;
   }>(null);
+  // ===== Geography Quiz =====
+  // Multiple-choice quiz drawing from the existing landmark + city data.
+  // Each question: shows a place name and asks the user to pick its
+  // country from 4 choices (1 correct, 3 random other countries).
+  // Score persists across the session. Resets via the 'New game' button.
+  type QuizQ = {
+    place: string;
+    placeEmoji?: string;
+    correctCountry: string;
+    correctLat: number;
+    correctLon: number;
+    choices: string[];   // shuffled, includes correctCountry
+  };
+  const [quiz, setQuiz] = useState<null | {
+    q: QuizQ;
+    answered: string | null;
+    score: { right: number; total: number };
+    streak: number;
+  }>(null);
+  // Reusable country list — pulls from city + landmark data we already
+  // have in memory. ~50 unique countries.
+  const quizCountryList = useMemo(() => {
+    const COUNTRY_NAMES: Record<string, string> = {
+      JP: "Japan", IN: "India", CN: "China", BR: "Brazil", MX: "Mexico",
+      EG: "Egypt", BD: "Bangladesh", US: "United States", PK: "Pakistan",
+      AR: "Argentina", TR: "Turkey", PH: "Philippines", NG: "Nigeria",
+      CD: "DR Congo", RU: "Russia", FR: "France", CO: "Colombia",
+      ID: "Indonesia", PE: "Peru", TH: "Thailand", KR: "South Korea",
+      IR: "Iran", VN: "Vietnam", AO: "Angola", ES: "Spain", CA: "Canada",
+      AU: "Australia", ZA: "South Africa", SG: "Singapore", DE: "Germany",
+      SE: "Sweden", AE: "United Arab Emirates", GB: "United Kingdom",
+      IT: "Italy", PT: "Portugal", IE: "Ireland", NL: "Netherlands",
+      BE: "Belgium", AT: "Austria", CH: "Switzerland", DK: "Denmark",
+      NO: "Norway", FI: "Finland", IS: "Iceland", PL: "Poland",
+      CZ: "Czechia", HU: "Hungary", RO: "Romania", BG: "Bulgaria",
+      GR: "Greece", IL: "Israel", JO: "Jordan", LB: "Lebanon", SY: "Syria",
+      IQ: "Iraq", SA: "Saudi Arabia", QA: "Qatar", BH: "Bahrain",
+      OM: "Oman", YE: "Yemen", KZ: "Kazakhstan", UZ: "Uzbekistan",
+      AF: "Afghanistan", NP: "Nepal", LK: "Sri Lanka", MM: "Myanmar",
+      MY: "Malaysia", KH: "Cambodia", LA: "Laos", TW: "Taiwan", HK: "Hong Kong",
+      MA: "Morocco", DZ: "Algeria", TN: "Tunisia", LY: "Libya",
+      KE: "Kenya", ET: "Ethiopia", TZ: "Tanzania", UG: "Uganda",
+      GH: "Ghana", CI: "Ivory Coast", SN: "Senegal", ML: "Mali",
+      CL: "Chile", VE: "Venezuela", EC: "Ecuador", BO: "Bolivia",
+      UY: "Uruguay", PY: "Paraguay", NZ: "New Zealand",
+    };
+    const set = new Set<string>();
+    [...MAJOR_CITIES, ...REGIONAL_CITIES].forEach(c => {
+      if (COUNTRY_NAMES[c.country]) set.add(COUNTRY_NAMES[c.country]);
+    });
+    return Array.from(set);
+  }, []);
+  const newQuizQuestion = useCallback(() => {
+    // Pick a random landmark or city for the question
+    const COUNTRY_NAMES: Record<string, string> = {
+      JP: "Japan", IN: "India", CN: "China", BR: "Brazil", MX: "Mexico",
+      EG: "Egypt", BD: "Bangladesh", US: "United States", PK: "Pakistan",
+      AR: "Argentina", TR: "Turkey", PH: "Philippines", NG: "Nigeria",
+      CD: "DR Congo", RU: "Russia", FR: "France", CO: "Colombia",
+      ID: "Indonesia", PE: "Peru", TH: "Thailand", KR: "South Korea",
+      IR: "Iran", VN: "Vietnam", AO: "Angola", ES: "Spain", CA: "Canada",
+      AU: "Australia", ZA: "South Africa", SG: "Singapore", DE: "Germany",
+      SE: "Sweden", AE: "United Arab Emirates", GB: "United Kingdom",
+      IT: "Italy", PT: "Portugal", IE: "Ireland", NL: "Netherlands",
+      BE: "Belgium", AT: "Austria", CH: "Switzerland", DK: "Denmark",
+      NO: "Norway", FI: "Finland", IS: "Iceland", PL: "Poland",
+      CZ: "Czechia", HU: "Hungary", RO: "Romania", BG: "Bulgaria",
+      GR: "Greece", IL: "Israel", JO: "Jordan", LB: "Lebanon", SY: "Syria",
+      IQ: "Iraq", SA: "Saudi Arabia", QA: "Qatar", BH: "Bahrain",
+      OM: "Oman", YE: "Yemen", KZ: "Kazakhstan", UZ: "Uzbekistan",
+      AF: "Afghanistan", NP: "Nepal", LK: "Sri Lanka", MM: "Myanmar",
+      MY: "Malaysia", KH: "Cambodia", LA: "Laos", TW: "Taiwan", HK: "Hong Kong",
+      MA: "Morocco", DZ: "Algeria", TN: "Tunisia", LY: "Libya",
+      KE: "Kenya", ET: "Ethiopia", TZ: "Tanzania", UG: "Uganda",
+      GH: "Ghana", CI: "Ivory Coast", SN: "Senegal", ML: "Mali",
+      CL: "Chile", VE: "Venezuela", EC: "Ecuador", BO: "Bolivia",
+      UY: "Uruguay", PY: "Paraguay", NZ: "New Zealand",
+    };
+    // Pool of cities with known country codes. Landmarks don't have
+    // country fields — we'd need to derive from coords (skipped for now).
+    const pool: Array<{ place: string; emoji?: string; cc: string; lat: number; lon: number }> = [];
+    for (const c of MAJOR_CITIES) {
+      if (COUNTRY_NAMES[c.country]) pool.push({ place: c.name, cc: c.country, lat: c.lat, lon: c.lon });
+    }
+    for (const c of REGIONAL_CITIES) {
+      if (COUNTRY_NAMES[c.country]) pool.push({ place: c.name, cc: c.country, lat: c.lat, lon: c.lon });
+    }
+    const pick = pool[Math.floor(Math.random() * pool.length)];
+    const correctCountry = COUNTRY_NAMES[pick.cc];
+    // Build 3 wrong choices from the country list
+    const wrongs: string[] = [];
+    while (wrongs.length < 3) {
+      const candidate = quizCountryList[Math.floor(Math.random() * quizCountryList.length)];
+      if (candidate !== correctCountry && !wrongs.includes(candidate)) wrongs.push(candidate);
+    }
+    // Shuffle the 4 choices
+    const choices = [correctCountry, ...wrongs].sort(() => Math.random() - 0.5);
+    return {
+      place: pick.place,
+      placeEmoji: pick.emoji,
+      correctCountry,
+      correctLat: pick.lat,
+      correctLon: pick.lon,
+      choices,
+    };
+  }, [quizCountryList]);
+  const startQuiz = useCallback(() => {
+    setQuiz({ q: newQuizQuestion(), answered: null, score: { right: 0, total: 0 }, streak: 0 });
+  }, [newQuizQuestion]);
+  const answerQuiz = useCallback((choice: string) => {
+    setQuiz((prev) => {
+      if (!prev || prev.answered) return prev;
+      const correct = choice === prev.q.correctCountry;
+      // Fly camera to the correct location to teach the user where it is
+      setFlyTo((p) => ({ id: p.id + 1, lat: prev.q.correctLat, lon: prev.q.correctLon, altKm: 100 }));
+      return {
+        ...prev,
+        answered: choice,
+        score: { right: prev.score.right + (correct ? 1 : 0), total: prev.score.total + 1 },
+        streak: correct ? prev.streak + 1 : 0,
+      };
+    });
+  }, []);
+  const nextQuiz = useCallback(() => {
+    setQuiz((prev) => prev ? { ...prev, q: newQuizQuestion(), answered: null } : null);
+  }, [newQuizQuestion]);
+
   // "What's here?" rich info card — combines multiple existing data
   // sources (reverse-geocode + weather + elevation + sunrise/sunset +
   // Wikipedia + antipode) into ONE comprehensive card. Triggered via a
@@ -3655,6 +3782,8 @@ function App() {
               if (!c) return;
               fetchWhatsHere(c.lat, c.lon);
             }},
+            // Geography quiz — multiple-choice game using the city dataset.
+            { id: "quizStart", label: quiz ? `🎮 Geography quiz running (score ${quiz.score.right}/${quiz.score.total})` : "🎮 Start geography quiz (where in the world?)", group: "Tools", icon: Sparkles, run: () => quiz ? setQuiz(null) : startQuiz() },
             { id: "weatherForecastNYC",   label: "📅 7-day forecast: New York City",   group: "Tools", icon: Cloud, run: () => fetchWeatherCard(40.7128, -74.0060,  "New York") },
             { id: "weatherForecastLondon",label: "📅 7-day forecast: London",         group: "Tools", icon: Cloud, run: () => fetchWeatherCard(51.5074, -0.1278,    "London") },
             { id: "weatherForecastTokyo", label: "📅 7-day forecast: Tokyo",          group: "Tools", icon: Cloud, run: () => fetchWeatherCard(35.6762, 139.6503,   "Tokyo") },
@@ -6181,6 +6310,54 @@ function App() {
             ) : lower ? (
               <div className="atlasAltScaleSingle">{lower.emoji} {(altKm / lower.km).toFixed(0)}× higher than {lower.name}</div>
             ) : null}
+          </div>
+        );
+      })()}
+
+      {/* Geography quiz card — multiple-choice game. */}
+      {quiz && (() => {
+        const isAnswered = quiz.answered !== null;
+        return (
+          <div className="atlasQuizCard" role="dialog" aria-label="Geography quiz">
+            <div className="atlasQuizHead">
+              <Sparkles size={14} />
+              <strong>Geography quiz</strong>
+              <span className="atlasQuizScore">
+                {quiz.score.right}/{quiz.score.total}
+                {quiz.streak >= 3 && <em title="Streak"> 🔥{quiz.streak}</em>}
+              </span>
+              <button type="button" className="atlasIconBtn" onClick={() => setQuiz(null)} aria-label="End quiz"><X size={11} /></button>
+            </div>
+            <div className="atlasQuizBody">
+              <p className="atlasQuizPrompt">In which country is <strong>{quiz.q.place}</strong>?</p>
+              <div className="atlasQuizChoices">
+                {quiz.q.choices.map((c) => {
+                  const isCorrect = c === quiz.q.correctCountry;
+                  const isPicked = c === quiz.answered;
+                  let cls = "atlasQuizChoice";
+                  if (isAnswered) {
+                    if (isCorrect) cls += " correct";
+                    else if (isPicked) cls += " wrong";
+                    else cls += " dim";
+                  }
+                  return (
+                    <button
+                      key={c}
+                      type="button"
+                      className={cls}
+                      onClick={() => answerQuiz(c)}
+                      disabled={isAnswered}
+                    >{c}</button>
+                  );
+                })}
+              </div>
+              {isAnswered && (
+                <div className="atlasQuizFooter">
+                  <span>{quiz.answered === quiz.q.correctCountry ? "✓ Correct!" : `✗ It's in ${quiz.q.correctCountry}.`}</span>
+                  <button type="button" className="atlasPrimaryBtn small" onClick={nextQuiz}>Next →</button>
+                </div>
+              )}
+            </div>
           </div>
         );
       })()}
