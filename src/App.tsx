@@ -3943,6 +3943,49 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: a.lat, lon: a.lon, altKm: 2 }));
               showToast(`✈ ${a.iata} · ${a.name} (${a.city})`);
             }},
+            // Recent earthquakes within 500km of this view (USGS).
+            // Useful for travelers checking activity near a destination.
+            { id: "quakesNearby", label: "🌋 Recent earthquakes within 500km of this view (USGS, last 24h)", group: "Tools", icon: Sparkles, run: async () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              showToast("Fetching nearby earthquakes…");
+              try {
+                // USGS rectangle query — ~5° box centered on view (≈550km at equator).
+                const minLat = c.lat - 4.5;
+                const maxLat = c.lat + 4.5;
+                const minLon = c.lon - 4.5;
+                const maxLon = c.lon + 4.5;
+                const url = `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&minlatitude=${minLat.toFixed(2)}&maxlatitude=${maxLat.toFixed(2)}&minlongitude=${minLon.toFixed(2)}&maxlongitude=${maxLon.toFixed(2)}&starttime=${new Date(Date.now() - 86_400_000).toISOString()}&minmagnitude=2`;
+                const r = await fetch(url, { cache: "no-store" });
+                if (!r.ok) { showToast(`USGS HTTP ${r.status}`); return; }
+                const j = await r.json();
+                const features = j?.features ?? [];
+                if (features.length === 0) { showToast("✓ No earthquakes M2.0+ near this view in the last 24h"); return; }
+                const sorted = features.sort((a: any, b: any) => b.properties.mag - a.properties.mag);
+                const top = sorted.slice(0, 3);
+                const list = top.map((f: any) => `M${f.properties.mag.toFixed(1)} ${f.properties.place}`).join(" · ");
+                const more = features.length > 3 ? ` +${features.length - 3} more` : "";
+                showToast(`🌋 ${features.length} quake${features.length === 1 ? "" : "s"} near here · ${list}${more}`);
+              } catch (e) {
+                showToast(`USGS fetch failed: ${(e as Error).message}`);
+              }
+            }},
+            // Top 5 strongest quakes in the last 24h globally.
+            { id: "quakesTop5", label: "🌋 Top 5 strongest earthquakes in the last 24h (worldwide)", group: "Tools", icon: Sparkles, run: async () => {
+              showToast("Fetching global earthquake data…");
+              try {
+                const r = await fetch("https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson", { cache: "no-store" });
+                if (!r.ok) { showToast(`USGS HTTP ${r.status}`); return; }
+                const j = await r.json();
+                const features = (j?.features ?? []) as any[];
+                const top = features.sort((a, b) => b.properties.mag - a.properties.mag).slice(0, 5);
+                if (top.length === 0) { showToast("No earthquake data"); return; }
+                const list = top.map((f: any) => `M${f.properties.mag.toFixed(1)} ${f.properties.place.split(",")[0].trim()}`).join(" · ");
+                showToast(`🌋 Top quakes: ${list}`);
+              } catch (e) {
+                showToast(`USGS fetch failed: ${(e as Error).message}`);
+              }
+            }},
             // Compare current view's weather to another location. Useful
             // for trip planning: "is it warmer in Sydney right now than NYC?"
             { id: "compareWeather", label: "🌡 Compare weather: this view vs another major city", group: "Tools", icon: Cloud, run: async () => {
