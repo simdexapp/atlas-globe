@@ -4099,6 +4099,37 @@ function App() {
             }},
             // Visualisation: fly through your bounding box with auto-zoom
             // to fit all your points.
+            // Auto-Explore mode — like a screensaver. Every N seconds,
+            // flies to a random landmark + shows the name. Toggle with
+            // the same command to stop. Lives in window-scoped interval
+            // so it survives across renders.
+            { id: "autoExplore", label: (window as any).__atlasAutoExploreActive ? "🛑 Stop auto-explore" : "🎬 Start auto-explore (auto-fly to random landmarks every 12s)", group: "Tools", icon: Play, run: () => {
+              const w = window as any;
+              if (w.__atlasAutoExploreInterval) {
+                clearInterval(w.__atlasAutoExploreInterval);
+                w.__atlasAutoExploreInterval = null;
+                w.__atlasAutoExploreActive = false;
+                showToast("🛑 Auto-explore stopped");
+                return;
+              }
+              w.__atlasAutoExploreActive = true;
+              const tick = () => {
+                // 50/50 between landmark and curated tropical/extreme
+                const pickFromLandmarks = Math.random() < 0.7;
+                if (pickFromLandmarks) {
+                  const l = LANDMARKS[Math.floor(Math.random() * LANDMARKS.length)];
+                  setFlyTo((p) => ({ id: p.id + 1, lat: l.lat, lon: l.lon, altKm: l.zoomKm }));
+                  showToast(`${l.emoji} ${l.name}`);
+                } else {
+                  const c = MAJOR_CITIES[Math.floor(Math.random() * MAJOR_CITIES.length)];
+                  setFlyTo((p) => ({ id: p.id + 1, lat: c.lat, lon: c.lon, altKm: 8 }));
+                  showToast(`🏙 ${c.name}, ${c.country}`);
+                }
+              };
+              tick();  // first one immediately
+              w.__atlasAutoExploreInterval = setInterval(tick, 12000);
+              showToast("🎬 Auto-explore on — flies to a new place every 12s");
+            }},
             { id: "atlasFitAll", label: "🎯 Frame all my pins + bookmarks", group: "View", icon: Crosshair, run: () => {
               const allPoints = [...pins.map(p => ({ lat: p.lat, lon: p.lon })), ...bookmarks.filter(b => b.savedAt > 0).map(b => ({ lat: b.lat, lon: b.lon }))];
               if (allPoints.length === 0) {
