@@ -431,6 +431,8 @@ function App() {
   const [surfaceAutoOrbit, setSurfaceAutoOrbit] = useState(false);
   // Per-aircraft altitude bar overlay (vertical line from ground to billboard).
   const [surfaceAltBars, setSurfaceAltBars] = useState(false);
+  // Reset-heading command (bumped by Cmd+K).
+  const [resetHeadingCmd, setResetHeadingCmd] = useState<{ id: number } | null>(null);
   // GeoJSON drag-import state — set by the body-level dragdrop listener.
   const [geoJsonImport, setGeoJsonImport] = useState<any | null>(null);
 
@@ -2150,6 +2152,7 @@ function App() {
               autoOrbit={surfaceAutoOrbit}
               aircraftAltitudeBars={surfaceAltBars}
               bordersGeoJson={layers.borders ? bordersGeoJson : null}
+              resetHeadingCommand={resetHeadingCmd}
             />
           </Suspense>
         )}
@@ -2457,6 +2460,36 @@ function App() {
             { id: "surfTilt30", label: "Surface camera: low oblique (30°)", group: "Imagery", icon: Mountain, run: () => setSurfaceTilt((c) => ({ id: (c?.id ?? 0) + 1, pitchDeg: 30 })) },
             { id: "surfTiltHorizon", label: "Surface camera: horizon view (10°)", group: "Imagery", icon: Mountain, run: () => setSurfaceTilt((c) => ({ id: (c?.id ?? 0) + 1, pitchDeg: 10 })) },
             { id: "surfAutoOrbit", label: surfaceAutoOrbit ? "Stop auto-orbit (Surface)" : "Start auto-orbit (Surface)", group: "View", icon: RotateCcw, run: () => setSurfaceAutoOrbit((v) => !v) },
+            { id: "surfResetHeading", label: "Surface camera: reset heading to north", group: "View", icon: Navigation, run: () => setResetHeadingCmd((c) => ({ id: (c?.id ?? 0) + 1 })) },
+            // Open-Meteo current weather at camera-center lat/lon. Free,
+            // no auth. Returns temp/wind/wind-dir.
+            { id: "currentWeather", label: "Show current weather at this view (Open-Meteo)", group: "Tools", icon: Cloud, run: async () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              try {
+                const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${c.lat}&longitude=${c.lon}&current=temperature_2m,wind_speed_10m,wind_direction_10m,relative_humidity_2m,weather_code`, { cache: "no-store" });
+                const j = await r.json();
+                const cur = j?.current;
+                if (!cur) { showToast("Weather: no data"); return; }
+                showToast(`☁ ${cur.temperature_2m}°C · wind ${cur.wind_speed_10m} kph @ ${Math.round(cur.wind_direction_10m)}° · RH ${cur.relative_humidity_2m}%`);
+              } catch { showToast("Weather: fetch failed"); }
+            }},
+            // Open-Meteo air quality at camera-center. Returns PM2.5/10 + EU AQI.
+            { id: "currentAQ", label: "Show air quality at this view (Open-Meteo)", group: "Tools", icon: Cloud, run: async () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              try {
+                const r = await fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${c.lat}&longitude=${c.lon}&current=european_aqi,pm10,pm2_5`, { cache: "no-store" });
+                const j = await r.json();
+                const cur = j?.current;
+                if (!cur) { showToast("AQ: no data"); return; }
+                const aqi = cur.european_aqi ?? "—";
+                const tier = typeof aqi === "number"
+                  ? (aqi < 20 ? "good" : aqi < 40 ? "fair" : aqi < 60 ? "moderate" : aqi < 80 ? "poor" : aqi < 100 ? "very poor" : "extremely poor")
+                  : "—";
+                showToast(`🌫 EU AQI ${aqi} (${tier}) · PM2.5 ${cur.pm2_5} · PM10 ${cur.pm10} µg/m³`);
+              } catch { showToast("AQ: fetch failed"); }
+            }},
             { id: "surfAltBars", label: surfaceAltBars ? "Hide aircraft altitude bars" : "Show aircraft altitude bars", group: "Layers", icon: Plane, run: () => setSurfaceAltBars((v) => !v) },
             { id: "exag1", label: "Terrain exaggeration: 1× (real)", group: "Imagery", icon: Mountain, run: () => setSurfaceTerrainExag(1) },
             { id: "exag15", label: "Terrain exaggeration: 1.5×", group: "Imagery", icon: Mountain, run: () => setSurfaceTerrainExag(1.5) },

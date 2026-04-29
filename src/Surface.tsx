@@ -115,7 +115,8 @@ export default function Surface({
   auroraKp,
   autoOrbit,
   aircraftAltitudeBars,
-  bordersGeoJson
+  bordersGeoJson,
+  resetHeadingCommand
 }: {
   token: string;
   onCameraChange: (lat: number, lon: number, altKm: number) => void;
@@ -188,6 +189,9 @@ export default function Surface({
   // altitude. Implemented via scene.preRender to rotate the camera
   // about the local up axis each frame at ~1°/sec.
   autoOrbit?: boolean;
+  // Bumping this id snaps Cesium camera heading back to true north,
+  // preserving pitch + altitude. Used by the "Reset heading" Cmd+K.
+  resetHeadingCommand?: { id: number } | null;
   // Pixel-tall vertical bars from sea-level to each aircraft, so
   // altitude is visible as a height cue in the 3D scene. Off by
   // default; cheap-ish (one polyline per aircraft, glow material).
@@ -1844,6 +1848,28 @@ export default function Surface({
     viewer.scene.globe.enableLighting = enableGlobeLighting;
     viewer.scene.requestRender();
   }, [enableGlobeLighting]);
+
+  // ===== Reset heading to true north =====
+  // Snaps camera heading to 0 (north up) preserving lat/lon/altitude
+  // and current pitch. Useful after auto-orbit or manual rotation.
+  const lastResetHeadingIdRef = useRef(0);
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer || !resetHeadingCommand) return;
+    if (resetHeadingCommand.id === lastResetHeadingIdRef.current) return;
+    lastResetHeadingIdRef.current = resetHeadingCommand.id;
+    if (resetHeadingCommand.id === 0) return;
+    const cart = viewer.camera.positionCartographic;
+    viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(
+        Cesium.Math.toDegrees(cart.longitude),
+        Cesium.Math.toDegrees(cart.latitude),
+        cart.height
+      ),
+      orientation: { heading: 0, pitch: viewer.camera.pitch, roll: 0 },
+      duration: 0.7,
+    });
+  }, [resetHeadingCommand]);
 
   // ===== Tilt command: re-orient camera at current position =====
   const lastTiltIdRef = useRef(0);
