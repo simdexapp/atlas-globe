@@ -271,6 +271,10 @@ export default function Surface({
   const landmarkEntitiesRef = useRef<Cesium.Entity[]>([]);
   const airportEntitiesRef = useRef<Cesium.Entity[]>([]);
   const weatherImageryLayerRef = useRef<Cesium.ImageryLayer | null>(null);
+  // Latest weather opacity prop, mirrored to a ref so the camera-change
+  // listener can read it without the listener being re-installed every
+  // time the slider moves. Updated by an effect below.
+  const weatherOpacityRef = useRef<number>(0.7);
   const terminatorEntityRef = useRef<Cesium.Entity | null>(null);
   const subsolarEntityRef = useRef<Cesium.Entity | null>(null);
   const issEntityRef = useRef<Cesium.Entity | null>(null);
@@ -594,6 +598,17 @@ export default function Surface({
       const lon = Cesium.Math.toDegrees(cartographic.longitude);
       const altKm = cartographic.height / 1000;
       onCameraChange(lat, lon, altKm);
+      // Auto-hide the weather radar layer when zoomed in close. RainViewer's
+      // tile pyramid maxes out around level 5, and below ~80km altitude
+      // Cesium upscales those tiles enough that they tile the whole screen
+      // with a uniform tan haze. Fade the layer out under that threshold.
+      const radarLayer = weatherImageryLayerRef.current;
+      if (radarLayer) {
+        const baseAlpha = (weatherOpacityRef.current ?? 0.7);
+        if (altKm < 80) radarLayer.alpha = 0;
+        else if (altKm < 200) radarLayer.alpha = baseAlpha * ((altKm - 80) / 120);
+        else radarLayer.alpha = baseAlpha;
+      }
     });
     viewer.camera.percentageChanged = isLow ? 0.05 : 0.01;
 
@@ -1977,7 +1992,9 @@ export default function Surface({
     // "Zoom Level Not Supported" plastered across the tile, which the
     // user reported as a "tear" when zooming into city level. Cap at 5
     // so Cesium upscales lower-level tiles instead of requesting
-    // unsupported ones.
+    // unsupported ones. The camera-change listener also auto-fades the
+    // layer to zero alpha under 80km altitude — the upscaled level-5
+    // tile would otherwise haze the entire screen with a uniform color.
     const provider = new Cesium.UrlTemplateImageryProvider({
       url: `https://tilecache.rainviewer.com${weatherTilePath}/256/{z}/{x}/{y}/4/1_1.png`,
       maximumLevel: 5,
@@ -1986,6 +2003,7 @@ export default function Surface({
     const layer = viewer.imageryLayers.addImageryProvider(provider);
     layer.alpha = weatherOpacity ?? 0.7;
     weatherImageryLayerRef.current = layer;
+    weatherOpacityRef.current = weatherOpacity ?? 0.7;
   }, [weatherTilePath, weatherOpacity]);
 
   // ===== Per-frame interpolation (smooth aircraft motion) =====
