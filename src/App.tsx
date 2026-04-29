@@ -2523,6 +2523,27 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: best!.lat, lon: best!.lon, altKm: 30 }));
               showToast(`🏆 ${best.iata} (${best.city}) — ${bestCount} aircraft within 50km`);
             }},
+            // Closest airport / landmark to camera-center.
+            { id: "closestAirport", label: "Show closest major airport to this view", group: "Tools", icon: Plane, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const ranked = AIRPORTS
+                .map((ap) => ({ ap, d: haversineKm(c.lat, c.lon, ap.lat, ap.lon) }))
+                .sort((x, y) => x.d - y.d)
+                .slice(0, 3);
+              const list = ranked.map(({ ap, d }) => `${ap.iata} (${d.toFixed(0)}km)`).join(" · ");
+              showToast(`✈ Nearest airports: ${list}`);
+            }},
+            { id: "closestLandmark", label: "Show closest famous landmark to this view", group: "Tools", icon: Mountain, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const ranked = LANDMARKS
+                .map((lm) => ({ lm, d: haversineKm(c.lat, c.lon, lm.lat, lm.lon) }))
+                .sort((x, y) => x.d - y.d)
+                .slice(0, 3);
+              const list = ranked.map(({ lm, d }) => `${lm.emoji} ${lm.name} (${d.toFixed(0)}km)`).join(" · ");
+              showToast(list);
+            }},
             { id: "closestAircraft", label: "Show closest aircraft to this view", group: "Tools", icon: Plane, run: () => {
               const c = cameraStateRef.current;
               if (!c || !aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) {
