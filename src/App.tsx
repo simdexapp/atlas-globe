@@ -3417,6 +3417,32 @@ function App() {
             { id: "capCairo", label: "Fly to Cairo", group: "View", icon: Navigation, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: 30.0444, lon: 31.2357, altKm: 8 })); showToast("🇪🇬 Cairo"); } },
             { id: "capLagos", label: "Fly to Lagos", group: "View", icon: Navigation, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: 6.5244, lon: 3.3792, altKm: 8 })); showToast("🇳🇬 Lagos"); } },
             { id: "capCapeTown", label: "Fly to Cape Town", group: "View", icon: Navigation, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: -33.9249, lon: 18.4241, altKm: 8 })); showToast("🇿🇦 Cape Town"); } },
+            // Cardinal-direction quick-pans — move camera N/S/E/W by half
+            // the current screen (10° at globe view, ~0.5° at 1km alt).
+            { id: "panNorth", label: "Pan north (move camera up)", group: "View", icon: Navigation, run: () => {
+              const c = cameraStateRef.current;
+              if (c) setFlyTo((p) => ({ id: p.id + 1, lat: Math.min(89, c.lat + Math.max(0.5, c.altKm * 0.01)), lon: c.lon, altKm: c.altKm }));
+            }},
+            { id: "panSouth", label: "Pan south (move camera down)", group: "View", icon: Navigation, run: () => {
+              const c = cameraStateRef.current;
+              if (c) setFlyTo((p) => ({ id: p.id + 1, lat: Math.max(-89, c.lat - Math.max(0.5, c.altKm * 0.01)), lon: c.lon, altKm: c.altKm }));
+            }},
+            { id: "panEast", label: "Pan east", group: "View", icon: Navigation, run: () => {
+              const c = cameraStateRef.current;
+              if (c) {
+                let newLon = c.lon + Math.max(0.5, c.altKm * 0.01);
+                if (newLon > 180) newLon -= 360;
+                setFlyTo((p) => ({ id: p.id + 1, lat: c.lat, lon: newLon, altKm: c.altKm }));
+              }
+            }},
+            { id: "panWest", label: "Pan west", group: "View", icon: Navigation, run: () => {
+              const c = cameraStateRef.current;
+              if (c) {
+                let newLon = c.lon - Math.max(0.5, c.altKm * 0.01);
+                if (newLon < -180) newLon += 360;
+                setFlyTo((p) => ({ id: p.id + 1, lat: c.lat, lon: newLon, altKm: c.altKm }));
+              }
+            }},
             { id: "easterEggHelp", label: "Easter eggs hint (Konami code lives here…)", group: "Tools", icon: Sparkles, run: () => {
               showToast("🎮 Try ↑↑↓↓←→←→ B A (anywhere on the page)");
             }},
