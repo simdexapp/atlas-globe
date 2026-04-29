@@ -3376,6 +3376,14 @@ function App() {
               if (!c) return;
               window.open(`https://www.wunderground.com/weather/${c.lat.toFixed(3)},${c.lon.toFixed(3)}`, "_blank");
             }},
+            // Mode quick-jumps
+            { id: "modeAtlas", label: "Switch to Atlas mode (orbital shader globe)", group: "View", icon: Globe2, hint: "S", run: switchToAtlas },
+            { id: "modeSurface", label: "Switch to Surface mode (Cesium high-detail)", group: "View", icon: Mountain, hint: "S", run: switchToSurface },
+            { id: "toggleAutoMode", label: autoModeSwitch ? "Disable auto Atlas/Surface switching by altitude" : "Enable auto Atlas/Surface switching by altitude", group: "View", icon: Mountain, run: () => setAutoModeSwitch((v) => !v) },
+            // Pause / play rotation
+            { id: "togglePause", label: paused ? "Resume rotation" : "Pause rotation", group: "View", icon: paused ? Play : Pause, run: () => setPaused((v) => !v) },
+            // Hide / show UI
+            { id: "toggleUiHide", label: hideUi ? "Show UI panels" : "Hide UI panels (presentation mode)", group: "View", icon: Eye, hint: "H", run: () => setHideUi((v) => !v) },
             // Quick-save: turn the URL hash into a bookmark with auto-naming.
             { id: "saveQuickBookmark", label: "Quick-save current view as bookmark (auto-name)", group: "Tools", icon: BookmarkPlus, run: () => {
               const c = cameraStateRef.current;
