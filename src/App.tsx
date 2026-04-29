@@ -3913,6 +3913,45 @@ function App() {
               const list = top.map(({ city, km }) => `${city.name}: ${Math.round(km)}km`).join(" · ");
               showToast(`🗺 Closest 5 cities: ${list}`);
             }},
+            // ISS pass calculator — when will the ISS be over me next?
+            { id: "issNextPass", label: "Show ISS next overhead pass (approximate)", group: "Tools", icon: Plane, run: async () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              try {
+                showToast("Querying ISS pass times…");
+                const r = await fetch(`https://api.g7vrd.co.uk/v1/satellite-passes/25544/${c.lat.toFixed(4)}/${c.lon.toFixed(4)}.json?minelevation=10&hours=24`, { cache: "no-store" });
+                if (!r.ok) { showToast("Pass-prediction API unavailable"); return; }
+                const d = await r.json();
+                const pass = d?.passes?.[0];
+                if (!pass) { showToast("No ISS pass in next 24h above 10° elevation"); return; }
+                const start = new Date(pass.start);
+                const minsAway = Math.round((start.getTime() - Date.now()) / 60000);
+                const dur = Math.round((new Date(pass.end).getTime() - start.getTime()) / 60000);
+                showToast(`🛰 ISS next pass: T-${minsAway} min · duration ${dur} min · max elev ${Math.round(pass.maxelevation)}°`);
+              } catch { showToast("ISS pass query failed"); }
+            }},
+            // ISS facts toast.
+            { id: "issLiveStream", label: "Open NASA's live ISS view (YouTube)", group: "Tools", icon: Plane, run: () => {
+              window.open("https://www.youtube.com/watch?v=DIgkvm2nmHc", "_blank");
+            }},
+            // Bigger Wikipedia info — find nearest article + open it.
+            { id: "wikiNearest", label: "Show Wikipedia summary for nearest article", group: "Tools", icon: Share2, run: async () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              showToast("Searching Wikipedia…");
+              try {
+                const r = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gsradius=10000&gscoord=${c.lat}|${c.lon}&format=json&origin=*`);
+                const d = await r.json();
+                const first = d?.query?.geosearch?.[0];
+                if (!first) { showToast("No nearby Wikipedia article"); return; }
+                // Get the page summary
+                const sumRes = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(first.title)}`);
+                if (!sumRes.ok) { showToast(first.title); return; }
+                const sum = await sumRes.json();
+                const desc = (sum.description || sum.extract || "").slice(0, 120);
+                showToast(`📖 ${sum.title}: ${desc}${desc.length === 120 ? "…" : ""}`);
+              } catch { showToast("Wikipedia query failed"); }
+            }},
             { id: "distanceISS", label: "Distance from this view to the ISS right now", group: "Tools", icon: Plane, run: () => {
               const c = cameraStateRef.current;
               if (!c || !issPosition) { showToast("ISS layer not loaded"); return; }
