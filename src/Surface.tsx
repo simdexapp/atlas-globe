@@ -416,6 +416,40 @@ export default function Surface({
       });
     }
 
+    // ===== continent labels =====
+    // Very-far-zoom labels — visible from 100,000km out (Mars-view).
+    // Used as the visual entry-point at extreme zoom; fade out by the
+    // time country labels start showing (~25,000km).
+    const CONTINENTS = [
+      { name: "NORTH AMERICA",  lat:  46,   lon: -100 },
+      { name: "SOUTH AMERICA",  lat: -16,   lon:  -60 },
+      { name: "EUROPE",         lat:  54,   lon:   15 },
+      { name: "AFRICA",         lat:   2,   lon:   20 },
+      { name: "ASIA",           lat:  46,   lon:   90 },
+      { name: "OCEANIA",        lat: -26,   lon:  140 },
+      { name: "ANTARCTICA",     lat: -82,   lon:    0 },
+    ];
+    for (const cn of CONTINENTS) {
+      viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(cn.lon, cn.lat, 0),
+        label: {
+          text: cn.name,
+          font: "800 16px Inter, sans-serif",
+          fillColor: Cesium.Color.fromCssColorString("rgba(255, 230, 195, 0.85)"),
+          outlineColor: Cesium.Color.fromCssColorString("rgba(0,0,0,0.95)"),
+          outlineWidth: 5,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          verticalOrigin: Cesium.VerticalOrigin.CENTER,
+          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          // Visible from 25,000km..200,000km — pure long-range hierarchy.
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(25_000_000, 200_000_000),
+          translucencyByDistance: new Cesium.NearFarScalar(20_000_000, 0.0, 30_000_000, 1.0),
+        },
+      });
+    }
+
     // ===== country centroid labels =====
     // Tier 1 (huge nations) show from very far out (orbital view).
     // Tier 2 nations only appear once camera < ~6000km altitude.
