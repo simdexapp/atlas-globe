@@ -2682,6 +2682,58 @@ function App() {
               icon: Compass,
               run: () => setMeasurePoints([]),
             }] : []),
+            // Export measure path as GeoJSON LineString — round-trips
+            // through any GeoJSON viewer.
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureExportGeoJSON" as const,
+              label: `Export measure path as GeoJSON (${measurePoints.length} vertices)`,
+              group: "Tools" as const,
+              icon: Compass,
+              run: () => {
+                const fc = {
+                  type: "FeatureCollection",
+                  features: [{
+                    type: "Feature",
+                    geometry: {
+                      type: "LineString",
+                      coordinates: measurePoints.map(p => [p.lon, p.lat]),
+                    },
+                    properties: {
+                      vertexCount: measurePoints.length,
+                      totalKm: (() => {
+                        let total = 0;
+                        for (let i = 1; i < measurePoints.length; i++) {
+                          total += haversineKm(measurePoints[i-1].lat, measurePoints[i-1].lon, measurePoints[i].lat, measurePoints[i].lon);
+                        }
+                        return Math.round(total);
+                      })(),
+                    },
+                  }],
+                };
+                const blob = new Blob([JSON.stringify(fc, null, 2)], { type: "application/geo+json" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `atlas-path-${Date.now()}.geojson`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 500);
+                showToast(`Exported path with ${measurePoints.length} vertices`);
+              },
+            }, {
+              id: "measureCopyCoords" as const,
+              label: `Copy measure path coordinates as JSON`,
+              group: "Tools" as const,
+              icon: Compass,
+              run: () => {
+                const text = JSON.stringify(measurePoints, null, 2);
+                navigator.clipboard?.writeText(text).then(
+                  () => showToast(`Copied ${measurePoints.length} points`),
+                  () => showToast(text.length > 60 ? text.slice(0, 57) + "..." : text)
+                );
+              },
+            }] : []),
             // Compute spherical-excess area when the path has 3+ vertices —
             // we close the polygon by joining the last vertex back to the
             // first. Useful for area of a state/lake/island.
