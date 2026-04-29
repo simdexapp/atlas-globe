@@ -179,7 +179,11 @@ type PersistedState = {
   pins?: Pin[];
 };
 
-const STORAGE_KEY = "atlas-globe-state-v15";
+// Bumped from v15 → v16 to invalidate persisted layer state. Users
+// who had `buildings3D: true` from before the OSM Buildings tear-fix
+// would otherwise keep loading the tileset and seeing dark olive
+// boxes covering the imagery at low altitudes.
+const STORAGE_KEY = "atlas-globe-state-v16";
 const EARTH_RADIUS_KM = 6371;
 const MIN_DISTANCE = 1.0008;        // ~5 km above surface (texture-pixelated, but real zoom)
 const MAX_DISTANCE = 12;            // far view from space
