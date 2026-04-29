@@ -3060,6 +3060,116 @@ function App() {
             }},
             // Solar elongation — angle between sun and moon as seen from earth.
             // Useful for knowing when the moon will be visible at night.
+            // Open-Meteo wind & temp at the camera-center.
+            { id: "windTemp", label: "Show wind + temperature at this view (Open-Meteo)", group: "Tools", icon: Cloud, run: async () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              showToast(`Fetching weather for ${formatLat(c.lat)} ${formatLon(c.lon)}…`);
+              try {
+                const url = `https://api.open-meteo.com/v1/forecast?latitude=${c.lat.toFixed(3)}&longitude=${c.lon.toFixed(3)}&current=temperature_2m,wind_speed_10m,wind_direction_10m,relative_humidity_2m,weather_code,cloud_cover,pressure_msl&temperature_unit=celsius&wind_speed_unit=kmh`;
+                const r = await fetch(url, { cache: "no-store" });
+                if (!r.ok) { showToast("Open-Meteo fetch failed"); return; }
+                const d = await r.json();
+                const cu = d?.current;
+                if (!cu) { showToast("No current data"); return; }
+                const wcode = cu.weather_code;
+                const wname = ({ 0: "clear", 1: "mostly clear", 2: "partly cloudy", 3: "overcast", 45: "fog", 51: "drizzle", 61: "rain", 71: "snow", 95: "thunderstorm" } as Record<number, string>)[wcode] || `code ${wcode}`;
+                const dirCardinal = ["N","NE","E","SE","S","SW","W","NW"][Math.round(cu.wind_direction_10m / 45) % 8];
+                showToast(`🌡 ${cu.temperature_2m}°C · 💨 ${Math.round(cu.wind_speed_10m)} kph from ${dirCardinal} · ${wname} · ${cu.cloud_cover}% cloud · ${cu.pressure_msl} hPa`);
+              } catch { showToast("Weather request failed"); }
+            }},
+            // Bookmarks export/import
+            { id: "exportBookmarks", label: bookmarks.length > 0 ? `Export ${bookmarks.length} bookmarks as JSON` : "Export bookmarks (none yet)", group: "Tools", icon: Bookmark, run: () => {
+              if (bookmarks.length === 0) { showToast("No bookmarks to export"); return; }
+              const blob = new Blob([JSON.stringify(bookmarks, null, 2)], { type: "application/json" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `atlas-bookmarks-${new Date().toISOString().slice(0, 10)}.json`;
+              document.body.appendChild(a);
+              a.click();
+              a.remove();
+              setTimeout(() => URL.revokeObjectURL(url), 500);
+              showToast(`Exported ${bookmarks.length} bookmarks`);
+            }},
+            // Camera cinematic — slow zoom-out from current view to orbital
+            // over ~6 seconds. Animates by stepping flyTo target altitudes.
+            { id: "cinematicZoomOut", label: "Cinematic: slow zoom out to orbital view", group: "View", icon: Film, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const startAlt = c.altKm;
+              const endAlt = 12000;
+              const steps = 20;
+              for (let i = 0; i <= steps; i++) {
+                const t = i / steps;
+                // Ease-in-out cubic
+                const eased = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+                const alt = startAlt + (endAlt - startAlt) * eased;
+                setTimeout(() => {
+                  setFlyTo((p) => ({ id: p.id + 1, lat: c.lat, lon: c.lon, altKm: alt }));
+                }, i * 250);
+              }
+              showToast("🎬 Cinematic zoom-out");
+            }},
+            { id: "cinematicZoomIn", label: "Cinematic: slow zoom in to street level", group: "View", icon: Film, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const startAlt = c.altKm;
+              const endAlt = 0.5;
+              const steps = 20;
+              for (let i = 0; i <= steps; i++) {
+                const t = i / steps;
+                const eased = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+                const alt = startAlt * Math.pow(endAlt / startAlt, eased);
+                setTimeout(() => {
+                  setFlyTo((p) => ({ id: p.id + 1, lat: c.lat, lon: c.lon, altKm: alt }));
+                }, i * 250);
+              }
+              showToast("🎬 Cinematic zoom-in");
+            }},
+            // Auto 360° spin around current view location.
+            { id: "cinematicSpin360", label: "Cinematic: 360° orbit around this point", group: "View", icon: Film, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const steps = 36;
+              for (let i = 0; i <= steps; i++) {
+                const t = i / steps;
+                // Move the camera lon by 360° while keeping lat/alt fixed.
+                const lon = ((c.lon + t * 360 + 180) % 360) - 180;
+                setTimeout(() => {
+                  setFlyTo((p) => ({ id: p.id + 1, lat: c.lat, lon, altKm: c.altKm }));
+                }, i * 250);
+              }
+              showToast("🎬 360° orbit started (~9s)");
+            }},
+            { id: "importBookmarks", label: "Import bookmarks from JSON file", group: "Tools", icon: Bookmark, run: () => {
+              const input = document.createElement("input");
+              input.type = "file";
+              input.accept = "application/json,.json";
+              input.onchange = async () => {
+                const file = input.files?.[0];
+                if (!file) return;
+                try {
+                  const text = await file.text();
+                  const parsed = JSON.parse(text);
+                  if (!Array.isArray(parsed)) { showToast("Not a bookmark array"); return; }
+                  const cleaned: Bookmark[] = parsed
+                    .filter((b: any) => typeof b?.lat === "number" && typeof b?.lon === "number" && typeof b?.name === "string")
+                    .map((b: any) => ({
+                      id: typeof b.id === "string" ? b.id : `bm-imp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+                      name: b.name,
+                      lat: b.lat,
+                      lon: b.lon,
+                      altKm: typeof b.altKm === "number" ? b.altKm : 1500,
+                      savedAt: typeof b.savedAt === "number" ? b.savedAt : Date.now(),
+                    }));
+                  if (cleaned.length === 0) { showToast("No valid bookmarks in file"); return; }
+                  setBookmarks((prev) => [...cleaned, ...prev]);
+                  showToast(`Imported ${cleaned.length} bookmarks`);
+                } catch { showToast("Invalid JSON file"); }
+              };
+              input.click();
+            }},
             { id: "moonriseUtc", label: "Show approximate moonrise time at this view (UTC)", group: "Tools", icon: SunIcon, run: () => {
               const c = cameraStateRef.current;
               if (!c) return;
