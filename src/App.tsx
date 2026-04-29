@@ -9058,6 +9058,11 @@ function GlobeControls({
   const lastIdRef = useRef(0);
   const tweenRef = useRef<{ from: THREE.Vector3; to: THREE.Vector3; start: number; duration: number } | null>(null);
   const lastEmitRef = useRef(0);
+  // Last emitted camera values — used to suppress duplicate emits when
+  // the camera is idle. Without this we re-render App ~5×/sec even when
+  // the user isn't doing anything, which adds up: every layer panel,
+  // every footer pill, every command palette item gets reconciled.
+  const lastEmittedRef = useRef<{ lat: number; lon: number; altKm: number }>({ lat: NaN, lon: NaN, altKm: NaN });
 
   // Fly-to handling — when prefers-reduced-motion is on, we set duration=1
   // so the lerp completes on the next frame (no perceptible animation).
@@ -9092,8 +9097,10 @@ function GlobeControls({
 
     if (controlsRef.current) controlsRef.current.update(delta);
 
-    // Emit camera state ~5/sec — half the React renders for the same
-    // visible smoothness in the status bar / mini-map / sun-info widget.
+    // Emit camera state ~5/sec — but only if it actually moved. Skipping
+    // duplicate emits during idle saves a parent-component re-render every
+    // 200ms, which avoids re-running all the inline JSX (footer pills,
+    // status bar, layer panel children) for no visible gain.
     const now = performance.now();
     if (now - lastEmitRef.current > 200) {
       lastEmitRef.current = now;
@@ -9102,7 +9109,16 @@ function GlobeControls({
       const altKm = distanceToAltKm(distance);
       const lat = THREE.MathUtils.radToDeg(Math.asin(pos.y / distance));
       const lon = -THREE.MathUtils.radToDeg(Math.atan2(pos.z, pos.x));
-      onCameraChange(lat, lon, altKm);
+      // 0.0001° lat/lon ≈ 11m — finer than the status bar can display anyway.
+      // 0.001 km altitude = 1m — finer than zoom UI cares about.
+      const last = lastEmittedRef.current;
+      const moved = Math.abs(lat - last.lat) > 0.0001
+                 || Math.abs(lon - last.lon) > 0.0001
+                 || Math.abs(altKm - last.altKm) > 0.001;
+      if (moved) {
+        lastEmittedRef.current = { lat, lon, altKm };
+        onCameraChange(lat, lon, altKm);
+      }
 
       // Adaptive rotate speed: slow down as we get close to surface
       if (controlsRef.current) {

@@ -15,6 +15,35 @@
     <meta property="og:description" content="Interactive 3D Earth — orbit the planet, fly to any location, switch to high-detail surface mode." />
     <meta property="og:type" content="website" />
     <title>Atlas — 3D Globe</title>
+    <!--
+      Preconnect hints — open TCP+TLS to the data hosts the user is most
+      likely to hit during their first interaction. Saves roughly the cost
+      of one full handshake per host (~100-300ms on cold cache, more on
+      mobile networks). We can't preconnect everything, so this is gated
+      to what most sessions actually fetch:
+        • Cesium ion: terrain + Bing aerial imagery (Surface mode default)
+        • OpenStreetMap raster: fallback imagery
+        • USGS: earthquakes (auto-loaded with default layers)
+        • Nominatim: 'fly to anywhere' geocoding (Cmd+K + Search)
+        • NASA EONET: natural events
+      Aircraft / weather / space endpoints are not on by default, so we
+      only DNS-prefetch them — cheaper than full preconnect and harmless
+      if unused.
+    -->
+    <link rel="preconnect" href="https://api.cesium.com" crossorigin />
+    <link rel="preconnect" href="https://assets.ion.cesium.com" crossorigin />
+    <link rel="preconnect" href="https://earthquake.usgs.gov" />
+    <link rel="preconnect" href="https://nominatim.openstreetmap.org" />
+    <link rel="preconnect" href="https://eonet.gsfc.nasa.gov" />
+    <link rel="dns-prefetch" href="https://api.airplanes.live" />
+    <link rel="dns-prefetch" href="https://opendata.adsb.fi" />
+    <link rel="dns-prefetch" href="https://api.adsbdb.com" />
+    <link rel="dns-prefetch" href="https://api.rainviewer.com" />
+    <link rel="dns-prefetch" href="https://services.swpc.noaa.gov" />
+    <link rel="dns-prefetch" href="https://api.open-meteo.com" />
+    <link rel="dns-prefetch" href="https://api.spacexdata.com" />
+    <link rel="dns-prefetch" href="https://en.wikipedia.org" />
+    <link rel="dns-prefetch" href="https://tile.openstreetmap.org" />
   </head>
   <body>
     <div id="root">
