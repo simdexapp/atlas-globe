@@ -2528,6 +2528,23 @@ function App() {
             // Pole quick-views.
             { id: "viewNorthPole", label: "View North Pole", group: "View", icon: Navigation, run: () => setFlyTo((p) => ({ id: p.id + 1, lat: 89.99, lon: 0, altKm: 4500 })) },
             { id: "viewSouthPole", label: "View South Pole", group: "View", icon: Navigation, run: () => setFlyTo((p) => ({ id: p.id + 1, lat: -89.99, lon: 0, altKm: 4500 })) },
+            // Pull way back to see Earth as a small disk — "Voyager view".
+            { id: "viewMars", label: "Mars-view (Earth as a small disk)", group: "View", icon: Navigation, run: () => setFlyTo((p) => ({ id: p.id + 1, lat: 0, lon: 0, altKm: 100_000 })) },
+            // Pull camera up to ISS altitude (~408km) at the camera-center
+            // lat/lon. Useful for seeing what the ISS sees right now.
+            { id: "viewISSAlt", label: "View at ISS altitude (408km)", group: "View", icon: Navigation, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              setFlyTo((p) => ({ id: p.id + 1, lat: c.lat, lon: c.lon, altKm: 408 }));
+            }},
+            // Drone-view: low + oblique. Combines a fly-to with a tilt set.
+            { id: "viewDrone", label: "Drone view (low + oblique)", group: "View", icon: Navigation, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              setFlyTo((p) => ({ id: p.id + 1, lat: c.lat, lon: c.lon, altKm: 0.8 }));
+              // Apply a 30° pitch shortly after the fly arrives.
+              window.setTimeout(() => setSurfaceTilt((cur) => ({ id: (cur?.id ?? 0) + 1, pitchDeg: 30 })), 1800);
+            }},
             // Local civil time at the camera center, derived from longitude
             // alone (mean solar time, not zone time). Useful for "what time
             // is it where I'm looking right now" without picking a place.
