@@ -3312,6 +3312,149 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
   }
 }
 
+/* ============= Aircraft Radar widget =============
+   Closest 5 aircraft to current view, live-updating. Pinned to right
+   side below the existing widget rail. */
+.atlasRadarWidget {
+  position: fixed;
+  top: 88px;
+  right: 340px;
+  z-index: 8;
+  width: 240px;
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-3);
+  background: var(--surface-elevated);
+  backdrop-filter: blur(14px);
+  box-shadow: var(--shadow-2);
+  color: var(--gray-12);
+}
+.atlasRadarHead {
+  display: grid;
+  grid-template-columns: 12px 1fr auto;
+  align-items: center;
+  gap: var(--s-2);
+  padding-bottom: var(--s-1);
+  margin-bottom: var(--s-2);
+  border-bottom: 1px solid var(--border-subtle);
+  font-family: ui-monospace, monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--gray-9);
+}
+.atlasRadarHead strong { color: var(--gray-9); font-weight: 600; }
+.atlasRadarHead span { color: var(--accent); font-weight: 700; }
+.atlasRadarList {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.atlasRadarRow {
+  display: grid;
+  width: 100%;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: var(--r-1);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.atlasRadarRow:hover { background: var(--gray-2); }
+.atlasRadarRow strong {
+  font-family: ui-monospace, monospace;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--gray-12);
+}
+.atlasRadarRow em {
+  font-family: ui-monospace, monospace;
+  font-size: 10px;
+  font-style: normal;
+  color: var(--gray-9);
+}
+
+@media (max-width: 980px) { .atlasRadarWidget { right: 8px; width: 220px; } }
+@media (max-width: 620px) { .atlasRadarWidget { display: none; } }
+
+/* ============= Sky Tonight widget =============
+   Combined moon/sun/ISS dashboard. Pinned to left side below altitude
+   widget. */
+.atlasSkyTonightWidget {
+  position: fixed;
+  top: 660px;
+  left: 64px;
+  z-index: 5;
+  width: 280px;
+  padding: var(--s-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-3);
+  background: var(--surface-elevated);
+  backdrop-filter: blur(14px);
+  box-shadow: var(--shadow-2);
+  color: var(--gray-12);
+}
+.atlasSkyTonightHead {
+  display: grid;
+  grid-template-columns: 12px 1fr auto;
+  align-items: center;
+  gap: var(--s-2);
+  padding-bottom: var(--s-1);
+  margin-bottom: var(--s-2);
+  border-bottom: 1px solid var(--border-subtle);
+  font-family: ui-monospace, monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--gray-9);
+}
+.atlasSkyTonightHead strong { color: var(--gray-9); font-weight: 600; }
+.atlasSkyTonightHead span {
+  color: var(--gray-12);
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 10.5px;
+}
+.atlasSkyTonightGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-2);
+}
+.atlasSkyTonightCell {
+  display: grid;
+  gap: 1px;
+  padding: var(--s-2);
+  border-radius: var(--r-1);
+  background: var(--gray-1);
+}
+.atlasSkyTonightCell span {
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--gray-9);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.atlasSkyTonightCell strong {
+  font-size: 13px;
+  color: var(--gray-12);
+  font-weight: 700;
+  font-family: ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+.atlasSkyTonightCell em {
+  font-size: 10px;
+  color: var(--gray-9);
+  font-style: normal;
+  font-family: ui-monospace, monospace;
+}
+
+@media (max-width: 620px) { .atlasSkyTonightWidget { display: none; } }
+
 /* "Right now on Earth" digest widget */
 .atlasDigestWidget {
   position: fixed;

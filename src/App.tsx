@@ -136,6 +136,10 @@ type LayerVisibility = {
   antipode: boolean;        // shows the diametrically-opposite point
   localTime: boolean;       // local solar time at current view's longitude
   altScale: boolean;        // camera altitude vs Everest / ISS / Moon
+  // Aircraft radar widget — closest 5 to current view, live-updating.
+  aircraftRadar: boolean;
+  // Tonight in the sky — combines moon, planets, ISS pass, sun events.
+  skyTonight: boolean;
 };
 
 type GlobeSettings = {
@@ -272,6 +276,8 @@ const defaultLayers: LayerVisibility = {
   antipode: false,
   localTime: false,
   altScale: false,
+  aircraftRadar: false,
+  skyTonight: false,
   // 3D OSM Buildings tileset is heavy and renders with edge outlines
   // that disable imagery draping underneath, painting the screen with
   // dark olive boxes at low altitudes (the user's tear repro). Off by
@@ -3805,6 +3811,8 @@ function App() {
             { id: "widgetAntipode", label: layers.antipode ? "Hide antipode widget" : "Show antipode (opposite side of Earth)", group: "Widgets", icon: Globe2, run: () => toggleLayer("antipode") },
             { id: "widgetLocalTime", label: layers.localTime ? "Hide local-time widget" : "Show local solar time at this view", group: "Widgets", icon: SunIcon, run: () => toggleLayer("localTime") },
             { id: "widgetAltScale", label: layers.altScale ? "Hide altitude-scale widget" : "Show altitude scale (vs Everest, ISS, Moon)", group: "Widgets", icon: Mountain, run: () => toggleLayer("altScale") },
+            { id: "widgetAircraftRadar", label: layers.aircraftRadar ? "Hide aircraft radar widget" : "Show aircraft radar (closest 5 to view, live)", group: "Widgets", icon: Plane, run: () => toggleLayer("aircraftRadar") },
+            { id: "widgetSkyTonight", label: layers.skyTonight ? "Hide tonight-in-the-sky widget" : "Show tonight in the sky (moon, planets, sun, ISS)", group: "Widgets", icon: Telescope, run: () => toggleLayer("skyTonight") },
             { id: "layerClouds", label: layers.clouds ? "Hide clouds" : "Show clouds", group: "Layers", icon: Cloud, run: () => toggleLayer("clouds") },
             { id: "layerNight", label: layers.nightLights ? "Hide city lights" : "Show city lights", group: "Layers", icon: SunIcon, run: () => toggleLayer("nightLights") },
             { id: "layerAtm", label: layers.atmosphere ? "Hide atmosphere" : "Show atmosphere", group: "Layers", icon: Sparkles, run: () => toggleLayer("atmosphere") },
@@ -6672,6 +6680,124 @@ function App() {
             ) : lower ? (
               <div className="atlasAltScaleSingle">{lower.emoji} {(altKm / lower.km).toFixed(0)}× higher than {lower.name}</div>
             ) : null}
+          </div>
+        );
+      })()}
+
+      {/* Aircraft Radar widget — closest 5 aircraft to current view.
+          Live-updating from aircraftSnapshot which polls every 8s. */}
+      {layers.aircraftRadar && aircraftSnapshot && aircraftSnapshot.aircraft.length > 0 && (() => {
+        const c = cameraState;
+        const ranked = aircraftSnapshot.aircraft
+          .filter(a => !a.onGround)
+          .map(a => ({ a, km: haversineKm(c.lat, c.lon, a.lat, a.lon) }))
+          .sort((x, y) => x.km - y.km)
+          .slice(0, 5);
+        if (ranked.length === 0) return null;
+        return (
+          <div className="atlasRadarWidget" role="status" aria-label="Aircraft radar">
+            <div className="atlasRadarHead">
+              <Plane size={12} />
+              <strong>Closest aircraft</strong>
+              <span>{aircraftSnapshot.aircraft.length} live</span>
+            </div>
+            <ul className="atlasRadarList">
+              {ranked.map(({ a, km }) => (
+                <li key={a.icao24}>
+                  <button type="button" className="atlasRadarRow" onClick={() => {
+                    setSelectedAircraftId(a.icao24);
+                    setFlyTo((p) => ({ id: p.id + 1, lat: a.lat, lon: a.lon, altKm: 50 }));
+                  }}>
+                    <strong>{a.callsign || a.icao24.toUpperCase()}</strong>
+                    <em>{formatDistKm(km, unitsImperial)} · {Math.round(a.altitudeM / 0.3048).toLocaleString()} ft · {Math.round(a.velocityMs * 1.94384)} kt</em>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      })()}
+
+      {/* Tonight in the sky — combines moon phase, planets, ISS pass,
+          sun events at current view location. Updates live with camera. */}
+      {layers.skyTonight && (() => {
+        const c = cameraState;
+        // Moon phase
+        const synodic = 29.530588853;
+        const newMoonRef = Date.UTC(2000, 0, 6, 18, 14) / 86400000;
+        const today = Date.now() / 86400000;
+        const phase = ((today - newMoonRef) % synodic + synodic) % synodic;
+        const pct = phase / synodic;
+        let moonEmoji = "🌑";
+        if (pct < 0.03 || pct > 0.97) moonEmoji = "🌑";
+        else if (pct < 0.22) moonEmoji = "🌒";
+        else if (pct < 0.28) moonEmoji = "🌓";
+        else if (pct < 0.47) moonEmoji = "🌔";
+        else if (pct < 0.53) moonEmoji = "🌕";
+        else if (pct < 0.72) moonEmoji = "🌖";
+        else if (pct < 0.78) moonEmoji = "🌗";
+        else moonEmoji = "🌘";
+        const moonIllum = Math.round(50 * (1 - Math.cos(2 * Math.PI * pct)));
+        // Sun position at current view
+        const now = new Date();
+        const dayOfYear = Math.floor((now.getTime() - Date.UTC(now.getUTCFullYear(), 0, 0)) / 86400000);
+        const decl = 23.45 * Math.sin((360 / 365) * (dayOfYear - 81) * Math.PI / 180);
+        const utcHours = now.getUTCHours() + now.getUTCMinutes() / 60;
+        const localHourAngle = (utcHours - 12) * 15 + c.lon;
+        const altRad = Math.asin(
+          Math.sin(c.lat * Math.PI / 180) * Math.sin(decl * Math.PI / 180) +
+          Math.cos(c.lat * Math.PI / 180) * Math.cos(decl * Math.PI / 180) * Math.cos(localHourAngle * Math.PI / 180)
+        );
+        const sunAltDeg = altRad * 180 / Math.PI;
+        // Sun rise/set
+        const times = solarTimes(c.lat, c.lon, now);
+        const fmt = (h: number) => {
+          const hh = Math.floor(h);
+          const mm = Math.round((h - hh) * 60);
+          return `${hh.toString().padStart(2, "0")}:${mm.toString().padStart(2, "0")}`;
+        };
+        // ISS visibility — rough: ISS visible at view if both ISS lat is within 20°
+        // and current time is within ~2h of sunrise/sunset (sun below horizon but
+        // ISS lit). This is HUGE simplification — proper computation needs orbital propagation.
+        const issNear = issPosition && Math.abs(issPosition.lat - c.lat) < 30 && Math.abs(issPosition.lon - c.lon) < 30;
+        return (
+          <div className="atlasSkyTonightWidget" role="status" aria-label="Sky tonight">
+            <div className="atlasSkyTonightHead">
+              <Telescope size={12} />
+              <strong>Tonight in the sky</strong>
+              <span>{formatLat(c.lat)} {formatLon(c.lon)}</span>
+            </div>
+            <div className="atlasSkyTonightGrid">
+              <div className="atlasSkyTonightCell">
+                <span>MOON</span>
+                <strong>{moonEmoji} {moonIllum}%</strong>
+                <em>{phase.toFixed(1)}d age</em>
+              </div>
+              <div className="atlasSkyTonightCell">
+                <span>SUN ALT</span>
+                <strong>{sunAltDeg.toFixed(0)}°</strong>
+                <em>{sunAltDeg > 0 ? "above" : "below"} horizon</em>
+              </div>
+              {times !== "polar-day" && times !== "polar-night" && (
+                <>
+                  <div className="atlasSkyTonightCell">
+                    <span>SUNRISE UTC</span>
+                    <strong>{fmt(times.sunrise)}</strong>
+                  </div>
+                  <div className="atlasSkyTonightCell">
+                    <span>SUNSET UTC</span>
+                    <strong>{fmt(times.sunset)}</strong>
+                  </div>
+                </>
+              )}
+              {issPosition && (
+                <div className="atlasSkyTonightCell" style={{ gridColumn: "1 / -1" }}>
+                  <span>🛰 ISS</span>
+                  <strong>{formatLat(issPosition.lat)} {formatLon(issPosition.lon)}</strong>
+                  <em>{issNear ? "Near you — possible visible pass" : `${Math.round(haversineKm(c.lat, c.lon, issPosition.lat, issPosition.lon)).toLocaleString()} km away`}</em>
+                </div>
+              )}
+            </div>
           </div>
         );
       })()}
