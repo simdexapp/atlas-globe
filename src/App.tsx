@@ -827,6 +827,81 @@ function App() {
     current?: { temp: number; code: number; wind: number; windDir: number; humidity: number; feels?: number };
     daily?: Array<{ date: string; code: number; tmax: number; tmin: number; precipProb: number; windMax: number }>;
   }>(null);
+  // ===== Daily Geo Challenge =====
+  // Wordle-style city-guessing game. Same secret city for everyone today
+  // (derived from UTC date), 6 guesses, distance + bearing feedback after
+  // each guess. Result history persists in localStorage so users see their
+  // streak across days.
+  type GeoChallengeState = {
+    targetIdx: number;        // index into MAJOR_CITIES
+    guesses: Array<{ name: string; lat: number; lon: number; km: number; bearing: number }>;
+    won: boolean;
+    over: boolean;
+  };
+  const [geoChallenge, setGeoChallenge] = useState<GeoChallengeState | null>(null);
+  const [geoChallengeStats, setGeoChallengeStats] = useState<{ played: number; won: number; streak: number; lastDate: string }>(() => {
+    try {
+      const raw = window.localStorage.getItem("atlas-geo-challenge-stats");
+      if (raw) return JSON.parse(raw);
+    } catch { /* ignore */ }
+    return { played: 0, won: 0, streak: 0, lastDate: "" };
+  });
+  // Day-of-year + year hash → stable index into MAJOR_CITIES so everyone
+  // gets the same target on the same UTC day.
+  const dailyTargetIdx = useMemo(() => {
+    const now = new Date();
+    const start = Date.UTC(now.getUTCFullYear(), 0, 0);
+    const day = Math.floor((now.getTime() - start) / 86400000);
+    // Mix the year in so the same day-of-year doesn't repeat every year.
+    const seed = day * 37 + now.getUTCFullYear() * 1709;
+    return Math.abs(seed) % MAJOR_CITIES.length;
+  }, []);
+  const startGeoChallenge = useCallback(() => {
+    setGeoChallenge({ targetIdx: dailyTargetIdx, guesses: [], won: false, over: false });
+  }, [dailyTargetIdx]);
+  const submitGeoGuess = useCallback((guess: string) => {
+    setGeoChallenge((prev) => {
+      if (!prev || prev.over) return prev;
+      const q = guess.trim().toLowerCase();
+      // Find any city matching the guess (any name in our pool).
+      const allCities = [...MAJOR_CITIES, ...REGIONAL_CITIES];
+      const hit = allCities.find((c) => c.name.toLowerCase() === q || c.name.toLowerCase().startsWith(q));
+      if (!hit) return prev;  // ignore invalid guess
+      const target = MAJOR_CITIES[prev.targetIdx];
+      const km = haversineKm(hit.lat, hit.lon, target.lat, target.lon);
+      const bearing = bearingDeg(hit.lat, hit.lon, target.lat, target.lon);
+      const isWin = km < 50;  // Within 50km counts as a win (same metro)
+      const guesses = [...prev.guesses, { name: hit.name, lat: hit.lat, lon: hit.lon, km, bearing }];
+      const over = isWin || guesses.length >= 6;
+      // Fly camera to the guess so user sees where they were
+      setFlyTo((p) => ({ id: p.id + 1, lat: hit.lat, lon: hit.lon, altKm: 800 }));
+      // If game over, update stats
+      if (over) {
+        const today = new Date().toISOString().slice(0, 10);
+        setGeoChallengeStats((s) => {
+          const newPlayed = s.lastDate === today ? s.played : s.played + 1;
+          const newWon = isWin && s.lastDate !== today ? s.won + 1 : s.won;
+          // Streak resets if missed a day; +1 if won today (and not already won today)
+          let newStreak = s.streak;
+          if (s.lastDate !== today) {
+            if (isWin) {
+              const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+              newStreak = s.lastDate === yesterday ? s.streak + 1 : 1;
+            } else {
+              newStreak = 0;
+            }
+          }
+          const stats = { played: newPlayed, won: newWon, streak: newStreak, lastDate: today };
+          try { window.localStorage.setItem("atlas-geo-challenge-stats", JSON.stringify(stats)); } catch { /* ignore */ }
+          return stats;
+        });
+      }
+      return { ...prev, guesses, won: isWin, over };
+    });
+  }, []);
+  // shareGeoChallenge moved inline below the showToast declaration to
+  // avoid TDZ issues. Renders the result as Wordle-style emoji squares.
+
   // ===== Geography Quiz =====
   // Multiple-choice quiz drawing from the existing landmark + city data.
   // Each question: shows a place name and asks the user to pick its
@@ -3784,6 +3859,9 @@ function App() {
             }},
             // Geography quiz — multiple-choice game using the city dataset.
             { id: "quizStart", label: quiz ? `🎮 Geography quiz running (score ${quiz.score.right}/${quiz.score.total})` : "🎮 Start geography quiz (where in the world?)", group: "Tools", icon: Sparkles, run: () => quiz ? setQuiz(null) : startQuiz() },
+            // Daily challenge — same secret city for everyone today, 6
+            // guesses, Wordle-style emoji share. Persistent streak.
+            { id: "geoChallenge", label: geoChallenge ? `🌍 Today's challenge ${geoChallenge.over ? (geoChallenge.won ? "won" : "ended") : `(${geoChallenge.guesses.length}/6 guesses)`}` : `🌍 Today's daily geo challenge ${geoChallengeStats.streak > 0 ? `(streak: ${geoChallengeStats.streak})` : ""}`, group: "Tools", icon: Sparkles, run: () => geoChallenge ? setGeoChallenge(null) : startGeoChallenge() },
             // Compare current view's weather to another location. Useful
             // for trip planning: "is it warmer in Sydney right now than NYC?"
             { id: "compareWeather", label: "🌡 Compare weather: this view vs another major city", group: "Tools", icon: Cloud, run: async () => {
@@ -6388,6 +6466,62 @@ function App() {
         );
       })()}
 
+      {/* Daily Geo Challenge — Wordle-style city guesser */}
+      {geoChallenge && (() => {
+        const target = MAJOR_CITIES[geoChallenge.targetIdx];
+        const remaining = 6 - geoChallenge.guesses.length;
+        const dist = (km: number) => km < 50 ? "🟩" : km < 500 ? "🟧" : km < 2000 ? "🟨" : km < 8000 ? "🟦" : "⬛";
+        return (
+          <div className="atlasChallengeCard" role="dialog" aria-label="Daily geo challenge">
+            <div className="atlasChallengeHead">
+              <Sparkles size={14} />
+              <strong>Daily challenge</strong>
+              <span className="atlasChallengeStats" title={`Played ${geoChallengeStats.played} · Won ${geoChallengeStats.won}`}>
+                🔥 {geoChallengeStats.streak}
+              </span>
+              <button type="button" className="atlasIconBtn" onClick={() => setGeoChallenge(null)} aria-label="Close challenge"><X size={11} /></button>
+            </div>
+            <p className="atlasChallengePrompt">
+              {geoChallenge.over
+                ? geoChallenge.won
+                  ? `🎉 You found ${target.name} in ${geoChallenge.guesses.length}/6 guesses!`
+                  : `Game over — the answer was ${target.name}.`
+                : `Guess today's secret city. ${remaining} guess${remaining === 1 ? "" : "es"} left.`}
+            </p>
+            <div className="atlasChallengeGuesses">
+              {geoChallenge.guesses.map((g, i) => (
+                <div key={i} className="atlasChallengeGuess">
+                  <span className="atlasChallengeEmoji" title={`${Math.round(g.km).toLocaleString()}km`}>{dist(g.km)}</span>
+                  <strong>{g.name}</strong>
+                  <em>{Math.round(g.km).toLocaleString()} km {compassDir(g.bearing)} ↗ {g.bearing.toFixed(0)}°</em>
+                </div>
+              ))}
+            </div>
+            {!geoChallenge.over && (
+              <ChallengeInput onSubmit={submitGeoGuess} />
+            )}
+            {geoChallenge.over && (
+              <button type="button" className="atlasPrimaryBtn small" onClick={() => {
+                const bucket = (km: number) => km < 50 ? "🟩" : km < 500 ? "🟧" : km < 2000 ? "🟨" : km < 8000 ? "🟦" : "⬛";
+                const emoji = geoChallenge.guesses.map(g => bucket(g.km)).join("");
+                const today = new Date().toISOString().slice(0, 10);
+                const score = geoChallenge.won ? `${geoChallenge.guesses.length}/6` : "X/6";
+                const text = `Atlas Daily ${today} · ${score}\n${emoji}\n${window.location.origin}${window.location.pathname}`;
+                navigator.clipboard?.writeText(text).then(
+                  () => showToast("📋 Result copied!"),
+                  () => showToast(text)
+                );
+              }}>
+                <Share2 size={12} /> Share result
+              </button>
+            )}
+            <div className="atlasChallengeLegend">
+              🟩 &lt;50km · 🟧 &lt;500km · 🟨 &lt;2000km · 🟦 &lt;8000km · ⬛ farther
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Geography quiz card — multiple-choice game. */}
       {quiz && (() => {
         const isAnswered = quiz.answered !== null;
@@ -8604,6 +8738,57 @@ function formatAreaKm2(km2: number, imperial: boolean): string {
 function formatElevM(m: number, imperial: boolean): string {
   if (imperial) return `${Math.round(m * 3.28084).toLocaleString()} ft`;
   return `${Math.round(m).toLocaleString()} m`;
+}
+
+function ChallengeInput({ onSubmit }: { onSubmit: (city: string) => void }) {
+  const [val, setVal] = useState("");
+  const [open, setOpen] = useState(false);
+  const lower = val.trim().toLowerCase();
+  // Autocomplete from city pool — substring match, top 6.
+  const suggestions = useMemo(() => {
+    if (lower.length < 2) return [];
+    const all = [...MAJOR_CITIES, ...REGIONAL_CITIES];
+    return all
+      .filter(c => c.name.toLowerCase().startsWith(lower) || c.name.toLowerCase().includes(lower))
+      .slice(0, 6);
+  }, [lower]);
+  const submit = (city: string) => {
+    onSubmit(city);
+    setVal("");
+    setOpen(false);
+  };
+  return (
+    <div className="atlasChallengeInput">
+      <input
+        type="text"
+        value={val}
+        onChange={(e) => { setVal(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            // Pick top suggestion if any, else submit raw
+            submit(suggestions[0]?.name ?? val);
+          }
+        }}
+        placeholder="Type a city name…"
+        aria-label="Guess city"
+        autoFocus
+      />
+      {open && suggestions.length > 0 && (
+        <ul className="atlasChallengeSuggestions" role="listbox">
+          {suggestions.map((c) => (
+            <li key={`${c.name}-${c.country}`}>
+              <button type="button" onMouseDown={() => submit(c.name)}>
+                {c.name} <em>{c.country}</em>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }
 
 function ShortcutsModal({ onClose }: { onClose: () => void }) {

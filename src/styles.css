@@ -3162,6 +3162,156 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
   .atlasQuizChoices { grid-template-columns: 1fr; }
 }
 
+/* ============= Daily Geo Challenge =============
+   Wordle-style city-guessing card. Grouped to the right side at the
+   top so it doesn't collide with the bottom-centered weather/quiz cards. */
+.atlasChallengeCard {
+  position: fixed;
+  top: 88px;
+  right: 340px;
+  z-index: 12;
+  width: min(380px, calc(100vw - 360px));
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-4);
+  background: var(--surface-elevated);
+  backdrop-filter: blur(14px);
+  box-shadow: var(--shadow-3);
+  color: var(--gray-12);
+  display: grid;
+  gap: var(--s-3);
+  animation: scaleIn var(--dur-base) var(--ease-out);
+}
+.atlasChallengeHead {
+  display: grid;
+  grid-template-columns: 14px 1fr auto auto;
+  align-items: center;
+  gap: var(--s-2);
+  padding-bottom: var(--s-2);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.atlasChallengeHead strong {
+  font-size: var(--text-base);
+  color: var(--gray-12);
+  font-weight: 700;
+}
+.atlasChallengeStats {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--warm);
+  font-variant-numeric: tabular-nums;
+}
+.atlasChallengePrompt {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--gray-11);
+}
+.atlasChallengeGuesses {
+  display: grid;
+  gap: 4px;
+}
+.atlasChallengeGuess {
+  display: grid;
+  grid-template-columns: 22px 1fr auto;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 6px 8px;
+  border-radius: var(--r-2);
+  background: var(--gray-1);
+  font-size: 11.5px;
+}
+.atlasChallengeGuess strong {
+  color: var(--gray-12);
+  font-weight: 700;
+}
+.atlasChallengeGuess em {
+  color: var(--gray-9);
+  font-style: normal;
+  font-family: ui-monospace, monospace;
+  font-size: 10.5px;
+}
+.atlasChallengeEmoji { font-size: 16px; line-height: 1; }
+.atlasChallengeInput {
+  position: relative;
+}
+.atlasChallengeInput input {
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-2);
+  background: var(--gray-1);
+  color: var(--gray-12);
+  font: 600 12px Inter, sans-serif;
+  outline: none;
+}
+.atlasChallengeInput input:focus { border-color: var(--accent); }
+.atlasChallengeSuggestions {
+  position: absolute;
+  top: 36px;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: var(--r-2);
+  background: var(--surface-elevated);
+  box-shadow: var(--shadow-2);
+  display: grid;
+  gap: 1px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.atlasChallengeSuggestions button {
+  width: 100%;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: var(--r-1);
+  background: transparent;
+  color: var(--gray-12);
+  font: 600 11.5px Inter, sans-serif;
+  text-align: left;
+  cursor: pointer;
+}
+.atlasChallengeSuggestions button:hover {
+  background: color-mix(in srgb, var(--accent), transparent 86%);
+}
+.atlasChallengeSuggestions em {
+  color: var(--gray-9);
+  font-style: normal;
+  font-size: 10px;
+  margin-left: 6px;
+}
+.atlasChallengeLegend {
+  font-size: 9.5px;
+  color: var(--gray-9);
+  text-align: center;
+  letter-spacing: 0.02em;
+  padding-top: var(--s-2);
+  border-top: 1px solid var(--border-subtle);
+}
+
+@media (max-width: 980px) {
+  .atlasChallengeCard {
+    right: 8px;
+    width: min(380px, calc(100vw - 80px));
+  }
+}
+@media (max-width: 620px) {
+  .atlasChallengeCard {
+    top: auto;
+    bottom: 240px;
+    right: 8px;
+    left: 8px;
+    width: auto;
+    max-width: none;
+  }
+}
+
 /* "Right now on Earth" digest widget */
 .atlasDigestWidget {
   position: fixed;
