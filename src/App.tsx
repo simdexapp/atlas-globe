@@ -4193,6 +4193,56 @@ function App() {
             }},
             // 💎 Hidden gem — picks a random regional city most users probably
             // haven't heard of. Filters for cities under 5M population.
+            // 🎲 Random Wikipedia article that has geographic coords —
+            // fetches up to 10 random pages, picks the first one with
+            // coordinates, flies there + shows summary toast.
+            { id: "wikiRandomGeo", label: "🎲 Surprise me — fly to a random place from Wikipedia", group: "Tools", icon: Sparkles, run: async () => {
+              showToast("Hunting for a random geographic article…");
+              try {
+                // Try up to 5 random articles to find one with coordinates
+                for (let attempt = 0; attempt < 5; attempt++) {
+                  const r = await fetch("https://en.wikipedia.org/api/rest_v1/page/random/summary");
+                  if (!r.ok) continue;
+                  const j = await r.json();
+                  const c = j?.coordinates;
+                  if (c && typeof c.lat === "number" && typeof c.lon === "number") {
+                    setFlyTo((p) => ({ id: p.id + 1, lat: c.lat, lon: c.lon, altKm: 30 }));
+                    const extract = j.extract ? (j.extract.length > 120 ? j.extract.slice(0, 120) + "…" : j.extract) : "";
+                    showToast(`📖 ${j.title}: ${extract}`);
+                    if (j.content_urls?.desktop?.page) console.log(j.content_urls.desktop.page);
+                    return;
+                  }
+                }
+                showToast("Couldn't find a geographic Wikipedia article — try again");
+              } catch (e) {
+                showToast(`Wikipedia fetch failed: ${(e as Error).message}`);
+              }
+            }},
+            // 📚 Wikipedia summary for whatever's at the camera-center lat/lon.
+            // Same lookup as the 'What's here?' rich card but a one-toast quick form.
+            { id: "wikiSummaryHere", label: "📚 Wikipedia summary for current view location", group: "Tools", icon: Sparkles, run: async () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              showToast("Looking up Wikipedia for this place…");
+              try {
+                // Reverse-geocode first to get a place name we can look up
+                const rgRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${c.lat}&lon=${c.lon}&zoom=10`, { headers: { Accept: "application/json" } });
+                if (!rgRes.ok) { showToast("Couldn't reverse-geocode this point"); return; }
+                const rgJ = await rgRes.json();
+                const a = rgJ?.address || {};
+                const name = a.city || a.town || a.village || a.county || a.state || a.country;
+                if (!name) { showToast("No place name at this view"); return; }
+                const wikiRes = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(name)}`);
+                if (!wikiRes.ok) { showToast(`No Wikipedia article for '${name}'`); return; }
+                const wikiJ = await wikiRes.json();
+                const ext = wikiJ?.extract;
+                if (!ext) { showToast(`No summary for '${name}'`); return; }
+                showToast(`📚 ${wikiJ.title}: ${ext.length > 200 ? ext.slice(0, 200) + "…" : ext}`);
+                if (wikiJ.content_urls?.desktop?.page) console.log(`📚 ${wikiJ.title}\n${wikiJ.content_urls.desktop.page}\n\n${ext}`);
+              } catch (e) {
+                showToast(`Lookup failed: ${(e as Error).message}`);
+              }
+            }},
             { id: "hiddenGem", label: "💎 Discover a hidden-gem city (random regional under 5M pop)", group: "Tools", icon: Sparkles, run: () => {
               const gems = REGIONAL_CITIES.filter(c => c.population < 5_000_000 && c.population > 200_000);
               if (gems.length === 0) return;
