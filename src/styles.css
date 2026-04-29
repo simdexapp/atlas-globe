@@ -3455,6 +3455,76 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
 
 @media (max-width: 620px) { .atlasSkyTonightWidget { display: none; } }
 
+/* ============= World Clocks widget =============
+   6 financial centers at a glance with market-open status badge. */
+.atlasWorldClocksWidget {
+  position: fixed;
+  top: 88px;
+  left: 64px;
+  z-index: 6;
+  width: 240px;
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-3);
+  background: var(--surface-elevated);
+  backdrop-filter: blur(14px);
+  box-shadow: var(--shadow-2);
+  color: var(--gray-12);
+}
+.atlasWorldClocksHead {
+  display: grid;
+  grid-template-columns: 12px 1fr auto;
+  align-items: center;
+  gap: var(--s-2);
+  padding-bottom: var(--s-1);
+  margin-bottom: var(--s-2);
+  border-bottom: 1px solid var(--border-subtle);
+  font-family: ui-monospace, monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--gray-9);
+}
+.atlasWorldClocksHead strong { color: var(--gray-9); font-weight: 600; }
+.atlasWorldClocksHead span { color: var(--accent); font-weight: 700; letter-spacing: 0; text-transform: none; font-size: 9.5px; }
+.atlasWorldClocksGrid {
+  display: grid;
+  gap: 4px;
+}
+.atlasWorldClocksCell {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: var(--s-2);
+  align-items: baseline;
+  padding: 4px 6px;
+  border-radius: var(--r-1);
+  background: var(--gray-1);
+  font-size: 11px;
+}
+.atlasWorldClocksCell span {
+  font-weight: 700;
+  color: var(--gray-12);
+  letter-spacing: 0.02em;
+}
+.atlasWorldClocksCell strong {
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+  color: var(--gray-12);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.atlasWorldClocksCell em {
+  font-style: normal;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.atlasWorldClocksCell em.open { color: #2ecc71; }
+.atlasWorldClocksCell em.closed { color: var(--gray-9); }
+
+@media (max-width: 620px) { .atlasWorldClocksWidget { display: none; } }
+
 /* "Right now on Earth" digest widget */
 .atlasDigestWidget {
   position: fixed;

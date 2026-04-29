@@ -140,6 +140,8 @@ type LayerVisibility = {
   aircraftRadar: boolean;
   // Tonight in the sky — combines moon, planets, ISS pass, sun events.
   skyTonight: boolean;
+  // World clocks — local time at 6 financial-centers + market open status.
+  worldClocks: boolean;
 };
 
 type GlobeSettings = {
@@ -278,6 +280,7 @@ const defaultLayers: LayerVisibility = {
   altScale: false,
   aircraftRadar: false,
   skyTonight: false,
+  worldClocks: false,
   // 3D OSM Buildings tileset is heavy and renders with edge outlines
   // that disable imagery draping underneath, painting the screen with
   // dark olive boxes at low altitudes (the user's tear repro). Off by
@@ -3813,6 +3816,7 @@ function App() {
             { id: "widgetAltScale", label: layers.altScale ? "Hide altitude-scale widget" : "Show altitude scale (vs Everest, ISS, Moon)", group: "Widgets", icon: Mountain, run: () => toggleLayer("altScale") },
             { id: "widgetAircraftRadar", label: layers.aircraftRadar ? "Hide aircraft radar widget" : "Show aircraft radar (closest 5 to view, live)", group: "Widgets", icon: Plane, run: () => toggleLayer("aircraftRadar") },
             { id: "widgetSkyTonight", label: layers.skyTonight ? "Hide tonight-in-the-sky widget" : "Show tonight in the sky (moon, planets, sun, ISS)", group: "Widgets", icon: Telescope, run: () => toggleLayer("skyTonight") },
+            { id: "widgetWorldClocks", label: layers.worldClocks ? "Hide world clocks widget" : "Show world clocks (6 financial centers, market status)", group: "Widgets", icon: Compass, run: () => toggleLayer("worldClocks") },
             { id: "layerClouds", label: layers.clouds ? "Hide clouds" : "Show clouds", group: "Layers", icon: Cloud, run: () => toggleLayer("clouds") },
             { id: "layerNight", label: layers.nightLights ? "Hide city lights" : "Show city lights", group: "Layers", icon: SunIcon, run: () => toggleLayer("nightLights") },
             { id: "layerAtm", label: layers.atmosphere ? "Hide atmosphere" : "Show atmosphere", group: "Layers", icon: Sparkles, run: () => toggleLayer("atmosphere") },
@@ -6714,6 +6718,49 @@ function App() {
                 </li>
               ))}
             </ul>
+          </div>
+        );
+      })()}
+
+      {/* World clocks — financial-centers local time + market-open badge. */}
+      {layers.worldClocks && (() => {
+        const CENTERS = [
+          { city: "New York",  lon: -74.006,  open: 9.5,  close: 16,    label: "NYSE" },
+          { city: "London",    lon: -0.128,   open: 8,    close: 16.5,  label: "LSE" },
+          { city: "Frankfurt", lon: 8.682,    open: 9,    close: 17.5,  label: "Xetra" },
+          { city: "Hong Kong", lon: 114.169,  open: 9.5,  close: 16,    label: "HKEX" },
+          { city: "Tokyo",     lon: 139.650,  open: 9,    close: 15,    label: "TSE" },
+          { city: "Sydney",    lon: 151.209,  open: 10,   close: 16,    label: "ASX" },
+        ];
+        const utcMs = Date.now();
+        const dayOfWeek = new Date(utcMs).getUTCDay(); // 0=Sun, 6=Sat
+        return (
+          <div className="atlasWorldClocksWidget" role="status" aria-label="World clocks">
+            <div className="atlasWorldClocksHead">
+              <Compass size={12} />
+              <strong>World clocks</strong>
+              <span>Markets {dayOfWeek === 0 || dayOfWeek === 6 ? "closed (weekend)" : "live"}</span>
+            </div>
+            <div className="atlasWorldClocksGrid">
+              {CENTERS.map((c) => {
+                const localMs = utcMs + (c.lon / 15) * 3_600_000;
+                const localD = new Date(localMs);
+                const hh = localD.getUTCHours();
+                const mm = localD.getUTCMinutes();
+                const localHr = hh + mm / 60;
+                const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+                const marketOpen = !isWeekend && localHr >= c.open && localHr < c.close;
+                return (
+                  <div key={c.city} className="atlasWorldClocksCell">
+                    <span>{c.city}</span>
+                    <strong>{hh.toString().padStart(2, "0")}:{mm.toString().padStart(2, "0")}</strong>
+                    <em className={marketOpen ? "open" : "closed"}>
+                      {marketOpen ? `● ${c.label} open` : `○ ${c.label} closed`}
+                    </em>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         );
       })()}
