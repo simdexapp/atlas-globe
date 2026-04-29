@@ -19,3 +19,11 @@ requestAnimationFrame(() => {
     }
   });
 });
+
+// Capture the PWA install prompt so the Cmd+K "Install Atlas Globe as
+// a PWA" command can fire it later. Browsers fire this once per
+// session when the manifest + service worker check passes.
+window.addEventListener("beforeinstallprompt", (e: any) => {
+  e.preventDefault();
+  (window as any).__atlasInstallPrompt = e;
+});
