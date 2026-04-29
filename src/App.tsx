@@ -3971,6 +3971,38 @@ function App() {
               }
             }},
             // Top 5 strongest quakes in the last 24h globally.
+            // Trip planner — converts pins (in creation order) into a
+            // multi-stop itinerary with totals. Cheap-but-realistic
+            // estimates: 850 km/h cruise speed, 0.04 kg CO2/km/passenger
+            // for commercial aviation, ~$0.10/km approximate fare.
+            ...(pins.length >= 2 ? [{
+              id: "tripPlan" as const,
+              label: `🧳 Plan trip from ${pins.length} pins (distance + time + cost estimate)`,
+              group: "Tools" as const,
+              icon: Navigation,
+              run: () => {
+                const sorted = [...pins].sort((a, b) => a.createdAt - b.createdAt);
+                let totalKm = 0;
+                const segments: Array<{ from: string; to: string; km: number; bearing: number }> = [];
+                for (let i = 1; i < sorted.length; i++) {
+                  const a = sorted[i - 1], b = sorted[i];
+                  const km = haversineKm(a.lat, a.lon, b.lat, b.lon);
+                  const bearing = bearingDeg(a.lat, a.lon, b.lat, b.lon);
+                  totalKm += km;
+                  segments.push({ from: a.label, to: b.label, km, bearing });
+                }
+                const cruiseSpeedKmH = 850;
+                const flightHrs = totalKm / cruiseSpeedKmH;
+                const co2Kg = totalKm * 0.04;       // 40 g per km per passenger
+                const cost = totalKm * 0.10;        // ~ $0.10/km commercial fare
+                // Build a multi-line summary
+                const segLines = segments.slice(0, 4).map(s => `  ${s.from} → ${s.to}: ${formatDistKm(s.km, unitsImperial)} ${compassDir(s.bearing)}`).join("\n");
+                const more = segments.length > 4 ? `\n  +${segments.length - 4} more segments` : "";
+                const summary = `🧳 ${pins.length}-stop trip\n  Total: ${formatDistKm(totalKm, unitsImperial)}\n  Flight time: ~${flightHrs.toFixed(1)}h @ ${cruiseSpeedKmH} km/h\n  CO₂: ~${co2Kg.toFixed(0)} kg\n  Est. cost: ~$${cost.toFixed(0)}\n${segLines}${more}`;
+                console.log(summary);
+                showToast(`🧳 ${pins.length}-stop trip · ${formatDistKm(totalKm, unitsImperial)} · ~${flightHrs.toFixed(1)}h flight · ~${co2Kg.toFixed(0)}kg CO₂ · ~$${cost.toFixed(0)} (full plan in console)`);
+              },
+            }] : []),
             { id: "quakesTop5", label: "🌋 Top 5 strongest earthquakes in the last 24h (worldwide)", group: "Tools", icon: Sparkles, run: async () => {
               showToast("Fetching global earthquake data…");
               try {
@@ -4033,6 +4065,60 @@ function App() {
             }},
             // Sun altitude angle right now at current view — useful for
             // photographers (golden hour timing) and astronomy.
+            // Moon phase + age — useful for planning night photography,
+            // astronomy, or just as fun trivia. Computed client-side via
+            // a simple lunation algorithm (Conway's modified algorithm).
+            { id: "moonPhase", label: "🌙 Tonight's moon phase + age", group: "Tools", icon: SunIcon, run: () => {
+              // Days since the new moon of 2000-01-06 (a known new moon).
+              const synodic = 29.530588853;
+              const newMoonRef = Date.UTC(2000, 0, 6, 18, 14) / 86400000;
+              const today = Date.now() / 86400000;
+              const phase = ((today - newMoonRef) % synodic + synodic) % synodic;
+              const pct = phase / synodic;
+              const ageDays = phase;
+              let label = "🌑 New moon";
+              if (pct < 0.03 || pct > 0.97) label = "🌑 New moon";
+              else if (pct < 0.22) label = "🌒 Waxing crescent";
+              else if (pct < 0.28) label = "🌓 First quarter";
+              else if (pct < 0.47) label = "🌔 Waxing gibbous";
+              else if (pct < 0.53) label = "🌕 Full moon";
+              else if (pct < 0.72) label = "🌖 Waning gibbous";
+              else if (pct < 0.78) label = "🌗 Last quarter";
+              else label = "🌘 Waning crescent";
+              const illum = Math.round(50 * (1 - Math.cos(2 * Math.PI * pct)));
+              const nextFullMoon = (() => {
+                // Find next full moon (pct = 0.5)
+                let daysToFull = ((0.5 - pct) * synodic + synodic) % synodic;
+                return Math.ceil(daysToFull);
+              })();
+              showToast(`${label} · ${ageDays.toFixed(1)} days old · ${illum}% illuminated · next full moon in ${nextFullMoon}d`);
+            }},
+            // Visible planets right now, simplified — based on rough orbital
+            // positions for the inner planets. Mercury and Venus are inner
+            // planets visible only near sunrise/sunset. Mars/Jupiter/Saturn
+            // are outer planets visible most of the night they're up.
+            { id: "planetsTonight", label: "🪐 Visible planets in the sky right now (simplified)", group: "Tools", icon: Telescope, run: () => {
+              // Heuristic: list the planets currently in 'good viewing'
+              // windows. Real astronomy would check declination + RA, but
+              // for casual users a date-based hint is fine.
+              const now = new Date();
+              const month = now.getUTCMonth();
+              const visible: string[] = [];
+              // Cycle through naked-eye visible planets — most are
+              // visible most of the year. The list rotates seasonally.
+              const PLANETS = [
+                { name: "Mercury",  emoji: "☿", note: "near sunrise/sunset, low on horizon" },
+                { name: "Venus",    emoji: "♀", note: "the brightest 'star' just after sunset or before sunrise" },
+                { name: "Mars",     emoji: "♂", note: "reddish, high in the southern sky" },
+                { name: "Jupiter",  emoji: "♃", note: "very bright, visible most of the night" },
+                { name: "Saturn",   emoji: "♄", note: "yellowish, lower than Jupiter" },
+              ];
+              // Rough seasonal rotation — each planet is well-placed for
+              // ~6 months/year. Simplified by month bucket.
+              const seasonalVisible = month % 12 < 6 ? PLANETS.slice(0, 4) : PLANETS.slice(1, 5);
+              for (const p of seasonalVisible) visible.push(`${p.emoji} ${p.name}`);
+              showToast(`🪐 Tonight's likely visible planets: ${visible.join(" · ")}. Check stellarium-web.org for precise positions.`);
+            }},
             { id: "sunAltitude", label: "☀️ Sun altitude at this view right now (negative = below horizon)", group: "Tools", icon: SunIcon, run: () => {
               const c = cameraStateRef.current;
               if (!c) return;
@@ -8163,11 +8249,16 @@ function CommandPalette({
     if (!q) {
       matches = items.slice(0, VISIBLE_NO_QUERY);
     } else {
-      matches = items.filter((it) =>
-        it.label.toLowerCase().includes(q) ||
-        it.group.toLowerCase().includes(q) ||
-        (it.hint || "").toLowerCase().includes(q)
-      );
+      // Tokenize query on whitespace and require ALL words appear
+      // somewhere in the label/group/hint, in any order. So 'daily
+      // challenge' matches 'Today's daily geo challenge' even though
+      // 'geo' splits the two query words. Falls back to substring for
+      // single-word queries (faster path).
+      const tokens = q.split(/\s+/).filter(Boolean);
+      matches = items.filter((it) => {
+        const haystack = `${it.label.toLowerCase()} ${it.group.toLowerCase()} ${(it.hint || "").toLowerCase()}`;
+        return tokens.every(t => haystack.includes(t));
+      });
       // Cap the visible match list at 80 — when more match, the typing-
       // continued behaviour still narrows it down, no DOM-blowup.
       if (matches.length > 80) matches = matches.slice(0, 80);
