@@ -7442,7 +7442,7 @@ function SearchModal({
         <ul className="atlasSearchResults">
           {!query.trim() && history.length > 0 && (
             <>
-              <li className="atlasSearchEmpty" style={{ textAlign: "left", padding: "8px 12px", color: "#6f7c91", fontSize: "10.5px", textTransform: "uppercase", letterSpacing: "0.06em" }}>Recent searches</li>
+              <li className="atlasSearchEmpty" style={{ textAlign: "left", padding: "8px 12px", color: "var(--gray-9)", fontSize: "10.5px", textTransform: "uppercase", letterSpacing: "0.06em" }}>Recent searches</li>
               {history.map((h) => (
                 <li key={`h-${h}`}>
                   <button type="button" onClick={() => onQuery(h)}>
