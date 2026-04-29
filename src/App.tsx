@@ -614,6 +614,10 @@ function App() {
   const [selectedPin, setSelectedPin] = useState<string | null>(null);
   const [earthquakes, setEarthquakes] = useState<Earthquake[]>([]);
   const [borders, setBorders] = useState<Float32Array | null>(null);
+  // GeoJSON FeatureCollection of country borders, computed alongside the
+  // Float32Array borders. Cesium can render this via GeoJsonDataSource so
+  // we don't need to re-walk the topojson per mode.
+  const [bordersGeoJson, setBordersGeoJson] = useState<any | null>(null);
   const [bordersLoading, setBordersLoading] = useState(false);
   const [tourActive, setTourActive] = useState(false);
   const [recordingState, setRecordingState] = useState<RecordingState>("idle");
@@ -1670,6 +1674,9 @@ function App() {
         if (cancelled) return;
         const topo = atlasModule as any;
         const featureCollection = feature(topo, topo.objects.countries) as any;
+        // Stash the FeatureCollection so Cesium Surface mode can render
+        // the same outlines via GeoJsonDataSource.
+        setBordersGeoJson(featureCollection);
         const positions: number[] = [];
         for (const f of featureCollection.features) {
           const geom = f.geometry;
@@ -2142,6 +2149,7 @@ function App() {
               auroraKp={layers.aurora && spaceWeather ? spaceWeather.kpLatest : null}
               autoOrbit={surfaceAutoOrbit}
               aircraftAltitudeBars={surfaceAltBars}
+              bordersGeoJson={layers.borders ? bordersGeoJson : null}
             />
           </Suspense>
         )}
@@ -2490,6 +2498,22 @@ function App() {
             // Local civil time at the camera center, derived from longitude
             // alone (mean solar time, not zone time). Useful for "what time
             // is it where I'm looking right now" without picking a place.
+            // Open the current view in Google Maps in a new tab. Useful
+            // when you spot something on the imagery and want street view
+            // or business listings.
+            { id: "openInGoogleMaps", label: "Open this view in Google Maps", group: "Tools", icon: Navigation, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const zoom = Math.max(2, Math.min(19, Math.round(20 - Math.log2(Math.max(0.5, c.altKm)))));
+              window.open(`https://www.google.com/maps/@${c.lat.toFixed(5)},${c.lon.toFixed(5)},${zoom}z`, "_blank", "noopener,noreferrer");
+            }},
+            // Same idea for OpenStreetMap.
+            { id: "openInOSM", label: "Open this view in OpenStreetMap", group: "Tools", icon: Navigation, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const zoom = Math.max(2, Math.min(19, Math.round(20 - Math.log2(Math.max(0.5, c.altKm)))));
+              window.open(`https://www.openstreetmap.org/#map=${zoom}/${c.lat.toFixed(5)}/${c.lon.toFixed(5)}`, "_blank", "noopener,noreferrer");
+            }},
             { id: "localTime", label: "Show approximate local time at this view", group: "Tools", icon: Compass, run: () => {
               const c = cameraStateRef.current;
               if (!c) return;

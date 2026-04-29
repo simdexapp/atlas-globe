@@ -114,7 +114,8 @@ export default function Surface({
   storms,
   auroraKp,
   autoOrbit,
-  aircraftAltitudeBars
+  aircraftAltitudeBars,
+  bordersGeoJson
 }: {
   token: string;
   onCameraChange: (lat: number, lon: number, altKm: number) => void;
@@ -191,6 +192,11 @@ export default function Surface({
   // altitude is visible as a height cue in the 3D scene. Off by
   // default; cheap-ish (one polyline per aircraft, glow material).
   aircraftAltitudeBars?: boolean;
+  // Country-borders GeoJSON FeatureCollection. Rendered as a thin
+  // amber outline if the borders layer is on. Reuses the topojson
+  // load that Atlas mode triggers, so it's free once Atlas has been
+  // visited at least once.
+  bordersGeoJson?: any | null;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Cesium.Viewer | null>(null);
@@ -221,6 +227,7 @@ export default function Surface({
   const launchEntitiesRef = useRef<Cesium.Entity[]>([]);
   const stormEntitiesRef = useRef<Cesium.Entity[]>([]);
   const auroraOvalEntitiesRef = useRef<Cesium.Entity[]>([]);
+  const bordersDataSourceRef = useRef<Cesium.GeoJsonDataSource | null>(null);
   const weatherImageryLayerRef = useRef<Cesium.ImageryLayer | null>(null);
   const terminatorEntityRef = useRef<Cesium.Entity | null>(null);
   const subsolarEntityRef = useRef<Cesium.Entity | null>(null);
@@ -533,6 +540,10 @@ export default function Surface({
       stormEntitiesRef.current = [];
       auroraOvalEntitiesRef.current.forEach((e) => viewer.entities.remove(e));
       auroraOvalEntitiesRef.current = [];
+      if (bordersDataSourceRef.current) {
+        viewer.dataSources.remove(bordersDataSourceRef.current, true);
+        bordersDataSourceRef.current = null;
+      }
       for (const ref of [issGroundTrackEntityRef, tiangongGroundTrackEntityRef, hubbleGroundTrackEntityRef]) {
         if (ref.current) {
           viewer.entities.remove(ref.current);
@@ -1489,6 +1500,32 @@ export default function Surface({
       launchEntitiesRef.current.push(entity);
     }
   }, [launches]);
+
+  // ===== Country borders (GeoJsonDataSource) =====
+  // Loads the FeatureCollection passed in (built once by App from
+  // world-atlas/countries-50m.json topojson). Cesium's GeoJsonDataSource
+  // renders each polygon outline. We prefer thin amber lines on top of
+  // the imagery — same look as the Atlas-mode borders.
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    if (bordersDataSourceRef.current) {
+      viewer.dataSources.remove(bordersDataSourceRef.current, true);
+      bordersDataSourceRef.current = null;
+    }
+    if (!bordersGeoJson) return;
+    Cesium.GeoJsonDataSource.load(bordersGeoJson, {
+      stroke: Cesium.Color.fromCssColorString("#ffd66b").withAlpha(0.55),
+      fill: Cesium.Color.TRANSPARENT,
+      strokeWidth: 1,
+      clampToGround: true,
+    }).then((ds) => {
+      if (!viewerRef.current) return;
+      viewer.dataSources.add(ds);
+      bordersDataSourceRef.current = ds;
+      viewer.scene.requestRender();
+    }).catch(() => { /* malformed — silent */ });
+  }, [bordersGeoJson]);
 
   // ===== Aurora oval overlay =====
   // Two great-circle "small circles" centered on the magnetic poles,
