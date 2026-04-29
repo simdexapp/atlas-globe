@@ -2911,6 +2911,23 @@ function App() {
             // Distance from current view to a famous landmark ("how far am
             // I from Mt Everest right now"). Iterates the bookmark list +
             // landmarks.
+            // Aircraft filter quick-jumps
+            { id: "filterAllAircraft", label: "Aircraft filter: all", group: "Tools", icon: Plane, run: () => { setAircraftCategory("all"); setAircraftMinAltFt(0); setAircraftMaxAltFt(50000); setAircraftAirlinePrefix(""); showToast("Showing all aircraft"); } },
+            { id: "filterCommercial", label: "Aircraft filter: commercial only", group: "Tools", icon: Plane, run: () => { setAircraftCategory("commercial"); showToast("Filter: commercial"); } },
+            { id: "filterMilitary", label: "Aircraft filter: military only (callsign hint)", group: "Tools", icon: Plane, run: () => { setAircraftCategory("military"); showToast("Filter: military"); } },
+            { id: "filterHeli", label: "Aircraft filter: helicopters only", group: "Tools", icon: Plane, run: () => { setAircraftCategory("heli"); showToast("Filter: helicopters"); } },
+            { id: "filterPrivate", label: "Aircraft filter: private / GA only", group: "Tools", icon: Plane, run: () => { setAircraftCategory("private"); showToast("Filter: private/GA"); } },
+            { id: "filterCruise", label: "Aircraft filter: cruise altitude (30k-45k ft)", group: "Tools", icon: Plane, run: () => { setAircraftMinAltFt(30000); setAircraftMaxAltFt(45000); showToast("Filter: 30k-45k ft cruise"); } },
+            { id: "filterLow", label: "Aircraft filter: low altitude (<10k ft, departures/arrivals)", group: "Tools", icon: Plane, run: () => { setAircraftMinAltFt(0); setAircraftMaxAltFt(10000); showToast("Filter: <10k ft"); } },
+            { id: "filterHigh", label: "Aircraft filter: high altitude (>40k ft, biz jets)", group: "Tools", icon: Plane, run: () => { setAircraftMinAltFt(40000); setAircraftMaxAltFt(50000); showToast("Filter: >40k ft"); } },
+            // Quick airline filters by callsign prefix
+            { id: "airlineUAL", label: "Airline: United (UAL)", group: "Tools", icon: Plane, run: () => { setAircraftAirlinePrefix("UAL"); showToast("Airline: UAL"); } },
+            { id: "airlineAAL", label: "Airline: American (AAL)", group: "Tools", icon: Plane, run: () => { setAircraftAirlinePrefix("AAL"); showToast("Airline: AAL"); } },
+            { id: "airlineDAL", label: "Airline: Delta (DAL)", group: "Tools", icon: Plane, run: () => { setAircraftAirlinePrefix("DAL"); showToast("Airline: DAL"); } },
+            { id: "airlineBAW", label: "Airline: British Airways (BAW)", group: "Tools", icon: Plane, run: () => { setAircraftAirlinePrefix("BAW"); showToast("Airline: BAW"); } },
+            { id: "airlineSWA", label: "Airline: Southwest (SWA)", group: "Tools", icon: Plane, run: () => { setAircraftAirlinePrefix("SWA"); showToast("Airline: SWA"); } },
+            { id: "airlineRYR", label: "Airline: Ryanair (RYR)", group: "Tools", icon: Plane, run: () => { setAircraftAirlinePrefix("RYR"); showToast("Airline: RYR"); } },
+            { id: "airlineUAE", label: "Airline: Emirates (UAE)", group: "Tools", icon: Plane, run: () => { setAircraftAirlinePrefix("UAE"); showToast("Airline: UAE"); } },
             { id: "distanceToLandmark", label: "Show distance from this view to nearest famous landmark", group: "Tools", icon: Compass, run: () => {
               const c = cameraStateRef.current;
               if (!c) return;
