@@ -2142,6 +2142,31 @@ function App() {
     showToast(`Flying to ${formatLat(lat)} ${formatLon(lon)}`);
   }, [showToast]);
 
+  // Konami code easter egg detector. Up Up Down Down Left Right Left
+  // Right B A — fires a celebratory action (auto-tour all bookmarks
+  // with a confetti toast).
+  useEffect(() => {
+    const seq = ["ArrowUp","ArrowUp","ArrowDown","ArrowDown","ArrowLeft","ArrowRight","ArrowLeft","ArrowRight","b","a"];
+    let pos = 0;
+    const onKey = (e: KeyboardEvent) => {
+      const expected = seq[pos];
+      if (e.key === expected || e.key.toLowerCase() === expected) {
+        pos++;
+        if (pos === seq.length) {
+          showToast("🎮 KONAMI CODE — UNLOCKED! Cycling all themes…");
+          // Visual fanfare: cycle through all themes 1.5s apart.
+          const themes: Array<"dark"|"light"|"oled"|"cyber"|"solar"|"mono"> = ["cyber","solar","oled","light","mono","dark"];
+          themes.forEach((t, i) => setTimeout(() => setUiTheme(t), i * 1500));
+          pos = 0;
+        }
+      } else {
+        pos = 0;
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showToast]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -3298,6 +3323,46 @@ function App() {
             // Solar zenith — sun directly overhead at this point exactly
             // when (today). Useful for "what time will the sun be over my
             // head" questions.
+            // Fun / discovery commands
+            { id: "flyToHome", label: "Fly to Null Island (0°N, 0°E)", group: "View", icon: Navigation, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 0, lon: 0, altKm: 1500 }));
+              showToast("🏝 Welcome to Null Island");
+            }},
+            { id: "flyToBermudaTriangle", label: "Fly to the Bermuda Triangle", group: "View", icon: Navigation, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 25.0, lon: -71.0, altKm: 800 }));
+              showToast("🔺 Bermuda Triangle — keep an eye on your aircraft");
+            }},
+            { id: "flyToMtEverest", label: "Fly to Mount Everest summit", group: "View", icon: Mountain, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 27.9881, lon: 86.9250, altKm: 12 }));
+              showToast("🏔 Mt Everest — 8,848 m");
+            }},
+            { id: "flyToMarianaTrench", label: "Fly to the Mariana Trench", group: "View", icon: Mountain, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 11.35, lon: 142.2, altKm: 50 }));
+              showToast("🌊 Mariana Trench — 10,994 m below sea level");
+            }},
+            { id: "flyToArea51", label: "Fly to Area 51", group: "View", icon: Navigation, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 37.235, lon: -115.8111, altKm: 25 }));
+              showToast("🛸 Area 51 — Groom Lake, NV");
+            }},
+            { id: "flyToFour", label: "Fly to the Four Corners (US state intersection)", group: "View", icon: Navigation, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 36.999, lon: -109.045, altKm: 1 }));
+              showToast("🇺🇸 Four Corners — AZ, CO, NM, UT meet");
+            }},
+            { id: "flyToEquatorAfrica", label: "Fly to Lake Victoria (equator + Africa)", group: "View", icon: Navigation, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: -1, lon: 33, altKm: 800 }));
+              showToast("🌍 Lake Victoria — straddles the equator");
+            }},
+            { id: "flyToChernobyl", label: "Fly to Chernobyl exclusion zone", group: "View", icon: Mountain, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 51.389, lon: 30.099, altKm: 30 }));
+              showToast("☢ Chernobyl — exclusion zone");
+            }},
+            { id: "flyToHiroshimaPeace", label: "Fly to Hiroshima Peace Park", group: "View", icon: Mountain, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 34.3955, lon: 132.4536, altKm: 1.5 }));
+              showToast("🕊 Hiroshima Peace Memorial");
+            }},
+            { id: "easterEggHelp", label: "Easter eggs hint (Konami code lives here…)", group: "Tools", icon: Sparkles, run: () => {
+              showToast("🎮 Try ↑↑↓↓←→←→ B A (anywhere on the page)");
+            }},
             { id: "solarZenithHere", label: "Show solar zenith time (sun directly overhead) for this view", group: "Tools", icon: SunIcon, run: () => {
               const c = cameraStateRef.current;
               if (!c) return;
