@@ -3004,6 +3004,29 @@ function App() {
             { id: "airlineSWA", label: "Airline: Southwest (SWA)", group: "Tools", icon: Plane, run: () => { setAircraftAirlinePrefix("SWA"); showToast("Airline: SWA"); } },
             { id: "airlineRYR", label: "Airline: Ryanair (RYR)", group: "Tools", icon: Plane, run: () => { setAircraftAirlinePrefix("RYR"); showToast("Airline: RYR"); } },
             { id: "airlineUAE", label: "Airline: Emirates (UAE)", group: "Tools", icon: Plane, run: () => { setAircraftAirlinePrefix("UAE"); showToast("Airline: UAE"); } },
+            { id: "airlineQTR", label: "Airline: Qatar (QTR)", group: "Tools", icon: Plane, run: () => { setAircraftAirlinePrefix("QTR"); showToast("Airline: QTR"); } },
+            { id: "airlineSIA", label: "Airline: Singapore (SIA)", group: "Tools", icon: Plane, run: () => { setAircraftAirlinePrefix("SIA"); showToast("Airline: SIA"); } },
+            { id: "airlineANA", label: "Airline: All Nippon (ANA)", group: "Tools", icon: Plane, run: () => { setAircraftAirlinePrefix("ANA"); showToast("Airline: ANA"); } },
+            { id: "airlineAFR", label: "Airline: Air France (AFR)", group: "Tools", icon: Plane, run: () => { setAircraftAirlinePrefix("AFR"); showToast("Airline: AFR"); } },
+            { id: "airlineDLH", label: "Airline: Lufthansa (DLH)", group: "Tools", icon: Plane, run: () => { setAircraftAirlinePrefix("DLH"); showToast("Airline: DLH"); } },
+            { id: "airlineKLM", label: "Airline: KLM (KLM)", group: "Tools", icon: Plane, run: () => { setAircraftAirlinePrefix("KLM"); showToast("Airline: KLM"); } },
+            { id: "airlineCPA", label: "Airline: Cathay Pacific (CPA)", group: "Tools", icon: Plane, run: () => { setAircraftAirlinePrefix("CPA"); showToast("Airline: CPA"); } },
+            { id: "airlineFDX", label: "Airline: FedEx (FDX)", group: "Tools", icon: Plane, run: () => { setAircraftAirlinePrefix("FDX"); showToast("Airline: FDX cargo"); } },
+            { id: "airlineUPS", label: "Airline: UPS (UPS)", group: "Tools", icon: Plane, run: () => { setAircraftAirlinePrefix("UPS"); showToast("Airline: UPS cargo"); } },
+            // Emergency-squawk filter shortcut.
+            { id: "filterEmergency", label: "Aircraft filter: emergency squawks (7500/7600/7700)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot) { showToast("Aircraft layer not loaded"); return; }
+              const emergencies = aircraftSnapshot.aircraft.filter(a => a.squawk === "7500" || a.squawk === "7600" || a.squawk === "7700");
+              if (emergencies.length === 0) {
+                showToast("✅ No aircraft squawking emergency");
+              } else {
+                // Fly to the first emergency
+                const a = emergencies[0];
+                setFlyTo((p) => ({ id: p.id + 1, lat: a.lat, lon: a.lon, altKm: 100 }));
+                setSelectedAircraftId(a.icao24);
+                showToast(`🚨 ${emergencies.length} emergency squawk${emergencies.length === 1 ? "" : "s"} — flying to ${a.callsign || a.icao24} (${a.squawk})`);
+              }
+            }},
             // Discovery / random commands — useful for browsing without
             // a destination in mind.
             { id: "randomCity", label: "Fly to a random major city", group: "View", icon: Navigation, run: () => {
