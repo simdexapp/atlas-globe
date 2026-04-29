@@ -600,15 +600,17 @@ export default function Surface({
       const lon = Cesium.Math.toDegrees(cartographic.longitude);
       const altKm = cartographic.height / 1000;
       onCameraChange(lat, lon, altKm);
-      // Auto-hide the weather radar layer when zoomed in close. RainViewer's
-      // tile pyramid maxes out around level 5, and below ~80km altitude
-      // Cesium upscales those tiles enough that they tile the whole screen
-      // with a uniform tan haze. Fade the layer out under that threshold.
+      // Auto-hide weather radar when zoomed in. RainViewer's tile pyramid
+      // maxes out around level 5 — one such tile covers ~1250km of
+      // geography. At anything closer than ~250km altitude the upscaled
+      // tile blankets the screen with a uniform haze of whatever colors
+      // the precip mask happens to contain. Hard threshold: invisible
+      // below 250km, fade in 250-500km, full alpha above.
       const radarLayer = weatherImageryLayerRef.current;
       if (radarLayer) {
         const baseAlpha = (weatherOpacityRef.current ?? 0.7);
-        if (altKm < 80) radarLayer.alpha = 0;
-        else if (altKm < 200) radarLayer.alpha = baseAlpha * ((altKm - 80) / 120);
+        if (altKm < 250) radarLayer.alpha = 0;
+        else if (altKm < 500) radarLayer.alpha = baseAlpha * ((altKm - 250) / 250);
         else radarLayer.alpha = baseAlpha;
       }
     });
@@ -2035,13 +2037,13 @@ export default function Surface({
     const layer = viewer.imageryLayers.addImageryProvider(provider);
     weatherImageryLayerRef.current = layer;
     weatherOpacityRef.current = weatherOpacity ?? 0.7;
-    // Apply the altitude-based fade immediately on creation. Without this,
-    // enabling radar at low altitude would briefly show the upscaled tile
-    // until the user moved the camera enough to fire the change listener.
+    // Apply the altitude-based fade immediately on creation — same
+    // formula as the camera-changed listener so freshly-enabled radar
+    // is correct from frame 1.
     const baseAlpha = weatherOpacity ?? 0.7;
     const altKmNow = viewer.camera.positionCartographic.height / 1000;
-    if (altKmNow < 80) layer.alpha = 0;
-    else if (altKmNow < 200) layer.alpha = baseAlpha * ((altKmNow - 80) / 120);
+    if (altKmNow < 250) layer.alpha = 0;
+    else if (altKmNow < 500) layer.alpha = baseAlpha * ((altKmNow - 250) / 250);
     else layer.alpha = baseAlpha;
   }, [weatherTilePath, weatherOpacity]);
 
