@@ -4130,6 +4130,50 @@ function App() {
               w.__atlasAutoExploreInterval = setInterval(tick, 12000);
               showToast("🎬 Auto-explore on — flies to a new place every 12s");
             }},
+            // Open the current view in external map services. Each opens
+            // a new tab targeting the lat/lon at a sensible zoom level.
+            { id: "openGoogleMaps", label: "🌍 Open this view in Google Maps", group: "Tools", icon: Share2, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              // Google Maps zoom: log scale from altKm. Closer = higher zoom.
+              const z = Math.max(2, Math.min(20, Math.round(20 - Math.log2(Math.max(0.05, c.altKm)))));
+              window.open(`https://www.google.com/maps/@${c.lat.toFixed(5)},${c.lon.toFixed(5)},${z}z`, "_blank", "noopener,noreferrer");
+            }},
+            { id: "openGoogleEarth", label: "🌎 Open this view in Google Earth", group: "Tools", icon: Share2, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const altM = Math.max(100, c.altKm * 1000);
+              window.open(`https://earth.google.com/web/@${c.lat.toFixed(5)},${c.lon.toFixed(5)},0a,${altM.toFixed(0)}d,35y,0h,0t,0r`, "_blank", "noopener,noreferrer");
+            }},
+            { id: "openOSM", label: "🗺 Open this view in OpenStreetMap", group: "Tools", icon: Share2, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const z = Math.max(2, Math.min(19, Math.round(20 - Math.log2(Math.max(0.05, c.altKm)))));
+              window.open(`https://www.openstreetmap.org/#map=${z}/${c.lat.toFixed(5)},${c.lon.toFixed(5)}`, "_blank", "noopener,noreferrer");
+            }},
+            { id: "openWaze", label: "🚗 Open this view in Waze (driving directions)", group: "Tools", icon: Share2, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              window.open(`https://waze.com/ul?ll=${c.lat.toFixed(5)},${c.lon.toFixed(5)}&navigate=yes`, "_blank", "noopener,noreferrer");
+            }},
+            { id: "openWindy", label: "🌪 Open this view in Windy.com (wind/weather)", group: "Tools", icon: Cloud, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const z = Math.max(3, Math.min(15, Math.round(20 - Math.log2(Math.max(0.05, c.altKm)))));
+              window.open(`https://www.windy.com/?${c.lat.toFixed(3)},${c.lon.toFixed(3)},${z}`, "_blank", "noopener,noreferrer");
+            }},
+            { id: "openFlightradar", label: "✈ Open this view in Flightradar24 (live flights)", group: "Tools", icon: Plane, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const z = Math.max(2, Math.min(13, Math.round(20 - Math.log2(Math.max(0.05, c.altKm)))));
+              window.open(`https://www.flightradar24.com/${c.lat.toFixed(2)},${c.lon.toFixed(2)}/${z}`, "_blank", "noopener,noreferrer");
+            }},
+            { id: "openMarinetraffic", label: "🚢 Open this view in MarineTraffic (ships)", group: "Tools", icon: Navigation, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const z = Math.max(2, Math.min(15, Math.round(20 - Math.log2(Math.max(0.05, c.altKm)))));
+              window.open(`https://www.marinetraffic.com/en/ais/home/centerx:${c.lon.toFixed(2)}/centery:${c.lat.toFixed(2)}/zoom:${z}`, "_blank", "noopener,noreferrer");
+            }},
             { id: "atlasFitAll", label: "🎯 Frame all my pins + bookmarks", group: "View", icon: Crosshair, run: () => {
               const allPoints = [...pins.map(p => ({ lat: p.lat, lon: p.lon })), ...bookmarks.filter(b => b.savedAt > 0).map(b => ({ lat: b.lat, lon: b.lon }))];
               if (allPoints.length === 0) {
