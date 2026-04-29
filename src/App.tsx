@@ -3862,6 +3862,87 @@ function App() {
             // Daily challenge — same secret city for everyone today, 6
             // guesses, Wordle-style emoji share. Persistent streak.
             { id: "geoChallenge", label: geoChallenge ? `🌍 Today's challenge ${geoChallenge.over ? (geoChallenge.won ? "won" : "ended") : `(${geoChallenge.guesses.length}/6 guesses)`}` : `🌍 Today's daily geo challenge ${geoChallengeStats.streak > 0 ? `(streak: ${geoChallengeStats.streak})` : ""}`, group: "Tools", icon: Sparkles, run: () => geoChallenge ? setGeoChallenge(null) : startGeoChallenge() },
+            // ===== Random destination explorer =====
+            // Curated categories — each picks at random from a subset of
+            // existing data sources for surprise inspiration. The toast
+            // gives an evocative name + flag so it feels travel-blog-y.
+            { id: "randCapital", label: "🎲 Random world capital", group: "Tools", icon: Sparkles, run: () => {
+              const CAPITALS = MAJOR_CITIES.filter((c) =>
+                ["Tokyo","Beijing","Cairo","Mexico City","Moscow","London","Paris","Berlin","Rome","Madrid","Seoul","Bangkok","Hanoi","Manila","Jakarta","New Delhi","Lima","Buenos Aires","Caracas","Bogotá","Athens","Vienna","Prague","Budapest","Warsaw","Oslo","Stockholm","Helsinki","Dublin","Lisbon","Amsterdam","Brussels","Bern","Tehran","Baghdad","Riyadh","Ottawa","Brasília","Singapore","Dubai"].some(n => c.name.includes(n))
+              );
+              if (CAPITALS.length === 0) return;
+              const c = CAPITALS[Math.floor(Math.random() * CAPITALS.length)];
+              setFlyTo((p) => ({ id: p.id + 1, lat: c.lat, lon: c.lon, altKm: 8 }));
+              showToast(`🏛 ${c.name}, ${c.country}`);
+            }},
+            { id: "randLandmark", label: "🎲 Random famous landmark", group: "Tools", icon: Sparkles, run: () => {
+              const l = LANDMARKS[Math.floor(Math.random() * LANDMARKS.length)];
+              setFlyTo((p) => ({ id: p.id + 1, lat: l.lat, lon: l.lon, altKm: l.zoomKm }));
+              showToast(`${l.emoji} ${l.name}`);
+            }},
+            { id: "randNatural", label: "🎲 Random natural wonder", group: "Tools", icon: Sparkles, run: () => {
+              const naturals = LANDMARKS.filter(l => l.kind === "natural");
+              const l = naturals[Math.floor(Math.random() * naturals.length)];
+              setFlyTo((p) => ({ id: p.id + 1, lat: l.lat, lon: l.lon, altKm: l.zoomKm }));
+              showToast(`${l.emoji} ${l.name}`);
+            }},
+            { id: "randManMade", label: "🎲 Random man-made wonder", group: "Tools", icon: Sparkles, run: () => {
+              const manmade = LANDMARKS.filter(l => l.kind === "manmade");
+              const l = manmade[Math.floor(Math.random() * manmade.length)];
+              setFlyTo((p) => ({ id: p.id + 1, lat: l.lat, lon: l.lon, altKm: l.zoomKm }));
+              showToast(`${l.emoji} ${l.name}`);
+            }},
+            { id: "randTropical", label: "🎲 Random tropical paradise", group: "Tools", icon: Sparkles, run: () => {
+              // Curated list of tropical/island destinations
+              const TROPICAL = [
+                { name: "Bora Bora",       lat: -16.5004, lon: -151.7415, emoji: "🏝" },
+                { name: "Maldives",        lat: 3.2028,   lon: 73.2207,   emoji: "🏝" },
+                { name: "Seychelles",      lat: -4.6796,  lon: 55.4920,   emoji: "🏝" },
+                { name: "Fiji",            lat: -17.7134, lon: 178.0650,  emoji: "🏝" },
+                { name: "Bali",            lat: -8.3405,  lon: 115.0920,  emoji: "🏝" },
+                { name: "Phuket",          lat: 7.8804,   lon: 98.3923,   emoji: "🏝" },
+                { name: "Cancún",          lat: 21.1619,  lon: -86.8515,  emoji: "🏝" },
+                { name: "Hawaiʻi (Maui)",  lat: 20.7984,  lon: -156.3319, emoji: "🌺" },
+                { name: "Mauritius",       lat: -20.3484, lon: 57.5522,   emoji: "🌴" },
+                { name: "Barbados",        lat: 13.1939,  lon: -59.5432,  emoji: "🌴" },
+                { name: "Santorini",       lat: 36.3932,  lon: 25.4615,   emoji: "🏖" },
+                { name: "Galápagos",       lat: -0.6666,  lon: -90.5500,  emoji: "🐢" },
+                { name: "Tahiti",          lat: -17.6797, lon: -149.4068, emoji: "🌺" },
+              ];
+              const t = TROPICAL[Math.floor(Math.random() * TROPICAL.length)];
+              setFlyTo((p) => ({ id: p.id + 1, lat: t.lat, lon: t.lon, altKm: 30 }));
+              showToast(`${t.emoji} ${t.name}`);
+            }},
+            { id: "randExtreme", label: "🎲 Random extreme/remote spot", group: "Tools", icon: Sparkles, run: () => {
+              const EXTREME = [
+                { name: "Point Nemo (oceanic pole of inaccessibility)", lat: -48.876, lon: -123.393, emoji: "🌊" },
+                { name: "Tristan da Cunha (most remote inhabited island)", lat: -37.105, lon: -12.288, emoji: "🏝" },
+                { name: "McMurdo Station, Antarctica", lat: -77.846, lon: 166.668, emoji: "🧊" },
+                { name: "Yakutsk, Siberia (coldest city)", lat: 62.0339, lon: 129.7331, emoji: "❄️" },
+                { name: "Death Valley (hottest)", lat: 36.5054, lon: -117.0794, emoji: "🏜" },
+                { name: "Iquitos (largest unreachable-by-road city)", lat: -3.7437, lon: -73.2516, emoji: "🌳" },
+                { name: "La Rinconada, Peru (highest town)", lat: -14.6300, lon: -69.4400, emoji: "🏔" },
+                { name: "Wellington (most southern capital)", lat: -41.2865, lon: 174.7762, emoji: "🇳🇿" },
+                { name: "Reykjavík (most northern capital)", lat: 64.1466, lon: -21.9426, emoji: "🇮🇸" },
+                { name: "Hawaiian Mauna Kea (tallest mountain from base)", lat: 19.8207, lon: -155.4681, emoji: "🌋" },
+                { name: "Mariana Trench Challenger Deep", lat: 11.3733, lon: 142.5917, emoji: "🌊" },
+                { name: "Vostok Station, Antarctica (coldest recorded)", lat: -78.464, lon: 106.835, emoji: "🥶" },
+              ];
+              const t = EXTREME[Math.floor(Math.random() * EXTREME.length)];
+              setFlyTo((p) => ({ id: p.id + 1, lat: t.lat, lon: t.lon, altKm: 80 }));
+              showToast(`${t.emoji} ${t.name}`);
+            }},
+            { id: "randCountry", label: "🎲 Random country to explore", group: "Tools", icon: Sparkles, run: () => {
+              if (COUNTRY_CENTROIDS.length === 0) return;
+              const c = COUNTRY_CENTROIDS[Math.floor(Math.random() * COUNTRY_CENTROIDS.length)];
+              setFlyTo((p) => ({ id: p.id + 1, lat: c.lat, lon: c.lon, altKm: 1500 }));
+              showToast(`🗺 ${c.name}`);
+            }},
+            { id: "randAirport", label: "🎲 Random world-busy airport", group: "Tools", icon: Plane, run: () => {
+              const a = AIRPORTS[Math.floor(Math.random() * AIRPORTS.length)];
+              setFlyTo((p) => ({ id: p.id + 1, lat: a.lat, lon: a.lon, altKm: 2 }));
+              showToast(`✈ ${a.iata} · ${a.name} (${a.city})`);
+            }},
             // Compare current view's weather to another location. Useful
             // for trip planning: "is it warmer in Sydney right now than NYC?"
             { id: "compareWeather", label: "🌡 Compare weather: this view vs another major city", group: "Tools", icon: Cloud, run: async () => {
