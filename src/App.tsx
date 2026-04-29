@@ -3274,6 +3274,47 @@ function App() {
               setLayers((l) => ({ ...l, aircraft: true, weather: true, eonet: true, earthquakes: true, volcanoes: true, launches: true, iss: true, tiangong: true, hubble: true, aurora: true, storms: true, borders: true, neoWatch: true }));
               showToast("🌐 EVERYTHING preset (might be slow)");
             }},
+            // Animated sunrise sequence — chases the sunrise terminator
+            // around the globe in 24 1-hour steps, taking ~12 seconds.
+            // Pairs with the terminator overlay for a hypnotic visual.
+            { id: "sunriseSequence", label: "Animate full 24h sun cycle (auto-step every 0.5s)", group: "Imagery", icon: SunIcon, run: () => {
+              updateGlobe({ realTimeSun: false });
+              showToast("🎬 24h sun cycle animation starting");
+              for (let h = 0; h <= 24; h++) {
+                setTimeout(() => {
+                  setSurfaceManualHour(h % 24);
+                }, h * 500);
+              }
+            }},
+            { id: "sunriseSequenceFast", label: "Animate 24h sun cycle (FAST — 4s)", group: "Imagery", icon: SunIcon, run: () => {
+              updateGlobe({ realTimeSun: false });
+              showToast("🎬 24h sun cycle FAST");
+              for (let h = 0; h <= 24; h++) {
+                setTimeout(() => {
+                  setSurfaceManualHour(h % 24);
+                }, h * 170);
+              }
+            }},
+            // Solar zenith — sun directly overhead at this point exactly
+            // when (today). Useful for "what time will the sun be over my
+            // head" questions.
+            { id: "solarZenithHere", label: "Show solar zenith time (sun directly overhead) for this view", group: "Tools", icon: SunIcon, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const now = new Date();
+              const start = Date.UTC(now.getUTCFullYear(), 0, 0);
+              const doy = Math.floor((now.getTime() - start) / 86400000);
+              const declDeg = 23.45 * Math.sin(2 * Math.PI / 365 * (doy - 81));
+              if (Math.abs(c.lat - declDeg) > 23.45) {
+                showToast(`🌞 Sun never reaches zenith at ${formatLat(c.lat)} (lat too far from declination ${declDeg.toFixed(2)}°)`);
+                return;
+              }
+              // Solar zenith happens at solar noon at this longitude:
+              const zenithUtc = 12 - c.lon / 15;
+              const hh = String(Math.floor(((zenithUtc % 24) + 24) % 24)).padStart(2, "0");
+              const mm = String(Math.floor((((zenithUtc % 1) + 1) % 1) * 60)).padStart(2, "0");
+              showToast(`☀ Sun directly overhead at ${formatLat(c.lat)} ${formatLon(c.lon)}: ${hh}:${mm} UTC today (zenith)`);
+            }},
             { id: "timezoneAtView", label: "Show approximate timezone offset at this view", group: "Tools", icon: Compass, run: () => {
               const c = cameraStateRef.current;
               if (!c) return;
