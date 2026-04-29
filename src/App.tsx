@@ -3814,6 +3814,21 @@ function App() {
             { id: "flySydneyOpera", label: "Fly to Sydney Opera House", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: -33.8568, lon: 151.2153, altKm: 1.5 })); showToast("🎭 Sydney Opera House"); } },
             { id: "flyStonehenge", label: "Fly to Stonehenge", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: 51.1789, lon: -1.8262, altKm: 2 })); showToast("🪨 Stonehenge"); } },
             { id: "flyMoai", label: "Fly to Easter Island Moai", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: -27.1212, lon: -109.3676, altKm: 6 })); showToast("🗿 Easter Island Moai"); } },
+            // Famous waters
+            { id: "flyVictoriaFalls", label: "Fly to Victoria Falls", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: -17.9243, lon: 25.8572, altKm: 6 })); showToast("💦 Victoria Falls"); } },
+            { id: "flyIguazu", label: "Fly to Iguazu Falls", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: -25.6953, lon: -54.4367, altKm: 6 })); showToast("💦 Iguazu Falls"); } },
+            { id: "flyNiagara", label: "Fly to Niagara Falls", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: 43.0962, lon: -79.0377, altKm: 6 })); showToast("💦 Niagara Falls"); } },
+            { id: "flyAngelFalls", label: "Fly to Angel Falls (tallest)", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: 5.9694, lon: -62.5358, altKm: 12 })); showToast("💦 Angel Falls — 979 m"); } },
+            { id: "flyDeadSea", label: "Fly to Dead Sea (lowest land point)", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: 31.5497, lon: 35.4732, altKm: 30 })); showToast("💧 Dead Sea — 430 m below sea level"); } },
+            { id: "flyCaspian", label: "Fly over the Caspian Sea (largest lake)", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: 41, lon: 51, altKm: 800 })); showToast("🌊 Caspian Sea — largest enclosed body"); } },
+            { id: "flyMtFuji", label: "Fly to Mount Fuji", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: 35.3606, lon: 138.7274, altKm: 14 })); showToast("🗻 Mt Fuji — 3,776 m"); } },
+            { id: "flyMtKilimanjaro", label: "Fly to Mt Kilimanjaro", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: -3.0674, lon: 37.3556, altKm: 18 })); showToast("🏔 Kilimanjaro — Africa's tallest"); } },
+            { id: "flyMatterhorn", label: "Fly to the Matterhorn", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: 45.9763, lon: 7.6586, altKm: 15 })); showToast("🏔 Matterhorn — 4,478 m"); } },
+            { id: "flyUluru", label: "Fly to Uluru (Ayers Rock)", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: -25.3444, lon: 131.0369, altKm: 8 })); showToast("🪨 Uluru — sandstone monolith"); } },
+            { id: "flyGreatBarrier", label: "Fly over the Great Barrier Reef", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: -18.2871, lon: 147.6992, altKm: 200 })); showToast("🐠 Great Barrier Reef — 2,300 km"); } },
+            { id: "flyAlps", label: "Fly along the Swiss Alps", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: 46.5, lon: 8.0, altKm: 100 })); showToast("🏔 Swiss Alps"); } },
+            { id: "flyAndes", label: "Fly along the Andes", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: -20, lon: -70, altKm: 800 })); showToast("🏔 Andes — 7,000 km long"); } },
+            { id: "flyRockies", label: "Fly along the Rockies", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: 45, lon: -111, altKm: 800 })); showToast("🏔 Rocky Mountains"); } },
             { id: "populationNearby", label: "Population estimate within 100km of this view", group: "Tools", icon: Compass, run: () => {
               const c = cameraStateRef.current;
               if (!c) return;
