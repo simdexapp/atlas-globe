@@ -163,6 +163,54 @@ html[data-theme="mono"] {
   --warm: #b8b8b8;
 }
 
+/* ===== Focus / accessibility =====
+   Visible focus ring for keyboard navigation. Browser default outline
+   is too thin and easily missed against our dark-on-dark surfaces. */
+button:focus-visible,
+input:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--accent-glow);
+}
+
+/* Smooth fade for toasts. */
+.atlasToast {
+  animation: atlasToastIn 200ms var(--ease-out);
+}
+@keyframes atlasToastIn {
+  from { opacity: 0; transform: translateY(8px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Modal entrance animations */
+.atlasModalShade > * {
+  animation: atlasModalIn 180ms var(--ease-out);
+}
+@keyframes atlasModalIn {
+  from { opacity: 0; transform: scale(0.96) translateY(-8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* High-contrast support — respect user preference */
+@media (prefers-contrast: more) {
+  :root {
+    --border: var(--gray-8);
+    --border-strong: var(--gray-9);
+    --gray-12: #ffffff;
+    --gray-9: #d8dfeb;
+  }
+}
+
+/* Reduce motion — respect prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 * { box-sizing: border-box; }
 
 html, body, #root {
