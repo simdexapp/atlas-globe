@@ -3533,6 +3533,51 @@ function App() {
               setAircraftCameraMode("off");
               showToast("Free camera");
             }},
+            // Cycle through visible aircraft — pick the next aircraft in
+            // the filtered list. Useful for quickly browsing planes.
+            { id: "nextAircraft", label: "Cycle to next visible aircraft", group: "View", icon: Plane, run: () => {
+              if (filteredAircraft.length === 0) { showToast("No aircraft visible"); return; }
+              const idx = filteredAircraft.findIndex(a => a.icao24 === selectedAircraftId);
+              const next = filteredAircraft[(idx + 1) % filteredAircraft.length];
+              setSelectedAircraftId(next.icao24);
+              showToast(`✈ ${next.callsign || next.icao24} (${idx + 2}/${filteredAircraft.length})`);
+            }},
+            { id: "prevAircraft", label: "Cycle to previous visible aircraft", group: "View", icon: Plane, run: () => {
+              if (filteredAircraft.length === 0) { showToast("No aircraft visible"); return; }
+              const idx = filteredAircraft.findIndex(a => a.icao24 === selectedAircraftId);
+              const prev = filteredAircraft[(idx - 1 + filteredAircraft.length) % filteredAircraft.length];
+              setSelectedAircraftId(prev.icao24);
+              showToast(`✈ ${prev.callsign || prev.icao24} (${idx}/${filteredAircraft.length})`);
+            }},
+            { id: "deselectAircraft", label: "Deselect current aircraft", group: "View", icon: Plane, run: () => {
+              setSelectedAircraftId(null);
+              setAircraftCameraMode("off");
+              showToast("Deselected");
+            }},
+            // Find slowest / highest / lowest aircraft
+            { id: "highestAircraft", label: "Find highest-flying aircraft", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("Aircraft layer not loaded"); return; }
+              const a = aircraftSnapshot.aircraft.reduce((max, c) => c.altitudeM > max.altitudeM ? c : max);
+              setSelectedAircraftId(a.icao24);
+              setFlyTo((p) => ({ id: p.id + 1, lat: a.lat, lon: a.lon, altKm: 100 }));
+              showToast(`🚀 ${a.callsign || a.icao24} @ ${Math.round(a.altitudeM / 0.3048).toLocaleString()} ft`);
+            }},
+            { id: "fastestAircraft", label: "Find fastest aircraft", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("Aircraft layer not loaded"); return; }
+              const a = aircraftSnapshot.aircraft.reduce((max, c) => c.velocityMs > max.velocityMs ? c : max);
+              setSelectedAircraftId(a.icao24);
+              setFlyTo((p) => ({ id: p.id + 1, lat: a.lat, lon: a.lon, altKm: 100 }));
+              showToast(`💨 ${a.callsign || a.icao24} @ ${Math.round(a.velocityMs * 1.94384)} kt`);
+            }},
+            { id: "slowestAircraft", label: "Find slowest moving aircraft (helicopters/floaters)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("Aircraft layer not loaded"); return; }
+              const moving = aircraftSnapshot.aircraft.filter(a => !a.onGround && a.velocityMs > 0);
+              if (moving.length === 0) { showToast("No moving aircraft"); return; }
+              const a = moving.reduce((min, c) => c.velocityMs < min.velocityMs ? c : min);
+              setSelectedAircraftId(a.icao24);
+              setFlyTo((p) => ({ id: p.id + 1, lat: a.lat, lon: a.lon, altKm: 50 }));
+              showToast(`🐢 ${a.callsign || a.icao24} @ ${Math.round(a.velocityMs * 1.94384)} kt`);
+            }},
             { id: "easterEggHelp", label: "Easter eggs hint (Konami code lives here…)", group: "Tools", icon: Sparkles, run: () => {
               showToast("🎮 Try ↑↑↓↓←→←→ B A (anywhere on the page)");
             }},
