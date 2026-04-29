@@ -5225,6 +5225,110 @@ function App() {
             { id: "pinExportKml", label: pins.length > 0 ? `Export all ${pins.length} pin${pins.length === 1 ? "" : "s"} as KML (Google Earth)` : "Export pins as KML (no pins yet)", group: "Tools", icon: BookmarkPlus, run: exportPinsAsKML },
             { id: "pinDeleteAll", label: pins.length > 0 ? `Delete all ${pins.length} pin${pins.length === 1 ? "" : "s"}` : "Delete all pins (none to delete)", group: "Tools", icon: BookmarkPlus, run: deleteAllPins },
             { id: "pinFromClipboard", label: "Drop pin from clipboard coords", group: "Tools", icon: BookmarkPlus, run: pinFromClipboard },
+            // Drop a pin from a Google Maps URL — paste, parse, drop. Supports
+            // the @lat,lon,zoom variant ("https://www.google.com/maps/@40.748,-73.985,15z")
+            // and the place-format URL ("...!3d40.748!4d-73.985").
+            { id: "pinFromGoogleMaps", label: "Drop pin from Google Maps URL (clipboard)", group: "Tools", icon: MapPin, run: async () => {
+              try {
+                const text = (await navigator.clipboard?.readText()) ?? "";
+                if (!text) { showToast("Clipboard is empty"); return; }
+                // Try the @lat,lon pattern first.
+                let m = text.match(/@(-?\d+\.\d+),\s*(-?\d+\.\d+)/);
+                let lat: number | null = null, lon: number | null = null;
+                if (m) { lat = parseFloat(m[1]); lon = parseFloat(m[2]); }
+                if (lat === null) {
+                  // Fall back to the embedded !3d / !4d pattern.
+                  const lm = text.match(/!3d(-?\d+\.\d+).*?!4d(-?\d+\.\d+)/);
+                  if (lm) { lat = parseFloat(lm[1]); lon = parseFloat(lm[2]); }
+                }
+                if (lat === null || lon === null) { showToast("No coords in clipboard URL"); return; }
+                if (Math.abs(lat) > 90 || Math.abs(lon) > 180) { showToast("Invalid coords"); return; }
+                const pin: Pin = {
+                  id: `pin-gmap-${Date.now()}`,
+                  lat, lon,
+                  label: `From Google Maps`,
+                  color: PIN_COLORS[Math.floor(Math.random() * PIN_COLORS.length)],
+                  createdAt: Date.now(),
+                };
+                setPins((prev) => [...prev, pin]);
+                setFlyTo((p) => ({ id: p.id + 1, lat, lon: lon!, altKm: 5 }));
+                showToast(`📍 Dropped pin at ${formatLat(lat)} ${formatLon(lon)}`);
+              } catch { showToast("Couldn't read clipboard"); }
+            }},
+            // Frame the camera to fit all pins — auto-zooms out to show
+            // the whole bounding box. Useful for surveying a road trip.
+            ...(pins.length >= 2 ? [{
+              id: "pinFitAll" as const,
+              label: `Frame camera to fit all ${pins.length} pins`,
+              group: "Tools" as const,
+              icon: Crosshair,
+              run: () => {
+                let minLat = 90, maxLat = -90, minLon = 180, maxLon = -180;
+                for (const p of pins) {
+                  if (p.lat < minLat) minLat = p.lat;
+                  if (p.lat > maxLat) maxLat = p.lat;
+                  if (p.lon < minLon) minLon = p.lon;
+                  if (p.lon > maxLon) maxLon = p.lon;
+                }
+                const cLat = (minLat + maxLat) / 2;
+                const cLon = (minLon + maxLon) / 2;
+                // Camera altitude proportional to bbox diagonal — picks a
+                // zoom that keeps all pins comfortably in view.
+                const diagKm = haversineKm(minLat, minLon, maxLat, maxLon);
+                const altKm = Math.max(20, Math.min(20000, diagKm * 1.4));
+                setFlyTo((p) => ({ id: p.id + 1, lat: cLat, lon: cLon, altKm }));
+                showToast(`🎯 Framed ${pins.length} pins (~${Math.round(diagKm)} km across)`);
+              },
+            }] : []),
+            // Distance between two pins — picks the two oldest as A/B by
+            // default, or the two closest-to-the-camera-view pair.
+            ...(pins.length >= 2 ? [{
+              id: "pinPairDist" as const,
+              label: `Show distance between two oldest pins (A→B)`,
+              group: "Tools" as const,
+              icon: Compass,
+              run: () => {
+                const sorted = [...pins].sort((a, b) => a.createdAt - b.createdAt);
+                const a = sorted[0], b = sorted[1];
+                const km = haversineKm(a.lat, a.lon, b.lat, b.lon);
+                const bearing = bearingDeg(a.lat, a.lon, b.lat, b.lon);
+                showToast(`📏 ${a.label} → ${b.label}: ${formatDistKm(km, unitsImperial)} · bearing ${bearing.toFixed(0)}° ${compassDir(bearing)}`);
+              },
+            }] : []),
+            // Bulk recolor — useful after many pins are dropped at random
+            // colors. Clears the visual noise.
+            ...(pins.length >= 2 ? [{
+              id: "pinBulkRecolor" as const,
+              label: `Recolor all ${pins.length} pins to a single color`,
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const colorOptions = PIN_COLORS.join(", ");
+                const choice = window.prompt(`Pick a color (${colorOptions}) or paste a hex:`, "#5cb5ff");
+                if (!choice) return;
+                const trimmed = choice.trim();
+                if (!/^#[0-9a-fA-F]{6}$/.test(trimmed)) { showToast("Invalid hex (use #RRGGBB)"); return; }
+                setPins((prev) => prev.map((p) => ({ ...p, color: trimmed })));
+                showToast(`🎨 Recolored ${pins.length} pins to ${trimmed}`);
+              },
+            }] : []),
+            // Stat: pins within view radius. Surface this so the user sees
+            // how their pin density maps to where they're looking right now.
+            ...(pins.length >= 1 ? [{
+              id: "pinNearbyStat" as const,
+              label: "How many of my pins are near this view? (within 200km)",
+              group: "Tools" as const,
+              icon: Compass,
+              run: () => {
+                const c = cameraStateRef.current;
+                if (!c) return;
+                const nearby = pins.filter((p) => haversineKm(c.lat, c.lon, p.lat, p.lon) < 200);
+                if (nearby.length === 0) { showToast("📍 No pins within 200km of this view"); return; }
+                const list = nearby.slice(0, 4).map((p) => p.label).join(", ");
+                const more = nearby.length > 4 ? ` +${nearby.length - 4} more` : "";
+                showToast(`📍 ${nearby.length}/${pins.length} pins within 200km · ${list}${more}`);
+              },
+            }] : []),
             // Pin import from GeoJSON file
             { id: "pinImport", label: "Import pins from GeoJSON file", group: "Tools", icon: BookmarkPlus, run: () => {
               const input = document.createElement("input");
