@@ -3128,6 +3128,46 @@ function App() {
               showToast("🎬 Cinematic zoom-in");
             }},
             // Auto 360° spin around current view location.
+            // Pin tour: walk through every pin in chronological order with
+            // a fly + dwell. Useful for sharing a "here are the places I
+            // care about" sequence.
+            { id: "tourPins", label: pins.length > 1 ? `Tour all ${pins.length} pins (3s each)` : "Tour pins (need 2+ pins)", group: "View", icon: Film, run: () => {
+              if (pins.length < 2) { showToast("Add at least 2 pins to start a tour"); return; }
+              showToast(`🎬 Tour: ${pins.length} pins — ${pins.length * 3}s total`);
+              pins.forEach((pin, i) => {
+                setTimeout(() => {
+                  setFlyTo((p) => ({ id: p.id + 1, lat: pin.lat, lon: pin.lon, altKm: 30 }));
+                  showToast(`📍 ${i + 1}/${pins.length}: ${pin.label}`);
+                }, i * 3000);
+              });
+            }},
+            // Tour bookmarks (saved places).
+            { id: "tourBookmarks", label: bookmarks.length > 1 ? `Tour all ${bookmarks.length} bookmarks (3s each)` : "Tour bookmarks (need 2+)", group: "View", icon: Film, run: () => {
+              if (bookmarks.length < 2) { showToast("Need at least 2 bookmarks"); return; }
+              showToast(`🎬 Tour: ${bookmarks.length} bookmarks`);
+              bookmarks.forEach((bm, i) => {
+                setTimeout(() => {
+                  setFlyTo((p) => ({ id: p.id + 1, lat: bm.lat, lon: bm.lon, altKm: bm.altKm }));
+                  showToast(`📍 ${i + 1}/${bookmarks.length}: ${bm.name}`);
+                }, i * 3000);
+              });
+            }},
+            // Quick share — copy URL to clipboard for X/Bluesky/etc.
+            { id: "shareTwitter", label: "Tweet this view", group: "Tools", icon: Share2, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const url = new URL(window.location.href);
+              url.hash = `#@${c.lat.toFixed(4)},${c.lon.toFixed(4)},${c.altKm.toFixed(1)}km`;
+              const text = `Check out this view at ${formatLat(c.lat)} ${formatLon(c.lon)}: ${url.toString()}`;
+              window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, "_blank");
+            }},
+            { id: "shareEmail", label: "Email this view as link", group: "Tools", icon: Share2, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const url = new URL(window.location.href);
+              url.hash = `#@${c.lat.toFixed(4)},${c.lon.toFixed(4)},${c.altKm.toFixed(1)}km`;
+              window.location.href = `mailto:?subject=${encodeURIComponent("Atlas Globe view")}&body=${encodeURIComponent(`${formatLat(c.lat)} ${formatLon(c.lon)}\n\n${url.toString()}`)}`;
+            }},
             { id: "cinematicSpin360", label: "Cinematic: 360° orbit around this point", group: "View", icon: Film, run: () => {
               const c = cameraStateRef.current;
               if (!c) return;
