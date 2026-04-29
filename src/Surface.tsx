@@ -402,6 +402,15 @@ export default function Surface({
             viewer.scene.primitives.add(tileset);
             buildingsTilesetRef.current = tileset;
             tileset.show = true;
+            // Apply a clean tile style so buildings render as soft white
+            // boxes instead of the default dark olive that bleeds onto
+            // the imagery. Higher screen-space-error reduces detail load
+            // and avoids the per-edge outline geometry that disables
+            // imagery draping underneath.
+            tileset.style = new Cesium.Cesium3DTileStyle({
+              color: 'color("#e8eef8", 0.85)',
+            });
+            tileset.maximumScreenSpaceError = 24;
           })
           .catch(() => { /* OSM Buildings unavailable on this token tier */ });
       }
@@ -760,6 +769,10 @@ export default function Surface({
         viewer.scene.primitives.add(ts);
         buildingsTilesetRef.current = ts;
         ts.show = true;
+        ts.style = new Cesium.Cesium3DTileStyle({
+          color: 'color("#e8eef8", 0.85)',
+        });
+        ts.maximumScreenSpaceError = 24;
       })
       .catch(() => { /* OSM Buildings unavailable on this token tier */ });
   }, [show3DBuildings]);

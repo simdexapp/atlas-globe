@@ -249,9 +249,11 @@ const defaultLayers: LayerVisibility = {
   launches: false,
   worldDigest: false,
   noonMeridian: false,
-  // 3D OSM Buildings tileset is heavy — ~50-200MB streamed for a typical
-  // city view. Off by default on mobile; user can opt-in via Cmd+K.
-  buildings3D: !IS_LOW_END,
+  // 3D OSM Buildings tileset is heavy and renders with edge outlines
+  // that disable imagery draping underneath, painting the screen with
+  // dark olive boxes at low altitudes (the user's tear repro). Off by
+  // default everywhere; user can opt in via Cmd+K when they want it.
+  buildings3D: false,
   // Active tropical cyclones (NOAA NHC). Cheap to render (handful of
   // points), so on by default.
   storms: true,
@@ -951,9 +953,19 @@ function App() {
     let cancelled = false;
     const tick = async () => {
       try {
-        const res = await fetch("https://www.nhc.noaa.gov/CurrentStorms.json", { cache: "no-store" });
+        // NOAA NHC doesn't send Access-Control-Allow-Origin, so direct
+        // fetches from a browser fail with CORS. Use the public CORS
+        // proxy r.jina.ai which returns the JSON body with permissive
+        // headers. (Free, no auth, ~100ms overhead.)
+        const res = await fetch("https://r.jina.ai/https://www.nhc.noaa.gov/CurrentStorms.json", { cache: "no-store" });
         if (!res.ok) return;
-        const data = await res.json();
+        // jina.ai returns the response body as text wrapped in markdown;
+        // strip the wrapper if present.
+        const text = await res.text();
+        const jsonStart = text.indexOf("{");
+        const jsonEnd = text.lastIndexOf("}");
+        if (jsonStart < 0 || jsonEnd < 0) return;
+        const data = JSON.parse(text.slice(jsonStart, jsonEnd + 1));
         if (cancelled) return;
         const storms: ActiveStorm[] = (data.activeStorms || []).map((s: any) => ({
           id: s.id || s.binNumber || crypto.randomUUID(),
