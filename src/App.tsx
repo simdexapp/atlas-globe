@@ -3731,6 +3731,19 @@ function App() {
               showToast(`✈ ${nearby.length} aircraft within 500km · avg ${avgAlt.toLocaleString()} ft`);
             }},
             // Population estimate
+            // National park fly-tos
+            { id: "parkBanff", label: "Fly to Banff National Park", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: 51.4968, lon: -115.9281, altKm: 80 })); showToast("🏞 Banff NP — Canadian Rockies"); } },
+            { id: "parkYosemite", label: "Fly to Yosemite National Park", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: 37.8651, lon: -119.5383, altKm: 80 })); showToast("🏞 Yosemite NP"); } },
+            { id: "parkGalapagos", label: "Fly to Galápagos Islands", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: -0.7893, lon: -91.0469, altKm: 200 })); showToast("🐢 Galápagos Islands"); } },
+            { id: "parkSerengeti", label: "Fly to Serengeti National Park", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: -2.3333, lon: 34.8333, altKm: 200 })); showToast("🦁 Serengeti — Tanzania"); } },
+            { id: "parkPlitvice", label: "Fly to Plitvice Lakes (Croatia)", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: 44.8654, lon: 15.5821, altKm: 30 })); showToast("💦 Plitvice Lakes NP"); } },
+            { id: "parkTorres", label: "Fly to Torres del Paine (Patagonia)", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: -50.9423, lon: -73.0744, altKm: 80 })); showToast("🏔 Torres del Paine"); } },
+            { id: "parkSagarmatha", label: "Fly to Sagarmatha NP (Everest area)", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: 27.9881, lon: 86.9250, altKm: 30 })); showToast("🏔 Sagarmatha NP — Mt Everest"); } },
+            { id: "parkKakadu", label: "Fly to Kakadu NP (Australia)", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: -12.6, lon: 132.6, altKm: 200 })); showToast("🦘 Kakadu NP — Northern Territory"); } },
+            // Geographic poles + extremes
+            { id: "flyMagneticNorth", label: "Fly to North Magnetic Pole (Ellesmere Island vicinity)", group: "View", icon: Compass, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: 86, lon: 137, altKm: 1500 })); showToast("🧲 N Magnetic Pole — drifts ~50 km/year"); } },
+            { id: "flySouthMagneticPole", label: "Fly to South Magnetic Pole", group: "View", icon: Compass, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: -64, lon: 137, altKm: 1500 })); showToast("🧲 S Magnetic Pole — Antarctic Ocean off Adélie Land"); } },
+            { id: "flyPoleInaccessibility", label: "Fly to oceanic Point Nemo (most isolated point)", group: "View", icon: Navigation, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: -48.8767, lon: -123.3933, altKm: 5000 })); showToast("🌊 Point Nemo — 2,688 km from any land"); } },
             { id: "populationNearby", label: "Population estimate within 100km of this view", group: "Tools", icon: Compass, run: () => {
               const c = cameraStateRef.current;
               if (!c) return;
