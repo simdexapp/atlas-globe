@@ -362,6 +362,18 @@ export default function Surface({
     // when the camera is idle. Already on by viewer config, but reaffirm.
     viewer.scene.requestRenderMode = true;
     viewer.scene.maximumRenderTimeChange = Number.POSITIVE_INFINITY;
+    // BUT: with requestRenderMode + maximumRenderTimeChange=Infinity, the
+    // scene only re-renders on camera change / entity change / explicit
+    // requestRender. Imagery tiles load async; Cesium SHOULD call
+    // requestRender via the tile-progress event but in 1.121 + our config
+    // it doesn't reliably fire. Result: page loads with a black globe
+    // (imagery tiles arrive but never get drawn) until the user moves
+    // the camera. Symptom reproduced via in-browser debug. Fix: listen
+    // for tile-progress and explicitly requestRender — no perf cost when
+    // tiles are quiet.
+    viewer.scene.globe.tileLoadProgressEvent.addEventListener(() => {
+      viewer.scene.requestRender();
+    });
     // (Tried disabling orderIndependentTranslucency for perf, but in this
     // Cesium build it's a getter-only property — assigning it throws. Skip.)
 
