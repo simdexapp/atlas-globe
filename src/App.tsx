@@ -2928,6 +2928,39 @@ function App() {
             { id: "airlineSWA", label: "Airline: Southwest (SWA)", group: "Tools", icon: Plane, run: () => { setAircraftAirlinePrefix("SWA"); showToast("Airline: SWA"); } },
             { id: "airlineRYR", label: "Airline: Ryanair (RYR)", group: "Tools", icon: Plane, run: () => { setAircraftAirlinePrefix("RYR"); showToast("Airline: RYR"); } },
             { id: "airlineUAE", label: "Airline: Emirates (UAE)", group: "Tools", icon: Plane, run: () => { setAircraftAirlinePrefix("UAE"); showToast("Airline: UAE"); } },
+            // Discovery / random commands — useful for browsing without
+            // a destination in mind.
+            { id: "randomCity", label: "Fly to a random major city", group: "View", icon: Navigation, run: () => {
+              if (MAJOR_CITIES.length === 0) return;
+              const c = MAJOR_CITIES[Math.floor(Math.random() * MAJOR_CITIES.length)];
+              setFlyTo((p) => ({ id: p.id + 1, lat: c.lat, lon: c.lon, altKm: 30 }));
+              showToast(`✈ Random city: ${c.name}, ${c.country}`);
+            }},
+            { id: "biggestQuake", label: "Fly to today's biggest earthquake", group: "Tools", icon: Sparkles, run: () => {
+              if (earthquakes.length === 0) { showToast("Earthquake layer not loaded"); return; }
+              const biggest = earthquakes.reduce((max, q) => q.mag > max.mag ? q : max);
+              setFlyTo((p) => ({ id: p.id + 1, lat: biggest.lat, lon: biggest.lon, altKm: 100 }));
+              showToast(`💥 M${biggest.mag.toFixed(1)} — ${biggest.place}`);
+            }},
+            { id: "newestEonet", label: "Fly to most recent EONET event", group: "Tools", icon: Sparkles, run: () => {
+              if (eonetEvents.length === 0) { showToast("EONET layer not loaded"); return; }
+              // EONET events come ordered newest-first.
+              const e = eonetEvents[0];
+              setFlyTo((p) => ({ id: p.id + 1, lat: e.lat, lon: e.lon, altKm: 200 }));
+              showToast(`🌍 ${e.title} (${e.category})`);
+            }},
+            { id: "nextLaunch", label: "Fly to next rocket launch pad", group: "Tools", icon: Sparkles, run: () => {
+              if (launches.length === 0) { showToast("No upcoming launches loaded"); return; }
+              const next = launches.find((l) => l.netUnixMs > Date.now()) || launches[0];
+              setFlyTo((p) => ({ id: p.id + 1, lat: next.padLat, lon: next.padLon, altKm: 50 }));
+              const hours = Math.max(0, (next.netUnixMs - Date.now()) / 3_600_000);
+              showToast(`🚀 ${next.name} — T-${hours < 1 ? `${Math.round(hours * 60)} min` : `${hours.toFixed(1)} hr`}`);
+            }},
+            // Camera-orientation resets
+            { id: "headingNorth", label: "Reset heading to true north", group: "View", icon: Compass, run: () => {
+              const c = cameraStateRef.current;
+              if (c) setFlyTo((p) => ({ id: p.id + 1, lat: c.lat, lon: c.lon, altKm: c.altKm }));
+            }},
             { id: "distanceToLandmark", label: "Show distance from this view to nearest famous landmark", group: "Tools", icon: Compass, run: () => {
               const c = cameraStateRef.current;
               if (!c) return;
