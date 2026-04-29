@@ -2617,6 +2617,26 @@ function App() {
             // and we'll geocode the rest with OSM Nominatim.
             // Airport fly-to by IATA code. Quick way to get to a specific
             // hub without scrolling the long airport command list.
+            // Aircraft near a specified airport — pick by IATA, find the
+            // 5 nearest planes from the live ADS-B feed. Useful for
+            // "what's coming into JFK right now".
+            { id: "trafficNearAirport", label: "Show traffic near airport (by IATA)", group: "Tools", icon: Plane, run: () => {
+              const q = window.prompt("Airport IATA for traffic check:");
+              if (!q) return;
+              const code = q.trim().toUpperCase();
+              const ap = AIRPORTS.find((a) => a.iata === code);
+              if (!ap) { showToast(`Unknown IATA: ${code}`); return; }
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) {
+                showToast("Aircraft layer not loaded — turn it on first");
+                return;
+              }
+              const ranked = aircraftSnapshot.aircraft
+                .map((a) => ({ a, d: haversineKm(ap.lat, ap.lon, a.lat, a.lon) }))
+                .sort((x, y) => x.d - y.d)
+                .slice(0, 5);
+              const list = ranked.map(({ a, d }) => `${(a.callsign || a.icao24.toUpperCase()).trim()}@${Math.round(a.altitudeM/0.3048).toLocaleString()}ft (${d.toFixed(0)}km)`).join(" · ");
+              showToast(`✈ Near ${code}: ${list}`);
+            }},
             { id: "iataFlyTo", label: "Fly to airport by IATA code (e.g. JFK, LHR)", group: "Tools", icon: Plane, run: () => {
               const q = window.prompt("Airport IATA code (3 letters):");
               if (!q) return;
