@@ -115,6 +115,7 @@ export default function Surface({
   measurePoints,
   geoJson,
   followSelectedAircraft,
+  aircraftCameraMode,
   showTerminator,
   enableGlobeLighting,
   issPosition,
@@ -175,6 +176,11 @@ export default function Surface({
   // When true and selectedAircraft is set, the camera locks-on to the plane
   // (Cesium tracked-entity mode). Click "Stop following" or deselect to free.
   followSelectedAircraft?: boolean;
+  // Chase camera mode: positions the camera ~1.5km behind + 200m above
+  // the selected aircraft, looking forward in the direction of flight.
+  // Updates each frame. "off" disables, "chase" rear view, "cockpit"
+  // first-person view from the aircraft's position.
+  aircraftCameraMode?: "off" | "chase" | "cockpit" | "wing";
   // Renders a polyline along the day/night terminator that auto-updates
   // with the Cesium clock (real-time or manual hour). Used to visualize
   // the solar limb without baking it into the imagery shader.
@@ -1289,6 +1295,88 @@ export default function Surface({
       },
     });
   }, [selectedAircraft]);
+
+  // ===== Aircraft chase / cockpit / wing camera =====
+  // When an aircraft is selected and camera mode is set, position the
+  // camera each frame relative to the plane:
+  //   chase   — ~1500m behind, 200m above, looking forward
+  //   cockpit — at the aircraft eye-point, looking forward
+  //   wing    — 600m off the right wing, looking at the plane
+  // Driven from a scene.preRender callback so it tracks the interpolated
+  // aircraft position smoothly. RAF nudge keeps frames flowing under
+  // requestRenderMode.
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    if (!selectedAircraft || !aircraftCameraMode || aircraftCameraMode === "off") return;
+    const samples = aircraftSampleByIcaoRef.current;
+    const tick = () => {
+      const s = samples.get(selectedAircraft.icao24);
+      if (!s) return;
+      const now = performance.now();
+      const dt = (now - s.sampleTimeMs) / 1000;
+      // Re-derive the live interpolated lat/lon/alt (same math as the
+      // billboard interpolation loop).
+      const distRad = (s.velocityMs * dt) / 6_371_000;
+      const cosD = Math.cos(distRad);
+      const sinD = Math.sin(distRad);
+      const lat = Math.asin(Math.sin(s.latRad) * cosD + Math.cos(s.latRad) * sinD * Math.cos(s.headingRad));
+      const lon = s.lonRad + Math.atan2(
+        Math.sin(s.headingRad) * sinD * Math.cos(s.latRad),
+        cosD - Math.sin(s.latRad) * Math.sin(lat)
+      );
+      const alt = Math.max(0, s.altM + s.verticalMs * dt);
+      const planeLatDeg = lat * 180 / Math.PI;
+      const planeLonDeg = lon * 180 / Math.PI;
+      // Offset the camera along the heading axis (or perpendicular for wing view).
+      const m2deg = 1 / 111_320;        // approx degrees of latitude per meter
+      let dxLat = 0, dxLon = 0, dxAlt = 0;
+      let cameraHeading = s.headingRad;
+      let cameraPitch = 0;
+      if (aircraftCameraMode === "chase") {
+        // Behind the aircraft = step backward along heading.
+        const back = 1500;
+        dxLat = -Math.cos(s.headingRad) * back * m2deg;
+        dxLon = -Math.sin(s.headingRad) * back * m2deg / Math.max(0.05, Math.cos(lat));
+        dxAlt = 200;
+        cameraPitch = -Cesium.Math.toRadians(8);
+      } else if (aircraftCameraMode === "cockpit") {
+        // At the plane (slight forward nudge so we don't see our own fuselage).
+        const forward = 12;
+        dxLat = Math.cos(s.headingRad) * forward * m2deg;
+        dxLon = Math.sin(s.headingRad) * forward * m2deg / Math.max(0.05, Math.cos(lat));
+        dxAlt = 0;
+        cameraPitch = -Cesium.Math.toRadians(2);
+      } else if (aircraftCameraMode === "wing") {
+        // Off the right wing — perpendicular to heading.
+        const side = 600;
+        const perp = s.headingRad + Math.PI / 2;
+        dxLat = Math.cos(perp) * side * m2deg;
+        dxLon = Math.sin(perp) * side * m2deg / Math.max(0.05, Math.cos(lat));
+        dxAlt = 0;
+        // Look at the plane.
+        cameraHeading = s.headingRad - Math.PI / 2;
+        cameraPitch = 0;
+      }
+      const camLat = planeLatDeg + dxLat;
+      const camLon = planeLonDeg + dxLon;
+      const camAlt = alt + dxAlt;
+      viewer.camera.setView({
+        destination: Cesium.Cartesian3.fromDegrees(camLon, camLat, camAlt),
+        orientation: { heading: cameraHeading, pitch: cameraPitch, roll: 0 },
+      });
+    };
+    viewer.scene.preRender.addEventListener(tick);
+    let raf = window.requestAnimationFrame(function loop() {
+      if (!viewerRef.current) return;
+      viewer.scene.requestRender();
+      raf = window.requestAnimationFrame(loop);
+    });
+    return () => {
+      viewer.scene.preRender.removeEventListener(tick);
+      window.cancelAnimationFrame(raf);
+    };
+  }, [selectedAircraft, aircraftCameraMode]);
 
   // ===== Camera-follow selected aircraft =====
   // Creates a phantom entity whose position is wired to a CallbackProperty

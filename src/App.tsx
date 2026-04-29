@@ -437,6 +437,8 @@ function App() {
   const [surfaceScreenshotCmd, setSurfaceScreenshotCmd] = useState<{ id: number } | null>(null);
   // Lock Cesium camera onto the currently selected aircraft.
   const [followSelectedAircraft, setFollowSelectedAircraft] = useState(false);
+  // Cinematic camera modes for selected aircraft. "off" disables.
+  const [aircraftCameraMode, setAircraftCameraMode] = useState<"off" | "chase" | "cockpit" | "wing">("off");
   // Cesium-side day/night terminator polyline overlay. Independent of
   // the Atlas-mode terminator layer so users can have it on per-mode.
   const [surfaceTerminator, setSurfaceTerminator] = useState(false);
@@ -2197,6 +2199,7 @@ function App() {
                 if (!id) setFollowSelectedAircraft(false);
               }}
               followSelectedAircraft={followSelectedAircraft}
+              aircraftCameraMode={aircraftCameraMode}
               showTerminator={surfaceTerminator}
               enableGlobeLighting={surfaceGlobeLighting}
               issPosition={layers.iss ? issPosition : null}
@@ -2924,6 +2927,24 @@ function App() {
               group: "Tools" as const,
               icon: Plane,
               run: () => setFollowSelectedAircraft((v) => !v),
+            }, {
+              id: "cameraChase" as const,
+              label: aircraftCameraMode === "chase" ? "Exit chase camera" : "Chase camera (1.5km behind plane)",
+              group: "View" as const,
+              icon: Plane,
+              run: () => setAircraftCameraMode((m) => m === "chase" ? "off" : "chase"),
+            }, {
+              id: "cameraCockpit" as const,
+              label: aircraftCameraMode === "cockpit" ? "Exit cockpit camera" : "Cockpit camera (first-person)",
+              group: "View" as const,
+              icon: Plane,
+              run: () => setAircraftCameraMode((m) => m === "cockpit" ? "off" : "cockpit"),
+            }, {
+              id: "cameraWing" as const,
+              label: aircraftCameraMode === "wing" ? "Exit wing camera" : "Wing camera (off right wingtip)",
+              group: "View" as const,
+              icon: Plane,
+              run: () => setAircraftCameraMode((m) => m === "wing" ? "off" : "wing"),
             }] : []),
             { id: "timeRealTime", label: "Surface clock: real-time UTC", group: "Imagery", icon: SunIcon, run: () => { updateGlobe({ realTimeSun: true }); setSurfaceManualHour(null); } },
             { id: "time06", label: "Surface clock: 06:00 UTC (sunrise over Greenwich)", group: "Imagery", icon: SunIcon, run: () => { updateGlobe({ realTimeSun: false }); setSurfaceManualHour(6); } },
