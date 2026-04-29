@@ -2829,11 +2829,23 @@ function App() {
           </div>
         </div>
 
-        <div className="modeStrip" aria-label="Mode">
-          <button className={mode === "atlas" ? "active" : ""} type="button" onClick={switchToAtlas}>
+        <div className="modeStrip" role="radiogroup" aria-label="Render mode">
+          <button
+            className={mode === "atlas" ? "active" : ""}
+            type="button"
+            role="radio"
+            aria-checked={mode === "atlas"}
+            onClick={switchToAtlas}
+          >
             <Globe2 size={13} /> Atlas
           </button>
-          <button className={mode === "surface" ? "active" : ""} type="button" onClick={switchToSurface}>
+          <button
+            className={mode === "surface" ? "active" : ""}
+            type="button"
+            role="radio"
+            aria-checked={mode === "surface"}
+            onClick={switchToSurface}
+          >
             <Mountain size={13} /> Surface
           </button>
         </div>
@@ -2900,12 +2912,38 @@ function App() {
       </div>
 
       <aside className="atlasInspector" aria-label="Inspector">
-        <div className="inspectorTabs">
-          <button className={inspectorTab === "imagery" ? "active" : ""} type="button" onClick={() => setInspectorTab("imagery")}>Imagery</button>
-          <button className={inspectorTab === "globe" ? "active" : ""} type="button" onClick={() => setInspectorTab("globe")}>Globe</button>
-          <button className={inspectorTab === "layers" ? "active" : ""} type="button" onClick={() => setInspectorTab("layers")}>Layers</button>
-          <button className={inspectorTab === "bookmarks" ? "active" : ""} type="button" onClick={() => setInspectorTab("bookmarks")}>Saved</button>
-          <button className={inspectorTab === "data" ? "active" : ""} type="button" onClick={() => setInspectorTab("data")}>Data</button>
+        {/* role=tablist + role=tab so screen readers announce the
+            inspector pane as 'Inspector tab list, 5 items' instead of
+            five generic buttons. aria-selected mirrors the active state.
+            Pressing Left/Right cycles tabs (vim-style hjkl style would
+            be cute but standard arrow nav matches WAI-ARIA practice). */}
+        <div className="inspectorTabs" role="tablist" aria-label="Inspector panel">
+          {([
+            { k: "imagery",   label: "Imagery" },
+            { k: "globe",     label: "Globe" },
+            { k: "layers",    label: "Layers" },
+            { k: "bookmarks", label: "Saved" },
+            { k: "data",      label: "Data" },
+          ] as const).map((t, i, arr) => (
+            <button
+              key={t.k}
+              role="tab"
+              aria-selected={inspectorTab === t.k}
+              tabIndex={inspectorTab === t.k ? 0 : -1}
+              className={inspectorTab === t.k ? "active" : ""}
+              type="button"
+              onClick={() => setInspectorTab(t.k)}
+              onKeyDown={(e) => {
+                if (e.key === "ArrowRight") {
+                  e.preventDefault();
+                  setInspectorTab(arr[(i + 1) % arr.length].k);
+                } else if (e.key === "ArrowLeft") {
+                  e.preventDefault();
+                  setInspectorTab(arr[(i - 1 + arr.length) % arr.length].k);
+                }
+              }}
+            >{t.label}</button>
+          ))}
         </div>
 
         {inspectorTab === "imagery" && (
@@ -7836,7 +7874,7 @@ function PinsMiniList({ pins, selectedId, onSelect, onFly, onDelete }: { pins: P
   }, [pins]);
 
   return (
-    <div className="atlasPinsMini">
+    <div className="atlasPinsMini" role="region" aria-label="Pins list">
       <div className="atlasPinsMiniHead">
         <span>Pins ({pins.length})</span>
         {trip && (
