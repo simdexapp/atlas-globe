@@ -3935,6 +3935,38 @@ function App() {
               window.open("https://www.youtube.com/watch?v=DIgkvm2nmHc", "_blank");
             }},
             // Bigger Wikipedia info — find nearest article + open it.
+            // Show specific aircraft by ICAO24 / hex
+            { id: "trackByHex", label: "Track aircraft by ICAO24 hex (prompt)", group: "Tools", icon: Plane, run: () => {
+              const hex = window.prompt("Enter ICAO24 hex (e.g. AABBCC)");
+              if (!hex) return;
+              const target = aircraftSnapshot?.aircraft.find((a) => a.icao24.toUpperCase() === hex.trim().toUpperCase());
+              if (!target) { showToast(`No aircraft with hex ${hex.toUpperCase()} in current set`); return; }
+              setSelectedAircraftId(target.icao24);
+              setFlyTo((p) => ({ id: p.id + 1, lat: target.lat, lon: target.lon, altKm: 50 }));
+              showToast(`✈ Tracking ${target.callsign || target.icao24}`);
+            }},
+            // Show aircraft by callsign
+            { id: "trackByCallsign", label: "Track aircraft by callsign (prompt, e.g. UAL123)", group: "Tools", icon: Plane, run: () => {
+              const callsign = window.prompt("Enter callsign (e.g. UAL123, BAW456)");
+              if (!callsign) return;
+              const target = aircraftSnapshot?.aircraft.find((a) => a.callsign.toUpperCase() === callsign.trim().toUpperCase());
+              if (!target) { showToast(`No aircraft with callsign ${callsign.toUpperCase()} in current set`); return; }
+              setSelectedAircraftId(target.icao24);
+              setFlyTo((p) => ({ id: p.id + 1, lat: target.lat, lon: target.lon, altKm: 50 }));
+              showToast(`✈ Tracking ${target.callsign}`);
+            }},
+            // Air traffic at famous airports — counts of aircraft within
+            // 50km of a given IATA code.
+            { id: "trafficAtAirport", label: "Show traffic count near airport (prompt for IATA)", group: "Tools", icon: Plane, run: () => {
+              const iata = window.prompt("Enter airport IATA (e.g. JFK, LHR, DXB)");
+              if (!iata) return;
+              const a = AIRPORTS.find((x) => x.iata.toUpperCase() === iata.trim().toUpperCase());
+              if (!a) { showToast(`Airport ${iata.toUpperCase()} not in our list`); return; }
+              if (!aircraftSnapshot) { showToast("Aircraft layer not loaded"); return; }
+              const nearby = aircraftSnapshot.aircraft.filter(ac => haversineKm(a.lat, a.lon, ac.lat, ac.lon) < 50);
+              setFlyTo((p) => ({ id: p.id + 1, lat: a.lat, lon: a.lon, altKm: 30 }));
+              showToast(`✈ ${nearby.length} aircraft within 50km of ${a.iata} (${a.name})`);
+            }},
             { id: "wikiNearest", label: "Show Wikipedia summary for nearest article", group: "Tools", icon: Share2, run: async () => {
               const c = cameraStateRef.current;
               if (!c) return;
