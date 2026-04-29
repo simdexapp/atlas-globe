@@ -357,17 +357,14 @@ export default function Surface({
     // Bigger terrain-tile cache so panning a recently-viewed area doesn't
     // re-fetch. Smaller on mobile to keep RAM in check.
     viewer.scene.globe.tileCacheSize = isLow ? 200 : 1000;
-    // requestRenderMode in Cesium 1.121 has a bug: imagery tiles that
-    // load AFTER the initial frame are silently dropped from the render
-    // pipeline (network 200, GPU upload, but never composited). Result:
-    // page loaded with a black globe (no imagery visible despite
-    // successful tile downloads — confirmed via in-browser network
-    // panel). Trying every workaround (tile-progress listener, finite
-    // maximumRenderTimeChange, periodic render pulses) didn't help.
-    //
-    // Cleanest fix: just always render. The perf savings of
-    // requestRenderMode are minimal compared to a broken globe. Idle
-    // frames are dirt-cheap on modern GPUs. We'll re-evaluate later.
+    // We deliberately keep requestRenderMode OFF (always render every
+    // frame). Cesium's request-mode is technically more efficient when
+    // the user is idle, but for an interactive globe with constant data
+    // updates (aircraft poll every 12s, terminator overlay redraw,
+    // satellite tracks, etc.) the user is almost never truly idle, and
+    // the small battery savings aren't worth the occasional bugs we've
+    // hit (imagery tiles arriving post-init not waking the renderer in
+    // certain edge cases). Idle frames are dirt-cheap on modern GPUs.
     viewer.scene.requestRenderMode = false;
     // (Tried disabling orderIndependentTranslucency for perf, but in this
     // Cesium build it's a getter-only property — assigning it throws. Skip.)
