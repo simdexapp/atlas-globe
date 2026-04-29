@@ -383,6 +383,8 @@ const KEYBOARD_HINTS = [
   { keys: "M", desc: "Toggle Measure tool" },
   { keys: "P", desc: "Toggle Pin tool" },
   { keys: "G", desc: "Toggle Graticule (Atlas) / Borders (Surface)" },
+  { keys: "Z", desc: "Undo last measure-path vertex (only while measuring)" },
+  { keys: "U", desc: "Toggle metric ↔ imperial units (km/mi, m/ft, km²/mi²)" },
   // ===== Pan / zoom =====
   { keys: "↑ ↓ ← → / W X A D", desc: "Pan camera north / south / west / east" },
   { keys: "+ / =", desc: "Zoom in 2× (halve altitude)" },
