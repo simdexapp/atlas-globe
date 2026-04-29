@@ -3784,6 +3784,80 @@ function App() {
             }},
             // Geography quiz — multiple-choice game using the city dataset.
             { id: "quizStart", label: quiz ? `🎮 Geography quiz running (score ${quiz.score.right}/${quiz.score.total})` : "🎮 Start geography quiz (where in the world?)", group: "Tools", icon: Sparkles, run: () => quiz ? setQuiz(null) : startQuiz() },
+            // Compare current view's weather to another location. Useful
+            // for trip planning: "is it warmer in Sydney right now than NYC?"
+            { id: "compareWeather", label: "🌡 Compare weather: this view vs another major city", group: "Tools", icon: Cloud, run: async () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              showToast("Fetching weather for both locations…");
+              const fetchTemp = async (lat: number, lon: number) => {
+                try {
+                  const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code`, { cache: "no-store" });
+                  const j = await r.json();
+                  return { temp: j?.current?.temperature_2m, code: j?.current?.weather_code };
+                } catch { return null; }
+              };
+              // Pick a contrasting major city — the one furthest from current view
+              // (often gives the most surprising comparison).
+              const targets = MAJOR_CITIES.slice(0, 30);
+              const farthest = targets.reduce((max, city) => {
+                const km = haversineKm(c.lat, c.lon, city.lat, city.lon);
+                return km > max.km ? { city, km } : max;
+              }, { city: targets[0], km: 0 });
+              const [here, there] = await Promise.all([
+                fetchTemp(c.lat, c.lon),
+                fetchTemp(farthest.city.lat, farthest.city.lon),
+              ]);
+              if (!here || !there || here.temp === undefined || there.temp === undefined) {
+                showToast("Couldn't fetch weather for both points");
+                return;
+              }
+              const diff = there.temp - here.temp;
+              const here_w = wmoLabel(here.code);
+              const there_w = wmoLabel(there.code);
+              showToast(`🌡 Here ${here_w.emoji} ${Math.round(here.temp)}°C vs ${farthest.city.name} ${there_w.emoji} ${Math.round(there.temp)}°C (${diff > 0 ? "+" : ""}${Math.round(diff)}°C)`);
+            }},
+            // Compare time zones between current view and home.
+            { id: "compareTimezone", label: homeLocation ? `🕐 Time difference: this view vs home (${homeLocation.name})` : "🕐 Time difference (set home location first)", group: "Tools", icon: Compass, run: () => {
+              if (!homeLocation) { showToast("Set home location first via 'Set this view as my home location'"); return; }
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const offsetH = (c.lon - homeLocation.lon) / 15;
+              const sign = offsetH >= 0 ? "+" : "−";
+              const offHr = Math.floor(Math.abs(offsetH));
+              const offMin = Math.round((Math.abs(offsetH) - offHr) * 60);
+              const direction = offsetH > 0 ? "ahead of" : offsetH < 0 ? "behind" : "same time as";
+              showToast(`🕐 This view is ${sign}${offHr}h${offMin > 0 ? ` ${offMin}m` : ""} ${direction} ${homeLocation.name}`);
+            }},
+            // Sun altitude angle right now at current view — useful for
+            // photographers (golden hour timing) and astronomy.
+            { id: "sunAltitude", label: "☀️ Sun altitude at this view right now (negative = below horizon)", group: "Tools", icon: SunIcon, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              // Compute sun altitude using current UTC time.
+              // Simplified solar-position formula sufficient for human-readable angle.
+              const now = new Date();
+              const utcMs = now.getTime();
+              const dayOfYear = Math.floor((utcMs - Date.UTC(now.getUTCFullYear(), 0, 0)) / 86400000);
+              const decl = 23.45 * Math.sin((360 / 365) * (dayOfYear - 81) * Math.PI / 180);
+              const utcHours = now.getUTCHours() + now.getUTCMinutes() / 60;
+              const localHourAngle = (utcHours - 12) * 15 + c.lon;
+              const latRad = c.lat * Math.PI / 180;
+              const declRad = decl * Math.PI / 180;
+              const haRad = localHourAngle * Math.PI / 180;
+              const altRad = Math.asin(
+                Math.sin(latRad) * Math.sin(declRad) +
+                Math.cos(latRad) * Math.cos(declRad) * Math.cos(haRad)
+              );
+              const altDeg = altRad * 180 / Math.PI;
+              const azRad = Math.atan2(
+                Math.sin(haRad),
+                Math.cos(haRad) * Math.sin(latRad) - Math.tan(declRad) * Math.cos(latRad)
+              );
+              const azDeg = ((azRad * 180 / Math.PI + 180) % 360);  // 0=N
+              const condition = altDeg < -6 ? "☾ Night" : altDeg < 0 ? "🌅 Twilight" : altDeg < 10 ? "🌄 Golden hour" : altDeg > 75 ? "☀️ Overhead" : "☀️ Day";
+              showToast(`${condition} · sun altitude ${altDeg.toFixed(1)}° · azimuth ${azDeg.toFixed(0)}° ${compassDir(azDeg)}`);
+            }},
             { id: "weatherForecastNYC",   label: "📅 7-day forecast: New York City",   group: "Tools", icon: Cloud, run: () => fetchWeatherCard(40.7128, -74.0060,  "New York") },
             { id: "weatherForecastLondon",label: "📅 7-day forecast: London",         group: "Tools", icon: Cloud, run: () => fetchWeatherCard(51.5074, -0.1278,    "London") },
             { id: "weatherForecastTokyo", label: "📅 7-day forecast: Tokyo",          group: "Tools", icon: Cloud, run: () => fetchWeatherCard(35.6762, 139.6503,   "Tokyo") },
