@@ -393,6 +393,11 @@ const KEYBOARD_HINTS = [
   { keys: "G", desc: "Toggle Graticule (Atlas) / Borders (Surface)" },
   { keys: "Z", desc: "Undo last measure-path vertex (only while measuring)" },
   { keys: "U", desc: "Toggle metric ↔ imperial units (km/mi, m/ft, km²/mi²)" },
+  { keys: "O", desc: "Toggle camera auto-orbit (Atlas mode)" },
+  { keys: "C", desc: "Copy current view's coordinates to clipboard" },
+  { keys: "Y", desc: "Yank — copy share-link to current view" },
+  { keys: "N", desc: "Fly to next bookmark (closest unvisited)" },
+  { keys: "J / K", desc: "Cycle through pins (vim-style prev/next)" },
   // ===== Pan / zoom =====
   { keys: "↑ ↓ ← → / W X A D", desc: "Pan camera north / south / west / east" },
   { keys: "+ / =", desc: "Zoom in 2× (halve altitude)" },
@@ -2580,12 +2585,94 @@ function App() {
             return !v;
           });
           break;
+        case "c":
+          // Copy current view's lat/lon/altitude to clipboard. Gives users
+          // a quick way to share or paste into another tool.
+          event.preventDefault();
+          if (cameraStateRef.current && navigator.clipboard) {
+            const cur = cameraStateRef.current;
+            const text = `${cur.lat.toFixed(5)}, ${cur.lon.toFixed(5)} (${cur.altKm.toFixed(1)} km altitude)`;
+            navigator.clipboard.writeText(text).then(
+              () => showToast(`📋 Copied: ${text}`),
+              () => showToast(`📋 Coords: ${text}`)
+            );
+          }
+          break;
+        case "o":
+          // Toggle camera auto-orbit. Surface mode handles this differently
+          // (via globe.timeAnim) so this only applies in Atlas.
+          event.preventDefault();
+          if (mode === "atlas") {
+            setOrbiting((v) => {
+              showToast(v ? "Auto-orbit off" : "Auto-orbit on");
+              return !v;
+            });
+          } else {
+            showToast("Auto-orbit is Atlas-mode only");
+          }
+          break;
+        case "n":
+          // Cycle to the nearest bookmark — finds the closest one to the
+          // current view that isn't already where we are. Useful for
+          // browsing all bookmarks via one key.
+          event.preventDefault();
+          if (bookmarks.length > 0 && cameraStateRef.current) {
+            const cur = cameraStateRef.current;
+            // Skip the current view (within 50km counts as same place)
+            // and pick the next-closest. Bookmarks already sorted by
+            // distance gives a stable cycling order.
+            const sorted = [...bookmarks]
+              .map((b) => ({ b, km: haversineKm(cur.lat, cur.lon, b.lat, b.lon) }))
+              .sort((a, b) => a.km - b.km);
+            const target = sorted.find(({ km }) => km > 50)?.b ?? sorted[0].b;
+            setFlyTo((p) => ({ id: p.id + 1, lat: target.lat, lon: target.lon, altKm: target.altKm }));
+            showToast(`📍 ${target.name} (next bookmark)`);
+          } else {
+            showToast(bookmarks.length === 0 ? "No bookmarks saved" : "Camera position unknown");
+          }
+          break;
+        case "y":
+          // Yank — copy a deep-link URL to the current view.
+          event.preventDefault();
+          if (cameraStateRef.current) {
+            const cur = cameraStateRef.current;
+            const url = new URL(window.location.href);
+            url.hash = `#@${cur.lat.toFixed(4)},${cur.lon.toFixed(4)},${cur.altKm.toFixed(1)}km`;
+            const link = url.toString();
+            navigator.clipboard?.writeText(link).then(
+              () => showToast(`🔗 Share-link copied`),
+              () => showToast(`🔗 ${link}`)
+            );
+          }
+          break;
+        case "j":
+          // Vim-style — go to previous pin. Useful for stepping through pins.
+          event.preventDefault();
+          if (pins.length > 0) {
+            const idx = selectedPin ? pins.findIndex((p) => p.id === selectedPin) : -1;
+            const next = pins[(idx - 1 + pins.length) % pins.length];
+            setSelectedPin(next.id);
+            setFlyTo((p) => ({ id: p.id + 1, lat: next.lat, lon: next.lon, altKm: 5 }));
+            showToast(`◀ ${next.label}`);
+          }
+          break;
+        case "k":
+          // Vim-style — go to next pin. (Plain k, not Cmd+K which opens palette.)
+          event.preventDefault();
+          if (pins.length > 0) {
+            const idx = selectedPin ? pins.findIndex((p) => p.id === selectedPin) : -1;
+            const next = pins[(idx + 1) % pins.length];
+            setSelectedPin(next.id);
+            setFlyTo((p) => ({ id: p.id + 1, lat: next.lat, lon: next.lon, altKm: 5 }));
+            showToast(`▶ ${next.label}`);
+          }
+          break;
         default:
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [cycleTheme, mode, resetView, saveCurrentBookmark, showSearch, showShortcuts, switchToAtlas, switchToSurface, measureMode, showToast]);
+  }, [cycleTheme, mode, resetView, saveCurrentBookmark, showSearch, showShortcuts, switchToAtlas, switchToSurface, measureMode, showToast, bookmarks, pins, selectedPin]);
 
   const rootStyle: CSSProperties = {
     "--accent": "#5cb5ff",
