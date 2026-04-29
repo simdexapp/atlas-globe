@@ -374,15 +374,24 @@ export default function Surface({
     // ===== city labels (Cesium label entities for major metros) =====
     // Each label has a distance-display condition keyed to population so
     // megacities (>15M) show from far out and smaller ones only when zoomed.
+    // Flag emoji from ISO code (regional indicator pair) gives visual hierarchy.
+    const cityFlag = (code: string) => {
+      const A = 0x41, RI = 0x1F1E6;
+      if (code.length !== 2) return "";
+      const c1 = code.charCodeAt(0) - A + RI;
+      const c2 = code.charCodeAt(1) - A + RI;
+      return String.fromCodePoint(c1, c2);
+    };
     for (const c of MAJOR_CITIES) {
       // Population-based visibility — bigger cities visible from farther.
       // Tokyo/Delhi (37M, 33M): visible from 8000km+. Madrid/Toronto (~5M): need ~1500km.
       const popRatio = c.population / 1_000_000;        // millions
       const farKm = Math.min(8000, 800 + popRatio * 150);  // 800-8000km range
+      const flag = cityFlag(c.country);
       viewer.entities.add({
         position: Cesium.Cartesian3.fromDegrees(c.lon, c.lat, 0),
         label: {
-          text: c.name,
+          text: flag ? `${flag} ${c.name}` : c.name,
           font: "11px Inter, sans-serif",
           fillColor: Cesium.Color.WHITE,
           outlineColor: Cesium.Color.fromCssColorString("rgba(0,0,0,0.85)"),

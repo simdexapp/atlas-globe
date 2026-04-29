@@ -2534,6 +2534,42 @@ function App() {
             // Open the current view in Google Maps in a new tab. Useful
             // when you spot something on the imagery and want street view
             // or business listings.
+            // Nominatim search — uses the address bar in lieu of a
+            // dedicated search UI. The user can type "Search: <query>"
+            // and we'll geocode the rest with OSM Nominatim.
+            { id: "geocodeSearch", label: "Search for a place by name (Nominatim)", group: "Tools", icon: Search, run: async () => {
+              const q = window.prompt("Search for a place (city, landmark, address):");
+              if (!q || !q.trim()) return;
+              try {
+                const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q.trim())}`, { headers: { Accept: "application/json" } });
+                const arr = await r.json();
+                const hit = Array.isArray(arr) && arr.length > 0 ? arr[0] : null;
+                if (!hit) { showToast(`No result for "${q}"`); return; }
+                const lat = parseFloat(hit.lat);
+                const lon = parseFloat(hit.lon);
+                setFlyTo((p) => ({ id: p.id + 1, lat, lon, altKm: 8 }));
+                showToast(`✈ ${hit.display_name.length > 60 ? hit.display_name.slice(0, 57) + "..." : hit.display_name}`);
+              } catch { showToast("Search failed"); }
+            }},
+            // Wikipedia summary at camera-center location. Uses the REST
+            // API geosearch endpoint for nearest article, then fetches
+            // the page summary.
+            { id: "wikiHere", label: "Wikipedia summary for this place", group: "Tools", icon: Search, run: async () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              try {
+                const geoRes = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gsradius=10000&gscoord=${c.lat}|${c.lon}&gslimit=1&format=json&origin=*`);
+                const geo = await geoRes.json();
+                const hit = geo?.query?.geosearch?.[0];
+                if (!hit) { showToast("No nearby Wikipedia article"); return; }
+                const title = hit.title;
+                const sumRes = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`);
+                const sum = await sumRes.json();
+                const extract = sum.extract || sum.description || title;
+                const trimmed = extract.length > 240 ? extract.slice(0, 237) + "..." : extract;
+                showToast(`📖 ${title} — ${trimmed}`);
+              } catch { showToast("Wikipedia: fetch failed"); }
+            }},
             { id: "openInGoogleMaps", label: "Open this view in Google Maps", group: "Tools", icon: Navigation, run: () => {
               const c = cameraStateRef.current;
               if (!c) return;
