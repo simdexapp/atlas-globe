@@ -679,7 +679,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
   gap: 2px;
   padding: var(--s-2) var(--s-2) var(--s-3);
   border-bottom: 1px solid var(--border-subtle);
-  background: rgba(10, 16, 28, 0.94);
+  background: var(--surface-elevated);
   backdrop-filter: blur(14px);
 }
 
@@ -1854,7 +1854,7 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
   padding: var(--s-2) var(--s-4);
   border: 1px solid var(--border-accent);
   border-radius: 99px;
-  background: rgba(10, 15, 28, 0.88);
+  background: var(--surface-elevated);
   backdrop-filter: blur(10px);
   color: var(--accent);
   font-family: ui-monospace, monospace;
@@ -1894,7 +1894,7 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
   height: 100%;
   border: 1px solid color-mix(in srgb, var(--accent), transparent 60%);
   border-radius: 50%;
-  background: rgba(10, 15, 28, 0.7);
+  background: var(--surface-elevated);
   backdrop-filter: blur(6px);
   transition: transform 200ms ease;
 }
@@ -2279,7 +2279,7 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
   padding: 6px var(--s-3);
   border-radius: 99px;
   border: 1px solid var(--border-accent);
-  background: rgba(10, 16, 28, 0.78);
+  background: var(--surface-elevated);
   backdrop-filter: blur(10px);
   font-size: var(--text-xs);
   color: var(--gray-10);
@@ -2298,7 +2298,7 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
   padding: var(--s-3);
   border-radius: var(--r-3);
   border: 1px solid var(--border);
-  background: rgba(8, 14, 26, 0.86);
+  background: var(--surface-elevated);
   backdrop-filter: blur(14px);
   font-size: var(--text-xs);
   color: var(--gray-10);
@@ -2395,7 +2395,7 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
   padding: var(--s-2) var(--s-3);
   border-radius: var(--r-2);
   border: 1px solid var(--border-strong);
-  background: rgba(8, 14, 26, 0.94);
+  background: var(--surface-elevated);
   backdrop-filter: blur(10px);
   pointer-events: none;
   font-size: var(--text-xs);
@@ -2418,7 +2418,7 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
   width: 280px;
   border-radius: var(--r-3);
   border: 1px solid var(--border);
-  background: rgba(8, 14, 26, 0.86);
+  background: var(--surface-elevated);
   backdrop-filter: blur(14px);
   font-size: var(--text-xs);
   color: var(--gray-10);
@@ -2478,7 +2478,7 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
   width: min(540px, calc(100vw - 80px));
   border-radius: var(--r-4);
   border: 1px solid var(--border-accent);
-  background: linear-gradient(180deg, rgba(14, 24, 44, 0.96) 0%, rgba(8, 14, 26, 0.96) 100%);
+  background: var(--surface-elevated);
   backdrop-filter: blur(14px);
   box-shadow: var(--shadow-3), 0 0 0 1px var(--border-accent) inset;
   color: var(--gray-11);
@@ -2499,7 +2499,7 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
   padding: var(--s-3);
   border-radius: var(--r-3);
   border: 1px solid var(--border);
-  background: rgba(10, 16, 28, 0.86);
+  background: var(--surface-elevated);
   backdrop-filter: blur(14px);
   font-size: var(--text-xs);
   color: var(--gray-10);
@@ -2581,7 +2581,7 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
   padding: 6px var(--s-3);
   border-radius: 99px;
   border: 1px solid var(--border);
-  background: rgba(10, 16, 28, 0.78);
+  background: var(--surface-elevated);
   backdrop-filter: blur(10px);
   font-size: var(--text-xs);
   color: var(--gray-10);
@@ -2614,7 +2614,7 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
   padding: var(--s-3);
   border-radius: var(--r-3);
   border: 1px solid var(--border);
-  background: rgba(10, 16, 28, 0.86);
+  background: var(--surface-elevated);
   backdrop-filter: blur(14px);
   box-shadow: var(--shadow-2);
   color: var(--gray-10);
@@ -2670,7 +2670,7 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
   /* Bumped opacity 0.86 → 0.94 to keep text legible when the widget
      overlays a sunlit-globe imagery. The 14% bleed-through at .86 was
      reading as washed-out grey against bright daylit geography. */
-  background: rgba(10, 16, 28, 0.94);
+  background: var(--surface-elevated);
   backdrop-filter: blur(14px);
   box-shadow: var(--shadow-2);
   color: var(--gray-12);
@@ -2778,7 +2778,7 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
   padding: var(--s-3);
   border-radius: var(--r-3);
   border: 1px solid var(--border);
-  background: rgba(8, 14, 26, 0.86);
+  background: var(--surface-elevated);
   backdrop-filter: blur(14px);
   box-shadow: var(--shadow-2);
   color: var(--gray-10);
@@ -2837,7 +2837,7 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
   padding: var(--s-2) var(--s-3);
   border-radius: var(--r-3);
   border: 1px solid var(--border);
-  background: rgba(10, 16, 28, 0.86);
+  background: var(--surface-elevated);
   backdrop-filter: blur(14px);
   box-shadow: var(--shadow-2);
 }
@@ -2900,7 +2900,7 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
   padding: 6px var(--s-3);
   border-radius: 99px;
   border: 1px solid var(--border);
-  background: rgba(10, 16, 28, 0.78);
+  background: var(--surface-elevated);
   backdrop-filter: blur(10px);
   font-size: var(--text-xs);
   color: var(--gray-10);
@@ -2926,7 +2926,7 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
   padding: 6px var(--s-3);
   border-radius: 99px;
   border: 1px solid var(--border);
-  background: rgba(10, 16, 28, 0.78);
+  background: var(--surface-elevated);
   backdrop-filter: blur(10px);
   font-size: var(--text-xs);
   color: var(--gray-10);
@@ -2946,7 +2946,7 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
   padding: var(--s-3);
   border-radius: var(--r-3);
   border: 1px solid var(--border);
-  background: rgba(8, 14, 26, 0.86);
+  background: var(--surface-elevated);
   backdrop-filter: blur(14px);
   font-size: var(--text-xs);
   color: var(--gray-10);
