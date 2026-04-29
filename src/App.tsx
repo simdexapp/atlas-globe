@@ -6513,10 +6513,42 @@ function LayersPanel({ layers, onToggle, bordersLoading, mode }: { layers: Layer
     { key: "miniMap", label: "Mini-map widget", icon: Compass }
   ];
   const visibleItems = items.filter(it => !it.modes || !mode || it.modes.includes(mode));
+  // Live filter — substring match on the label. With ~30 layers per mode
+  // it's quicker to type "aurora" than to scan the list.
+  const [filter, setFilter] = useState("");
+  const q = filter.trim().toLowerCase();
+  const filteredItems = q
+    ? visibleItems.filter(it => it.label.toLowerCase().includes(q) || it.key.toLowerCase().includes(q))
+    : visibleItems;
+  // Count of currently-active layers in the current mode-filtered set.
+  // Helpful at-a-glance to see how cluttered the globe is.
+  const activeCount = visibleItems.reduce((n, it) => n + (layers[it.key] ? 1 : 0), 0);
   return (
-    <PanelSection title="Visibility" icon={Layers}>
+    <PanelSection title={`Visibility (${activeCount}/${visibleItems.length} on)`} icon={Layers}>
+      <div className="atlasLayerFilter">
+        <input
+          type="search"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder="Filter layers…"
+          aria-label="Filter layers by name"
+          className="atlasLayerFilterInput"
+        />
+        {filter && (
+          <button
+            type="button"
+            className="atlasLayerFilterClear"
+            onClick={() => setFilter("")}
+            aria-label="Clear filter"
+          >
+            <X size={11} />
+          </button>
+        )}
+      </div>
       <div className="atlasLayerList">
-        {visibleItems.map(({ key, label, icon: Icon, suffix }) => (
+        {filteredItems.length === 0 ? (
+          <div className="atlasLayerEmpty">No layers match "{filter}"</div>
+        ) : filteredItems.map(({ key, label, icon: Icon, suffix }) => (
           <label key={key} className="atlasLayerRow">
             <Icon size={13} />
             <span>{label}{suffix ? ` ${suffix}` : ""}</span>

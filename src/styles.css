@@ -799,6 +799,46 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 2px s
   gap: var(--s-1);
 }
 
+/* Filter input above the layer list — lets users find a layer by name
+   quickly without scanning ~30 rows. */
+.atlasLayerFilter {
+  position: relative;
+  margin-bottom: var(--s-2);
+}
+.atlasLayerFilterInput {
+  width: 100%;
+  padding: 6px 28px 6px 10px;
+  border-radius: var(--r-2);
+  border: 1px solid var(--border);
+  background: var(--bg-1);
+  color: var(--gray-12);
+  font: 500 12px Inter, sans-serif;
+  transition: border-color 120ms;
+}
+.atlasLayerFilterInput::placeholder { color: var(--gray-9); }
+.atlasLayerFilterInput:focus { outline: none; border-color: var(--accent); }
+.atlasLayerFilterInput::-webkit-search-cancel-button { display: none; }
+.atlasLayerFilterClear {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: 0;
+  color: var(--gray-10);
+  cursor: pointer;
+  padding: 3px;
+  line-height: 0;
+  border-radius: 99px;
+}
+.atlasLayerFilterClear:hover { color: var(--gray-12); background: var(--bg-2); }
+.atlasLayerEmpty {
+  padding: var(--s-3);
+  color: var(--gray-9);
+  font-size: var(--text-xs);
+  text-align: center;
+}
+
 .atlasLayerRow {
   display: grid;
   grid-template-columns: 14px 1fr 32px;
