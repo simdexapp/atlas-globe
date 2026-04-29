@@ -3249,6 +3249,31 @@ function App() {
               showToast(`⏩ Clock: 1h ahead`);
             }},
             // Time-zone calculator at the camera-center longitude.
+            // Layer preset bundles — flip a curated set on/off in one click.
+            { id: "presetNatural", label: "Layer preset: Natural disasters (EONET + quakes + volcanoes + storms)", group: "Layers", icon: Layers, run: () => {
+              setLayers((l) => ({ ...l, eonet: true, earthquakes: true, volcanoes: true, storms: true, aircraft: false, weather: false }));
+              showToast("🌍 Natural disasters preset");
+            }},
+            { id: "presetTransport", label: "Layer preset: Transport (aircraft + launches + ISS)", group: "Layers", icon: Layers, run: () => {
+              setLayers((l) => ({ ...l, aircraft: true, launches: true, iss: true, tiangong: true, hubble: true, eonet: false, earthquakes: false }));
+              showToast("✈ Transport preset");
+            }},
+            { id: "presetWeather", label: "Layer preset: Weather (radar + storms + aurora)", group: "Layers", icon: Layers, run: () => {
+              setLayers((l) => ({ ...l, weather: true, storms: true, aurora: true, eonet: false, earthquakes: false, aircraft: false }));
+              showToast("⛈ Weather preset");
+            }},
+            { id: "presetReference", label: "Layer preset: Reference (borders + graticule + cardinals + pins)", group: "Layers", icon: Layers, run: () => {
+              setLayers((l) => ({ ...l, borders: true, graticule: true, cardinals: true, pins: true, aircraft: false, eonet: false }));
+              showToast("📐 Reference preset");
+            }},
+            { id: "presetMinimal", label: "Layer preset: Minimal (just the globe)", group: "Layers", icon: Layers, run: () => {
+              setLayers((l) => ({ ...l, aircraft: false, weather: false, eonet: false, earthquakes: false, volcanoes: false, launches: false, iss: false, tiangong: false, hubble: false, aurora: false, storms: false, borders: false, graticule: false, timezones: false, neoWatch: false }));
+              showToast("🌑 Minimal preset");
+            }},
+            { id: "presetEverything", label: "Layer preset: Everything (turn ALL data layers on)", group: "Layers", icon: Layers, run: () => {
+              setLayers((l) => ({ ...l, aircraft: true, weather: true, eonet: true, earthquakes: true, volcanoes: true, launches: true, iss: true, tiangong: true, hubble: true, aurora: true, storms: true, borders: true, neoWatch: true }));
+              showToast("🌐 EVERYTHING preset (might be slow)");
+            }},
             { id: "timezoneAtView", label: "Show approximate timezone offset at this view", group: "Tools", icon: Compass, run: () => {
               const c = cameraStateRef.current;
               if (!c) return;
