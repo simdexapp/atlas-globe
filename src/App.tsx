@@ -4147,6 +4147,60 @@ function App() {
             }},
             // Compare current view's weather to another location. Useful
             // for trip planning: "is it warmer in Sydney right now than NYC?"
+            // 📜 Wikipedia "On This Day" — today's notable historical events.
+            // Fetches from Wikipedia's REST API (free, CORS-friendly).
+            // Shows top 5 events as a console report + summary toast.
+            { id: "onThisDay", label: "📜 On this day in history (Wikipedia)", group: "Tools", icon: Sparkles, run: async () => {
+              showToast("Fetching today's historical events…");
+              try {
+                const today = new Date();
+                const mm = (today.getUTCMonth() + 1).toString().padStart(2, "0");
+                const dd = today.getUTCDate().toString().padStart(2, "0");
+                const r = await fetch(`https://en.wikipedia.org/api/rest_v1/feed/onthisday/events/${mm}/${dd}`);
+                if (!r.ok) { showToast(`Wikipedia HTTP ${r.status}`); return; }
+                const j = await r.json();
+                const events = (j?.events ?? []) as Array<{ year: number; text: string; pages?: any[] }>;
+                if (events.length === 0) { showToast("No events found"); return; }
+                // Sort by recency descending, take top 8
+                const sorted = events.sort((a, b) => b.year - a.year).slice(0, 8);
+                const report = `📜 On ${today.toLocaleDateString(undefined, { month: "long", day: "numeric" })} — ${events.length} historical events:\n\n` +
+                  sorted.map(e => `  ${e.year}: ${e.text}`).join("\n");
+                console.log(report);
+                const top = sorted[0];
+                showToast(`📜 ${top.year}: ${top.text.slice(0, 100)}${top.text.length > 100 ? "…" : ""} (${events.length} more in console)`);
+              } catch (e) {
+                showToast(`Wikipedia fetch failed: ${(e as Error).message}`);
+              }
+            }},
+            // 🎂 Famous people born today (Wikipedia OnThisDay/births)
+            { id: "bornToday", label: "🎂 Famous people born today (Wikipedia)", group: "Tools", icon: Sparkles, run: async () => {
+              showToast("Fetching today's birthdays…");
+              try {
+                const today = new Date();
+                const mm = (today.getUTCMonth() + 1).toString().padStart(2, "0");
+                const dd = today.getUTCDate().toString().padStart(2, "0");
+                const r = await fetch(`https://en.wikipedia.org/api/rest_v1/feed/onthisday/births/${mm}/${dd}`);
+                if (!r.ok) { showToast(`Wikipedia HTTP ${r.status}`); return; }
+                const j = await r.json();
+                const births = (j?.births ?? []) as Array<{ year: number; text: string }>;
+                if (births.length === 0) { showToast("No notable births found"); return; }
+                const sorted = births.sort((a, b) => b.year - a.year).slice(0, 5);
+                const list = sorted.map(b => `${b.year}: ${b.text.split(",")[0]}`).join(" · ");
+                showToast(`🎂 Born today: ${list}`);
+              } catch (e) {
+                showToast(`Wikipedia fetch failed: ${(e as Error).message}`);
+              }
+            }},
+            // 💎 Hidden gem — picks a random regional city most users probably
+            // haven't heard of. Filters for cities under 5M population.
+            { id: "hiddenGem", label: "💎 Discover a hidden-gem city (random regional under 5M pop)", group: "Tools", icon: Sparkles, run: () => {
+              const gems = REGIONAL_CITIES.filter(c => c.population < 5_000_000 && c.population > 200_000);
+              if (gems.length === 0) return;
+              const c = gems[Math.floor(Math.random() * gems.length)];
+              setFlyTo((p) => ({ id: p.id + 1, lat: c.lat, lon: c.lon, altKm: 8 }));
+              const popLabel = c.population >= 1_000_000 ? `${(c.population / 1_000_000).toFixed(1)}M` : `${Math.round(c.population / 1000)}k`;
+              showToast(`💎 ${c.name}, ${c.country} — ${popLabel} people. Try Cmd+K → 'Wikipedia summary'`);
+            }},
             // ===== Personal Atlas stats =====
             // Comprehensive "your atlas" report. Combines pin/bookmark
             // metrics, geographic extents, distance coverage, etc. into
