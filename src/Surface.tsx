@@ -117,7 +117,8 @@ export default function Surface({
   autoOrbit,
   aircraftAltitudeBars,
   bordersGeoJson,
-  resetHeadingCommand
+  resetHeadingCommand,
+  showLandmarks
 }: {
   token: string;
   onCameraChange: (lat: number, lon: number, altKm: number) => void;
@@ -202,6 +203,9 @@ export default function Surface({
   // load that Atlas mode triggers, so it's free once Atlas has been
   // visited at least once.
   bordersGeoJson?: any | null;
+  // Toggles the famous-landmark layer. Defaults to true; users can
+  // hide it via Cmd+K when they want a clean view.
+  showLandmarks?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Cesium.Viewer | null>(null);
@@ -233,6 +237,7 @@ export default function Surface({
   const stormEntitiesRef = useRef<Cesium.Entity[]>([]);
   const auroraOvalEntitiesRef = useRef<Cesium.Entity[]>([]);
   const bordersDataSourceRef = useRef<Cesium.GeoJsonDataSource | null>(null);
+  const landmarkEntitiesRef = useRef<Cesium.Entity[]>([]);
   const weatherImageryLayerRef = useRef<Cesium.ImageryLayer | null>(null);
   const terminatorEntityRef = useRef<Cesium.Entity | null>(null);
   const subsolarEntityRef = useRef<Cesium.Entity | null>(null);
@@ -494,44 +499,6 @@ export default function Surface({
         },
       });
       countryLabelsRef.current.push(entity);
-    }
-
-    // ===== famous landmarks =====
-    // Always-visible markers for ~35 iconic natural + man-made sites.
-    // Smaller than country/city labels and only show inside ~5000km
-    // so they appear once you're zoomed somewhat into a region.
-    for (const lm of LANDMARKS) {
-      viewer.entities.add({
-        position: Cesium.Cartesian3.fromDegrees(lm.lon, lm.lat, 0),
-        id: `landmark-${lm.id}`,
-        properties: { isLandmark: true, landmarkId: lm.id, landmarkLat: lm.lat, landmarkLon: lm.lon, landmarkZoom: lm.zoomKm },
-        label: {
-          text: `${lm.emoji} ${lm.name}`,
-          font: "600 11px Inter, sans-serif",
-          fillColor: Cesium.Color.fromCssColorString(lm.kind === "natural" ? "rgba(160, 230, 175, 0.95)" : "rgba(245, 220, 180, 0.95)"),
-          outlineColor: Cesium.Color.fromCssColorString("rgba(0,0,0,0.95)"),
-          outlineWidth: 4,
-          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-          pixelOffset: new Cesium.Cartesian2(0, -10),
-          showBackground: true,
-          backgroundColor: Cesium.Color.fromCssColorString("rgba(8, 14, 26, 0.85)"),
-          backgroundPadding: new Cesium.Cartesian2(6, 3),
-          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
-          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 5_000_000),
-        },
-        point: {
-          pixelSize: 6,
-          color: Cesium.Color.fromCssColorString(lm.kind === "natural" ? "#7cffb1" : "#ffd66b"),
-          outlineColor: Cesium.Color.WHITE,
-          outlineWidth: 1,
-          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
-          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 5_000_000),
-        },
-      });
     }
 
     // ===== aircraft billboards =====
@@ -1599,6 +1566,52 @@ export default function Surface({
       launchEntitiesRef.current.push(entity);
     }
   }, [launches]);
+
+  // ===== Famous landmarks (toggleable) =====
+  // Renders the landmark catalog as labeled points. Off-toggle: clear
+  // the entities. Re-runs only when the showLandmarks flag flips,
+  // so toggling is cheap.
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    for (const e of landmarkEntitiesRef.current) viewer.entities.remove(e);
+    landmarkEntitiesRef.current = [];
+    if (showLandmarks === false) return;
+    for (const lm of LANDMARKS) {
+      const e = viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(lm.lon, lm.lat, 0),
+        id: `landmark-${lm.id}`,
+        properties: { isLandmark: true, landmarkId: lm.id, landmarkLat: lm.lat, landmarkLon: lm.lon, landmarkZoom: lm.zoomKm },
+        label: {
+          text: `${lm.emoji} ${lm.name}`,
+          font: "600 11px Inter, sans-serif",
+          fillColor: Cesium.Color.fromCssColorString(lm.kind === "natural" ? "rgba(160, 230, 175, 0.95)" : "rgba(245, 220, 180, 0.95)"),
+          outlineColor: Cesium.Color.fromCssColorString("rgba(0,0,0,0.95)"),
+          outlineWidth: 4,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+          pixelOffset: new Cesium.Cartesian2(0, -10),
+          showBackground: true,
+          backgroundColor: Cesium.Color.fromCssColorString("rgba(8, 14, 26, 0.85)"),
+          backgroundPadding: new Cesium.Cartesian2(6, 3),
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 5_000_000),
+        },
+        point: {
+          pixelSize: 6,
+          color: Cesium.Color.fromCssColorString(lm.kind === "natural" ? "#7cffb1" : "#ffd66b"),
+          outlineColor: Cesium.Color.WHITE,
+          outlineWidth: 1,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 5_000_000),
+        },
+      });
+      landmarkEntitiesRef.current.push(e);
+    }
+  }, [showLandmarks]);
 
   // ===== Country borders (GeoJsonDataSource) =====
   // Loads the FeatureCollection passed in (built once by App from

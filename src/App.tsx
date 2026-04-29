@@ -119,6 +119,7 @@ type LayerVisibility = {
   noonMeridian: boolean;
   buildings3D: boolean;
   storms: boolean;
+  landmarks: boolean;
 };
 
 type GlobeSettings = {
@@ -250,7 +251,9 @@ const defaultLayers: LayerVisibility = {
   buildings3D: !IS_LOW_END,
   // Active tropical cyclones (NOAA NHC). Cheap to render (handful of
   // points), so on by default.
-  storms: true
+  storms: true,
+  // Famous landmarks (~35 sites). Cheap, on by default in Surface.
+  landmarks: true
 };
 
 const FAMOUS_VOLCANOES: { id: string; name: string; lat: number; lon: number }[] = [
@@ -2154,6 +2157,7 @@ function App() {
               aircraftAltitudeBars={surfaceAltBars}
               bordersGeoJson={layers.borders ? bordersGeoJson : null}
               resetHeadingCommand={resetHeadingCmd}
+              showLandmarks={layers.landmarks}
             />
           </Suspense>
         )}
@@ -2547,6 +2551,20 @@ function App() {
             { id: "viewSouthPole", label: "View South Pole", group: "View", icon: Navigation, run: () => setFlyTo((p) => ({ id: p.id + 1, lat: -89.99, lon: 0, altKm: 4500 })) },
             // Pull way back to see Earth as a small disk — "Voyager view".
             { id: "viewMars", label: "Mars-view (Earth as a small disk)", group: "View", icon: Navigation, run: () => setFlyTo((p) => ({ id: p.id + 1, lat: 0, lon: 0, altKm: 100_000 })) },
+            // Landmark of the day — deterministic by date so the same
+            // suggestion appears for everyone on a given UTC date.
+            { id: "landmarkOfDay", label: (() => {
+              const d = new Date();
+              const idx = (d.getUTCFullYear() * 365 + d.getUTCMonth() * 31 + d.getUTCDate()) % LANDMARKS.length;
+              const lm = LANDMARKS[idx];
+              return `${lm.emoji} Today's pick: fly to ${lm.name}`;
+            })(), group: "View" as const, icon: Navigation, run: () => {
+              const d = new Date();
+              const idx = (d.getUTCFullYear() * 365 + d.getUTCMonth() * 31 + d.getUTCDate()) % LANDMARKS.length;
+              const lm = LANDMARKS[idx];
+              setFlyTo((p) => ({ id: p.id + 1, lat: lm.lat, lon: lm.lon, altKm: lm.zoomKm }));
+              showToast(`${lm.emoji} ${lm.name}`);
+            }},
             // One Cmd+K entry per famous landmark — shows the emoji and
             // name in the palette, flies the camera to its zoom altitude.
             ...LANDMARKS.map((lm) => ({
@@ -3463,6 +3481,7 @@ function LayersPanel({ layers, onToggle, bordersLoading }: { layers: LayerVisibi
     { key: "noonMeridian", label: "Solar-noon meridian (where sun is overhead)", icon: SunIcon },
     { key: "buildings3D", label: "Cesium 3D buildings (Surface mode)", icon: Mountain },
     { key: "storms", label: "Active tropical cyclones (NOAA NHC)", icon: Cloud },
+    { key: "landmarks", label: "Famous landmarks (Cesium Surface)", icon: Mountain },
     { key: "subsolar", label: "Subsolar point (sun overhead)", icon: SunIcon },
     { key: "constellations", label: "Constellation lines (Orion etc)", icon: Sparkles },
     { key: "compass", label: "Compass / heading widget", icon: Navigation },
