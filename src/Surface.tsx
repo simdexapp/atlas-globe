@@ -1844,52 +1844,35 @@ export default function Surface({
       bordersDataSourceRef.current = null;
     }
     if (!bordersGeoJson) return;
-    Cesium.GeoJsonDataSource.load(bordersGeoJson, {
+    // Convert every polygon feature to a MultiLineString *before* loading
+    // so GeoJsonDataSource never creates polygon entities in the first
+    // place. The previous "strip after load" approach left phantom
+    // polygons hanging around at certain zoom levels — they'd tear into
+    // dark olive triangles over the imagery (the user's San Diego
+    // repro). MultiLineStrings have no fill so this is bullet-proof.
+    const linesGeoJson = {
+      type: "FeatureCollection",
+      features: (bordersGeoJson.features || []).flatMap((f: any) => {
+        const geom = f?.geometry;
+        if (!geom) return [];
+        if (geom.type === "Polygon") {
+          return [{ ...f, geometry: { type: "MultiLineString", coordinates: geom.coordinates } }];
+        }
+        if (geom.type === "MultiPolygon") {
+          // Flatten one level: each Polygon's array of rings becomes its own
+          // group of LineStrings. .flat(1) on an array of arrays of rings
+          // yields a flat array of rings — exactly the MultiLineString shape.
+          return [{ ...f, geometry: { type: "MultiLineString", coordinates: geom.coordinates.flat(1) } }];
+        }
+        return [f];
+      }),
+    };
+    Cesium.GeoJsonDataSource.load(linesGeoJson, {
       stroke: Cesium.Color.fromCssColorString("#ffd66b").withAlpha(0.55),
-      fill: Cesium.Color.TRANSPARENT,
       strokeWidth: 1,
       clampToGround: true,
     }).then((ds) => {
       if (!viewerRef.current) return;
-      // Strip all polygon graphics — Cesium creates them by default for
-      // each polygon feature even with fill = TRANSPARENT, and at close
-      // zoom they tear into gray triangles. We only want the outline.
-      // Re-create the outlines as polylines from each polygon's positions.
-      const polylinesToAdd: Cesium.Entity[] = [];
-      ds.entities.values.forEach((entity) => {
-        if (entity.polygon) {
-          // Pull the polygon's outer-ring positions, drop the polygon,
-          // and add a polyline entity for the boundary.
-          const hierarchy = entity.polygon.hierarchy?.getValue(Cesium.JulianDate.now());
-          if (hierarchy?.positions) {
-            polylinesToAdd.push(new Cesium.Entity({
-              polyline: {
-                positions: hierarchy.positions,
-                width: 1,
-                material: Cesium.Color.fromCssColorString("#ffd66b").withAlpha(0.55),
-                clampToGround: true,
-              },
-            }));
-            // Drop the holes too — they'd render as inner fill rings.
-            if (hierarchy.holes) {
-              for (const hole of hierarchy.holes) {
-                if (hole.positions) {
-                  polylinesToAdd.push(new Cesium.Entity({
-                    polyline: {
-                      positions: hole.positions,
-                      width: 1,
-                      material: Cesium.Color.fromCssColorString("#ffd66b").withAlpha(0.55),
-                      clampToGround: true,
-                    },
-                  }));
-                }
-              }
-            }
-          }
-          entity.polygon = undefined;
-        }
-      });
-      for (const e of polylinesToAdd) ds.entities.add(e);
       viewer.dataSources.add(ds);
       bordersDataSourceRef.current = ds;
       viewer.scene.requestRender();
@@ -2042,9 +2025,16 @@ export default function Surface({
       credit: new Cesium.Credit("RainViewer", false),
     });
     const layer = viewer.imageryLayers.addImageryProvider(provider);
-    layer.alpha = weatherOpacity ?? 0.7;
     weatherImageryLayerRef.current = layer;
     weatherOpacityRef.current = weatherOpacity ?? 0.7;
+    // Apply the altitude-based fade immediately on creation. Without this,
+    // enabling radar at low altitude would briefly show the upscaled tile
+    // until the user moved the camera enough to fire the change listener.
+    const baseAlpha = weatherOpacity ?? 0.7;
+    const altKmNow = viewer.camera.positionCartographic.height / 1000;
+    if (altKmNow < 80) layer.alpha = 0;
+    else if (altKmNow < 200) layer.alpha = baseAlpha * ((altKmNow - 80) / 120);
+    else layer.alpha = baseAlpha;
   }, [weatherTilePath, weatherOpacity]);
 
   // ===== Per-frame interpolation (smooth aircraft motion) =====
