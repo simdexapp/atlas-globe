@@ -5870,19 +5870,29 @@ function CommandPalette({
     inputRef.current?.focus();
   }, []);
 
+  // Cap the unfiltered list to 40 items so opening the palette with a
+  // 700+ item set doesn't render hundreds of DOM rows. As soon as the
+  // user types, we filter the FULL set so any item is reachable.
+  const VISIBLE_NO_QUERY = 40;
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const matches = q ? items.filter((it) =>
-      it.label.toLowerCase().includes(q) ||
-      it.group.toLowerCase().includes(q) ||
-      (it.hint || "").toLowerCase().includes(q)
-    ) : items;
+    let matches: CommandItem[];
+    if (!q) {
+      matches = items.slice(0, VISIBLE_NO_QUERY);
+    } else {
+      matches = items.filter((it) =>
+        it.label.toLowerCase().includes(q) ||
+        it.group.toLowerCase().includes(q) ||
+        (it.hint || "").toLowerCase().includes(q)
+      );
+      // Cap the visible match list at 80 — when more match, the typing-
+      // continued behaviour still narrows it down, no DOM-blowup.
+      if (matches.length > 80) matches = matches.slice(0, 80);
+    }
     // Append a synthetic "Fly to '{query}'" command when the user has
     // typed something — even if there are command matches. This lets
     // them treat the palette as a universal address bar: type the name
-    // of any place and hit Enter to geocode + fly + pin. The synthetic
-    // item lives in the "Geocode" group so it shows distinct from the
-    // command matches above it.
+    // of any place and hit Enter to geocode + fly + pin.
     if (q && q.length >= 2 && onGeocodeAndFly) {
       const geocodeItem: CommandItem = {
         id: "geocode",
@@ -5891,10 +5901,13 @@ function CommandPalette({
         icon: Navigation,
         run: () => onGeocodeAndFly(query.trim()),
       };
-      return [...matches, geocodeItem];
+      matches = [...matches, geocodeItem];
     }
     return matches;
   }, [items, query, onGeocodeAndFly]);
+  // For the "X more — keep typing" footer when there's no query.
+  const totalCommands = items.length;
+  const showMoreHint = !query.trim() && totalCommands > VISIBLE_NO_QUERY;
 
   // Reset active index when filter changes
   useEffect(() => { setActiveIndex(0); }, [query]);
@@ -5945,29 +5958,36 @@ function CommandPalette({
           {filtered.length === 0 ? (
             <div className="atlasCmdEmpty">No matches for "{query}"</div>
           ) : (
-            grouped.map(([group, list]) => (
-              <div key={group} className="atlasCmdGroup">
-                <div className="atlasCmdGroupTitle">{group}</div>
-                {list.map((it) => {
-                  const idx = runningIndex++;
-                  const isActive = idx === activeIndex;
-                  const Icon = it.icon;
-                  return (
-                    <button
-                      key={it.id}
-                      type="button"
-                      className={isActive ? "atlasCmdItem active" : "atlasCmdItem"}
-                      onMouseEnter={() => setActiveIndex(idx)}
-                      onClick={() => { it.run(); onClose(); }}
-                    >
-                      <Icon size={14} />
-                      <span>{it.label}</span>
-                      {it.hint && <kbd>{it.hint}</kbd>}
-                    </button>
-                  );
-                })}
-              </div>
-            ))
+            <>
+              {grouped.map(([group, list]) => (
+                <div key={group} className="atlasCmdGroup">
+                  <div className="atlasCmdGroupTitle">{group}</div>
+                  {list.map((it) => {
+                    const idx = runningIndex++;
+                    const isActive = idx === activeIndex;
+                    const Icon = it.icon;
+                    return (
+                      <button
+                        key={it.id}
+                        type="button"
+                        className={isActive ? "atlasCmdItem active" : "atlasCmdItem"}
+                        onMouseEnter={() => setActiveIndex(idx)}
+                        onClick={() => { it.run(); onClose(); }}
+                      >
+                        <Icon size={14} />
+                        <span>{it.label}</span>
+                        {it.hint && <kbd>{it.hint}</kbd>}
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
+              {showMoreHint && (
+                <div className="atlasCmdEmpty" style={{ opacity: 0.55, fontSize: "12px", padding: "8px 16px" }}>
+                  + {totalCommands - VISIBLE_NO_QUERY} more commands · type to search any city, airport, country, landmark…
+                </div>
+              )}
+            </>
           )}
         </div>
         <div className="atlasCmdFoot">
