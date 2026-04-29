@@ -4174,6 +4174,47 @@ function App() {
             }},
             // Find aircraft by destination IATA (using flight route DB
             // we already cache from adsbdb.com)
+            // What's-here lookup — reverse-geocode camera-center without
+            // dropping a pin or moving the view.
+            { id: "whatsHere", label: "What's at the center of this view? (reverse geocode)", group: "Tools", icon: Compass, run: async () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              showToast(`Looking up ${formatLat(c.lat)} ${formatLon(c.lon)}…`);
+              try {
+                const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${c.lat}&lon=${c.lon}&zoom=14`, { headers: { Accept: "application/json" } });
+                if (!r.ok) { showToast("Reverse geocode failed"); return; }
+                const d = await r.json();
+                const a = d?.address || {};
+                const parts: string[] = [];
+                if (a.amenity) parts.push(a.amenity);
+                if (a.road) parts.push(a.road);
+                if (a.suburb) parts.push(a.suburb);
+                if (a.city || a.town || a.village) parts.push(a.city || a.town || a.village);
+                if (a.state) parts.push(a.state);
+                if (a.country) parts.push(a.country);
+                if (parts.length === 0 && d.display_name) parts.push(d.display_name);
+                if (parts.length === 0) { showToast("📍 Open ocean / unmapped area"); return; }
+                showToast(`📍 ${parts.join(" · ")}`);
+              } catch { showToast("Reverse geocode failed"); }
+            }},
+            // Elevation lookup
+            { id: "elevationHere", label: "Get elevation at this view (Open-Meteo)", group: "Tools", icon: Mountain, run: async () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              try {
+                const r = await fetch(`https://api.open-meteo.com/v1/elevation?latitude=${c.lat.toFixed(4)}&longitude=${c.lon.toFixed(4)}`);
+                if (!r.ok) { showToast("Elevation API unavailable"); return; }
+                const d = await r.json();
+                const elevM = d?.elevation?.[0];
+                if (typeof elevM !== "number") { showToast("No elevation data"); return; }
+                const elevFt = Math.round(elevM * 3.28084);
+                if (elevM < 0) {
+                  showToast(`🌊 Below sea level: ${Math.abs(Math.round(elevM))} m (${Math.abs(elevFt)} ft)`);
+                } else {
+                  showToast(`⛰ Elevation: ${Math.round(elevM)} m (${elevFt.toLocaleString()} ft)`);
+                }
+              } catch { showToast("Elevation query failed"); }
+            }},
             // Voice search via the Web Speech API. "Fly to <place>" is
             // parsed and routed to geocoding; bare place names also work.
             { id: "voiceSearch", label: "Voice search 🎤 (browser SpeechRecognition)", group: "Tools", icon: Search, run: () => {
@@ -4402,6 +4443,34 @@ function App() {
                 const next = PIN_COLORS[(idx + 1) % PIN_COLORS.length];
                 updatePin(selectedPin, { color: next });
                 showToast(`🎨 Pin → ${next}`);
+              },
+            }, {
+              id: "pinNote" as const,
+              label: "Add / edit note on selected pin",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const p = pins.find((x) => x.id === selectedPin);
+                if (!p) return;
+                const newNote = window.prompt(`Note for "${p.label}":`, p.note || "");
+                if (newNote === null) return;       // cancel
+                updatePin(selectedPin, { note: newNote.trim() || undefined });
+                showToast(newNote.trim() ? `📝 Note saved` : `📝 Note cleared`);
+              },
+            }, {
+              id: "pinShare" as const,
+              label: "Share permalink to selected pin",
+              group: "Tools" as const,
+              icon: Share2,
+              run: () => {
+                const p = pins.find((x) => x.id === selectedPin);
+                if (!p) return;
+                const url = new URL(window.location.href);
+                url.hash = `#@${p.lat.toFixed(4)},${p.lon.toFixed(4)},5km`;
+                navigator.clipboard?.writeText(url.toString()).then(
+                  () => showToast(`📎 Copied permalink to "${p.label}"`),
+                  () => showToast(url.toString())
+                );
               },
             }, {
               id: "pinFlyTo" as const,
