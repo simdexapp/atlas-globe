@@ -377,6 +377,8 @@ const initialSearchSuggestions = cityBookmarks.map((c) => c.name);
 const KEYBOARD_HINTS = [
   // ===== Palette / search =====
   { keys: "⌘K / Ctrl+K", desc: "Command palette (search every action / layer / setting / city / airport / country)" },
+  { keys: "⌘⇧P / Ctrl+Shift+P", desc: "Command palette (VS Code-style alias)" },
+  { keys: "⌘/ / Ctrl+/", desc: "Show keyboard shortcuts (this list)" },
   { keys: "F", desc: "Open place search" },
   // ===== View / mode =====
   { keys: "R", desc: "Reset view" },
@@ -2377,10 +2379,18 @@ function App() {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
-      // Cmd/Ctrl+K opens command palette even from inside inputs
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+      // Cmd/Ctrl+K opens command palette even from inside inputs.
+      // Cmd/Ctrl+Shift+P is an alias for VS Code muscle memory.
+      if ((event.metaKey || event.ctrlKey) && (event.key.toLowerCase() === "k" || (event.shiftKey && event.key.toLowerCase() === "p"))) {
         event.preventDefault();
         setCommandPaletteOpen((v) => !v);
+        return;
+      }
+      // Cmd/Ctrl+/ opens the keyboard-shortcuts modal — common
+      // discoverability convention from GitHub, GitLab, etc.
+      if ((event.metaKey || event.ctrlKey) && event.key === "/") {
+        event.preventDefault();
+        setShowShortcuts((v) => !v);
         return;
       }
       if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
