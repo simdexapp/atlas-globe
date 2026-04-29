@@ -2844,6 +2844,37 @@ function App() {
             // Pole quick-views.
             { id: "viewNorthPole", label: "View North Pole", group: "View", icon: Navigation, run: () => setFlyTo((p) => ({ id: p.id + 1, lat: 89.99, lon: 0, altKm: 4500 })) },
             { id: "viewSouthPole", label: "View South Pole", group: "View", icon: Navigation, run: () => setFlyTo((p) => ({ id: p.id + 1, lat: -89.99, lon: 0, altKm: 4500 })) },
+            // Quick zoom shortcuts that preserve lat/lon and just change altitude.
+            { id: "zoomIn2x", label: "Zoom in 2× (halve altitude)", group: "View", icon: Maximize2, run: () => {
+              const c = cameraStateRef.current;
+              if (c) setFlyTo((p) => ({ id: p.id + 1, lat: c.lat, lon: c.lon, altKm: Math.max(0.05, c.altKm / 2) }));
+            }},
+            { id: "zoomOut2x", label: "Zoom out 2× (double altitude)", group: "View", icon: Maximize2, run: () => {
+              const c = cameraStateRef.current;
+              if (c) setFlyTo((p) => ({ id: p.id + 1, lat: c.lat, lon: c.lon, altKm: Math.min(50000, c.altKm * 2) }));
+            }},
+            { id: "fitGlobe", label: "Fit globe in view (orbital)", group: "View", icon: Globe2, run: () => {
+              const c = cameraStateRef.current;
+              if (c) setFlyTo((p) => ({ id: p.id + 1, lat: c.lat, lon: c.lon, altKm: 12000 }));
+            }},
+            { id: "lookHorizon", label: "Pull camera to horizon level", group: "View", icon: Mountain, run: () => {
+              const c = cameraStateRef.current;
+              if (c) setFlyTo((p) => ({ id: p.id + 1, lat: c.lat, lon: c.lon, altKm: 1.5 }));
+            }},
+            // Quick equator hop — useful for showing the curvature of the
+            // earth without traveling round-trip.
+            { id: "viewEquator", label: "Center on equator at this longitude", group: "View", icon: Navigation, run: () => {
+              const c = cameraStateRef.current;
+              if (c) setFlyTo((p) => ({ id: p.id + 1, lat: 0, lon: c.lon, altKm: c.altKm }));
+            }},
+            { id: "viewPrimeMeridian", label: "Center on prime meridian at this latitude", group: "View", icon: Navigation, run: () => {
+              const c = cameraStateRef.current;
+              if (c) setFlyTo((p) => ({ id: p.id + 1, lat: c.lat, lon: 0, altKm: c.altKm }));
+            }},
+            { id: "viewDateLine", label: "Center on the international date line", group: "View", icon: Navigation, run: () => {
+              const c = cameraStateRef.current;
+              if (c) setFlyTo((p) => ({ id: p.id + 1, lat: c.lat, lon: 180, altKm: c.altKm }));
+            }},
             // Geolocation — fly camera to user's actual location. Browser
             // prompts for permission. Coarse accuracy is fine since we're
             // viewing at ~30km altitude anyway.
