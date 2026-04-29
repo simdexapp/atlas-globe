@@ -27,6 +27,13 @@ export type SurfaceAircraft = {
   // 7700 = general emergency. We tint these magenta/red and pulse
   // them so they stand out from normal traffic.
   squawk?: string;
+  // Ground speed in m/s. Used for frame-by-frame interpolation
+  // between polls — without it the planes jump every snapshot.
+  velocityMs?: number;
+  // Vertical rate in m/s (positive = climbing). Used to interpolate
+  // altitude smoothly between polls. Optional; planes without this
+  // hold altitude constant.
+  verticalRateMs?: number;
 };
 
 export type SurfaceEonet = {
@@ -225,6 +232,19 @@ export default function Surface({
   // Map icao24 → vertical polyline entity from sea-level to billboard.
   // Built only when aircraftAltitudeBars is on.
   const aircraftAltBarByIcaoRef = useRef<Map<string, Cesium.Entity>>(new Map());
+  // Per-aircraft sample state captured at each poll. We project forward
+  // every render frame using heading + velocity, so planes glide smoothly
+  // instead of teleporting every 12-25s. Position units are radians.
+  type AircraftSample = {
+    latRad: number;
+    lonRad: number;
+    altM: number;
+    headingRad: number;
+    velocityMs: number;        // ground speed
+    verticalMs: number;        // vertical rate (positive = climb)
+    sampleTimeMs: number;      // when this snapshot was taken (performance.now())
+  };
+  const aircraftSampleByIcaoRef = useRef<Map<string, AircraftSample>>(new Map());
   const aircraftTrailEntityRef = useRef<Cesium.Entity | null>(null);
   const aircraftHistoryEntityRef = useRef<Cesium.Entity | null>(null);
   const aircraftSelectionRingRef = useRef<Cesium.Entity | null>(null);
@@ -1843,6 +1863,72 @@ export default function Surface({
     weatherImageryLayerRef.current = layer;
   }, [weatherTilePath, weatherOpacity]);
 
+  // ===== Per-frame interpolation (smooth aircraft motion) =====
+  // Polls only fire every 12-25s, but planes do ~250 m/s. Without
+  // interpolation they teleport every poll. Each frame we compute
+  //   dt = now - sampleTime
+  //   distance = velocity * dt
+  // and project the start position along the heading using great-circle
+  // math, then mutate the billboard position in-place. Cheap because
+  // it's just trig per aircraft and we already have the billboard refs.
+  // Force a steady RAF render so preRender keeps firing under
+  // requestRenderMode.
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    const billboards = aircraftBillboardsRef.current;
+    if (!billboards) return;
+    const byIcao = aircraftBillboardByIcaoRef.current;
+    const samples = aircraftSampleByIcaoRef.current;
+    const altBars = aircraftAltBarByIcaoRef.current;
+    const tick = () => {
+      const now = performance.now();
+      const tmpCart = new Cesium.Cartesian3();
+      // Iterate samples (one per live aircraft). Skip ones with zero
+      // velocity — no point doing trig for parked planes.
+      samples.forEach((s, icao) => {
+        const bb = byIcao.get(icao);
+        if (!bb) return;
+        const dt = (now - s.sampleTimeMs) / 1000;
+        if (s.velocityMs <= 0 && s.verticalMs === 0) return;
+        // Distance along the surface (radians).
+        const distRad = (s.velocityMs * dt) / 6_371_000;
+        const cosD = Math.cos(distRad);
+        const sinD = Math.sin(distRad);
+        const sinLat0 = Math.sin(s.latRad);
+        const cosLat0 = Math.cos(s.latRad);
+        const lat2 = Math.asin(sinLat0 * cosD + cosLat0 * sinD * Math.cos(s.headingRad));
+        const lon2 = s.lonRad + Math.atan2(
+          Math.sin(s.headingRad) * sinD * cosLat0,
+          cosD - sinLat0 * Math.sin(lat2)
+        );
+        const alt2 = Math.max(0, s.altM + s.verticalMs * dt);
+        Cesium.Cartesian3.fromRadians(lon2, lat2, alt2, undefined, tmpCart);
+        bb.position = tmpCart;
+        // Keep the altitude-bar in sync if it's on for this plane.
+        const bar = altBars.get(icao);
+        if (bar?.polyline) {
+          const ground = Cesium.Cartesian3.fromRadians(lon2, lat2, 0);
+          (bar.polyline.positions as any) = [ground, tmpCart.clone()];
+        }
+      });
+      viewer.scene.requestRender();
+    };
+    viewer.scene.preRender.addEventListener(tick);
+    // Steady RAF nudge so scene.preRender fires every frame even when
+    // the camera is idle. Without this, requestRenderMode would skip
+    // frames and planes would only move when the user pans.
+    let raf = window.requestAnimationFrame(function loop() {
+      if (!viewerRef.current) return;
+      viewer.scene.requestRender();
+      raf = window.requestAnimationFrame(loop);
+    });
+    return () => {
+      viewer.scene.preRender.removeEventListener(tick);
+      window.cancelAnimationFrame(raf);
+    };
+  }, []);
+
   // ===== Aircraft sync (incremental — diff by icao24) =====
   // Allocating 12k Cartesians + recreating 12k billboards every poll cycle
   // (~5s) was the single largest cost on mobile. Now we keep billboards
@@ -1893,6 +1979,26 @@ export default function Surface({
     if (!aircraftAltitudeBars && altBars.size > 0) {
       altBars.forEach((e) => viewer.entities.remove(e));
       altBars.clear();
+    }
+
+    // Refresh interpolation samples — capture pos/heading/velocity at
+    // poll time so the preRender loop can project each plane forward.
+    const samples = aircraftSampleByIcaoRef.current;
+    const nowMs = performance.now();
+    // Drop samples for aircraft no longer in feed.
+    samples.forEach((_, icao) => {
+      if (!newIcaos.has(icao)) samples.delete(icao);
+    });
+    for (const a of aircraft) {
+      samples.set(a.icao24, {
+        latRad: a.lat * Math.PI / 180,
+        lonRad: a.lon * Math.PI / 180,
+        altM: Math.max(0, a.altitudeM),
+        headingRad: (a.headingDeg || 0) * Math.PI / 180,
+        velocityMs: typeof a.velocityMs === "number" ? a.velocityMs : 0,
+        verticalMs: typeof a.verticalRateMs === "number" ? a.verticalRateMs : 0,
+        sampleTimeMs: nowMs,
+      });
     }
 
     // Pass 2: create or update.

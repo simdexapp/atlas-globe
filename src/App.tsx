@@ -2099,7 +2099,7 @@ function App() {
               onPickLocation={onGlobeClick}
               flyTo={flyTo}
               pins={pins.map((p) => ({ id: p.id, lat: p.lat, lon: p.lon, label: p.label, color: p.color }))}
-              aircraft={layers.aircraft ? filteredAircraft.map((a) => ({ icao24: a.icao24, callsign: a.callsign, lat: a.lat, lon: a.lon, altitudeM: a.altitudeM, headingDeg: a.headingDeg, squawk: a.squawk })) : []}
+              aircraft={layers.aircraft ? filteredAircraft.map((a) => ({ icao24: a.icao24, callsign: a.callsign, lat: a.lat, lon: a.lon, altitudeM: a.altitudeM, headingDeg: a.headingDeg, squawk: a.squawk, velocityMs: a.velocityMs, verticalRateMs: a.verticalRateMs })) : []}
               realTimeSun={globe.realTimeSun}
               initialCamera={cameraState}
               eonet={layers.eonet ? visibleEonetEvents.map((e) => ({ id: e.id, title: e.title, lat: e.lat, lon: e.lon, category: e.category, color: categoryColor(e.category) })) : []}
