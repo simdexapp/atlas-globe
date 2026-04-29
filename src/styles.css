@@ -2574,10 +2574,13 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
   padding: var(--s-3);
   border-radius: var(--r-3);
   border: 1px solid var(--border);
-  background: rgba(10, 16, 28, 0.86);
+  /* Bumped opacity 0.86 → 0.94 to keep text legible when the widget
+     overlays a sunlit-globe imagery. The 14% bleed-through at .86 was
+     reading as washed-out grey against bright daylit geography. */
+  background: rgba(10, 16, 28, 0.94);
   backdrop-filter: blur(14px);
   box-shadow: var(--shadow-2);
-  color: var(--gray-10);
+  color: var(--gray-12);
   font-size: var(--text-xs);
   display: grid;
   gap: var(--s-2);
@@ -2620,7 +2623,7 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
-.atlasAntipodeDesc { color: var(--gray-10); line-height: 1.4; font-size: 11.5px; }
+.atlasAntipodeDesc { color: var(--gray-11); line-height: 1.4; font-size: 11.5px; }
 .atlasAntipodeFlyBtn {
   appearance: none;
   border: 1px solid var(--border-accent);
@@ -2656,6 +2659,10 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
   font-size: 11.5px;
   line-height: 1.35;
 }
+/* The two reference labels (lower / higher) read as primary content,
+   not metadata — explicitly set to gray-12 so they don't dim out
+   against bright globe backgrounds. */
+.atlasAltScaleBetween span { color: var(--gray-12); font-weight: 500; }
 .atlasAltScaleBetween em {
   color: var(--accent);
   font-style: normal;
