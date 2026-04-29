@@ -2633,6 +2633,14 @@ function App() {
             const horizonKm = Math.sqrt(2 * EARTH_RADIUS_KM * h + h * h);
             return <span title="Geometric horizon distance — how far you'd see from this altitude on a smooth Earth">↻ {Math.round(horizonKm).toLocaleString()} km horizon</span>;
           })()}
+          {/* Active-mode indicator pills — show only when a tool is on
+              so the user always knows what their next click does. */}
+          {pinTool && (
+            <span className="footerLink" style={{color:"var(--accent)"}}>📍 Pin tool · click to drop</span>
+          )}
+          {measureMode && (
+            <span className="footerLink" style={{color:"var(--warm)"}}>📏 Measure ({measurePoints.length} pt{measurePoints.length === 1 ? "" : "s"}) · click to extend</span>
+          )}
           <span>Zoom L{Math.max(1, Math.min(18, Math.round(18 - Math.log2(Math.max(1, cameraState.altKm / 50)))))}</span>
           <button type="button" className="footerLink" onClick={() => setShowShortcuts(true)}>?</button>
         </div>
