@@ -131,6 +131,11 @@ type LayerVisibility = {
   storms: boolean;
   landmarks: boolean;
   airports: boolean;
+  // Three new widgets — each reads camera state and surfaces a different
+  // 'what's happening at this point on Earth' lens.
+  antipode: boolean;        // shows the diametrically-opposite point
+  localTime: boolean;       // local solar time at current view's longitude
+  altScale: boolean;        // camera altitude vs Everest / ISS / Moon
 };
 
 type GlobeSettings = {
@@ -264,6 +269,9 @@ const defaultLayers: LayerVisibility = {
   launches: false,
   worldDigest: false,
   noonMeridian: false,
+  antipode: false,
+  localTime: false,
+  altScale: false,
   // 3D OSM Buildings tileset is heavy and renders with edge outlines
   // that disable imagery draping underneath, painting the screen with
   // dark olive boxes at low altitudes (the user's tear repro). Off by
@@ -3209,6 +3217,11 @@ function App() {
             { id: "widgetClock", label: layers.timeClock ? "Hide world-clock widget" : "Show world-clock widget", group: "Widgets", icon: Compass, run: () => toggleLayer("timeClock") },
             { id: "widgetDayInfo", label: layers.dayInfo ? "Hide sunrise/sunset widget" : "Show sunrise/sunset for camera location", group: "Widgets", icon: SunIcon, run: () => toggleLayer("dayInfo") },
             { id: "widgetDigest", label: layers.worldDigest ? "Hide world-digest widget" : "Show 'what's happening on Earth' digest", group: "Widgets", icon: Sparkles, run: () => toggleLayer("worldDigest") },
+            // Three new widget toggles — antipode, local solar time, altitude scale.
+            // Each reads camera state and surfaces a different framing on it.
+            { id: "widgetAntipode", label: layers.antipode ? "Hide antipode widget" : "Show antipode (opposite side of Earth)", group: "Widgets", icon: Globe2, run: () => toggleLayer("antipode") },
+            { id: "widgetLocalTime", label: layers.localTime ? "Hide local-time widget" : "Show local solar time at this view", group: "Widgets", icon: SunIcon, run: () => toggleLayer("localTime") },
+            { id: "widgetAltScale", label: layers.altScale ? "Hide altitude-scale widget" : "Show altitude scale (vs Everest, ISS, Moon)", group: "Widgets", icon: Mountain, run: () => toggleLayer("altScale") },
             { id: "layerClouds", label: layers.clouds ? "Hide clouds" : "Show clouds", group: "Layers", icon: Cloud, run: () => toggleLayer("clouds") },
             { id: "layerNight", label: layers.nightLights ? "Hide city lights" : "Show city lights", group: "Layers", icon: SunIcon, run: () => toggleLayer("nightLights") },
             { id: "layerAtm", label: layers.atmosphere ? "Hide atmosphere" : "Show atmosphere", group: "Layers", icon: Sparkles, run: () => toggleLayer("atmosphere") },
@@ -5446,6 +5459,126 @@ function App() {
               <div><span>SUNSET</span><strong>{fmtUTC(times.sunset)} UTC</strong></div>
               <div><span>DAY</span><strong>{Math.floor(dayLengthH)}h {Math.round((dayLengthH % 1) * 60)}m</strong></div>
             </div>
+          </div>
+        );
+      })()}
+
+      {/* Antipode widget — shows what's on the diametrically-opposite
+          side of Earth from the current view. Fun fact + fly-to button.
+          Most antipodes are ocean (~71% of the globe is water and the
+          land/water antipode probability biases toward water-on-water),
+          so we surface that explicitly when applicable. */}
+      {layers.antipode && (() => {
+        // Antipode of (lat, lon) is (-lat, lon ± 180).
+        const aLat = -cameraState.lat;
+        const aLon = cameraState.lon > 0 ? cameraState.lon - 180 : cameraState.lon + 180;
+        // Find the closest known city to the antipode for context.
+        const allCities: Array<{ name: string; country: string; lat: number; lon: number }> =
+          [...MAJOR_CITIES, ...REGIONAL_CITIES];
+        let nearest = allCities[0];
+        let nearestKm = haversineKm(aLat, aLon, nearest.lat, nearest.lon);
+        for (const c of allCities) {
+          const km = haversineKm(aLat, aLon, c.lat, c.lon);
+          if (km < nearestKm) { nearest = c; nearestKm = km; }
+        }
+        const isOcean = nearestKm > 800;  // closest city >800km away → likely ocean
+        return (
+          <div className="atlasAntipodeWidget" role="status" aria-label="Antipode">
+            <div className="atlasAntipodeHead">
+              <Globe2 size={12} />
+              <strong>Antipode</strong>
+            </div>
+            <div className="atlasAntipodeCoords">{formatLat(aLat)} · {formatLon(aLon)}</div>
+            <div className="atlasAntipodeDesc">
+              {isOcean
+                ? <>~{Math.round(nearestKm).toLocaleString()} km from {nearest.name} — open ocean</>
+                : <>Near {nearest.name}, {nearest.country} ({Math.round(nearestKm)} km away)</>
+              }
+            </div>
+            <button
+              type="button"
+              className="atlasAntipodeFlyBtn"
+              onClick={() => setFlyTo((p) => ({ id: p.id + 1, lat: aLat, lon: aLon, altKm: cameraState.altKm }))}
+              aria-label={`Fly to antipode at ${formatLat(aLat)} ${formatLon(aLon)}`}
+            >
+              Fly there →
+            </button>
+          </div>
+        );
+      })()}
+
+      {/* Local-time widget — solar local time at the current view's
+          longitude. Differs from atlasClockWidget which is UTC. We compute
+          mean local solar time (UTC + lon/15) — close enough for human
+          reading, no DST/timezone-database needed. */}
+      {layers.localTime && (() => {
+        const now = new Date();
+        const utcMs = now.getTime();
+        const offsetH = cameraState.lon / 15;
+        const localMs = utcMs + offsetH * 3_600_000;
+        const localD = new Date(localMs);
+        const hh = localD.getUTCHours().toString().padStart(2, "0");
+        const mm = localD.getUTCMinutes().toString().padStart(2, "0");
+        const ss = localD.getUTCSeconds().toString().padStart(2, "0");
+        const sign = offsetH >= 0 ? "+" : "−";
+        const offHr = Math.floor(Math.abs(offsetH));
+        const offMin = Math.round((Math.abs(offsetH) - offHr) * 60);
+        return (
+          <div className="atlasLocalTimeWidget" role="status" aria-label="Local time">
+            <div className="atlasLocalTimeHead">
+              <SunIcon size={12} />
+              <strong>Local solar time</strong>
+            </div>
+            <div className="atlasLocalTimeClock">{hh}:{mm}<span className="atlasLocalTimeSeconds">:{ss}</span></div>
+            <div className="atlasLocalTimeMeta">
+              UTC{sign}{offHr.toString().padStart(2, "0")}:{offMin.toString().padStart(2, "0")} · {formatLon(cameraState.lon)}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Altitude-scale widget — show camera altitude as a fraction of
+          recognizable references. Helps users grok orbital scale: "you're
+          higher than the ISS but lower than the Moon" is more meaningful
+          than "you're at 8,000 km altitude." */}
+      {layers.altScale && (() => {
+        const altKm = cameraState.altKm;
+        const REFS = [
+          { name: "Cruise altitude", km: 11, emoji: "✈" },
+          { name: "Mt Everest summit", km: 8.85, emoji: "🏔" },
+          { name: "Highest balloon flight", km: 41.4, emoji: "🎈" },
+          { name: "Karman line (space)", km: 100, emoji: "🚀" },
+          { name: "ISS orbit", km: 408, emoji: "🛰" },
+          { name: "Hubble orbit", km: 540, emoji: "🔭" },
+          { name: "GPS satellites", km: 20_200, emoji: "📡" },
+          { name: "Geostationary", km: 35_786, emoji: "📺" },
+          { name: "Moon distance", km: 384_400, emoji: "🌙" },
+        ];
+        // Find the two references that bracket the current altitude.
+        let lower: typeof REFS[number] | null = null;
+        let higher: typeof REFS[number] | null = null;
+        for (const r of REFS) {
+          if (r.km <= altKm) { if (!lower || r.km > lower.km) lower = r; }
+          if (r.km > altKm) { if (!higher || r.km < higher.km) higher = r; }
+        }
+        return (
+          <div className="atlasAltScaleWidget" role="status" aria-label="Altitude scale">
+            <div className="atlasAltScaleHead">
+              <Mountain size={12} />
+              <strong>Altitude</strong>
+              <span>{altKm < 1 ? `${Math.round(altKm * 1000)} m` : altKm < 10000 ? `${altKm.toFixed(altKm < 100 ? 1 : 0)} km` : `${(altKm / 1000).toFixed(1)} Mm`}</span>
+            </div>
+            {higher && lower ? (
+              <div className="atlasAltScaleBetween">
+                <span>{lower.emoji} {lower.name}</span>
+                <em>{(altKm / lower.km).toFixed(altKm / lower.km < 10 ? 1 : 0)}× higher</em>
+                <span>{higher.emoji} {higher.name} at {(higher.km / altKm).toFixed(higher.km / altKm < 10 ? 1 : 0)}×</span>
+              </div>
+            ) : higher ? (
+              <div className="atlasAltScaleSingle">{higher.emoji} {higher.name} at {(higher.km / altKm).toFixed(1)}× this altitude</div>
+            ) : lower ? (
+              <div className="atlasAltScaleSingle">{lower.emoji} {(altKm / lower.km).toFixed(0)}× higher than {lower.name}</div>
+            ) : null}
           </div>
         );
       })()}
