@@ -1870,6 +1870,14 @@ export default function Surface({
     Cesium.GeoJsonDataSource.load(linesGeoJson, {
       stroke: Cesium.Color.fromCssColorString("#ffd66b").withAlpha(0.55),
       strokeWidth: 1,
+      // clampToGround MUST be true. With it false, polylines render as
+      // straight 3D segments at altitude 0 — those segments cut THROUGH
+      // the earth (since GeoJSON points are ellipsoid surface but
+      // terrain rises above) and re-emerge as fan-rays from oblique low
+      // angles (the user's most recent screenshot). The original olive-
+      // triangle tear was polygon FILL, not corridor width — the
+      // upstream MultiLineString conversion eliminates polygon entities
+      // entirely so there's no fill to render at any zoom.
       clampToGround: true,
     }).then((ds) => {
       if (!viewerRef.current) return;
