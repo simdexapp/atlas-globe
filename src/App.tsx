@@ -3383,6 +3383,20 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: 34.3955, lon: 132.4536, altKm: 1.5 }));
               showToast("🕊 Hiroshima Peace Memorial");
             }},
+            // More iconic places
+            { id: "flyToGiza", label: "Fly to Pyramids of Giza", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: 29.9792, lon: 31.1342, altKm: 4 })); showToast("🏛 Pyramids of Giza"); } },
+            { id: "flyToMachuPicchu", label: "Fly to Machu Picchu", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: -13.1631, lon: -72.5450, altKm: 4 })); showToast("🏛 Machu Picchu"); } },
+            { id: "flyToTajMahal", label: "Fly to Taj Mahal", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: 27.1751, lon: 78.0421, altKm: 1.5 })); showToast("🕌 Taj Mahal"); } },
+            { id: "flyToColosseum", label: "Fly to Roman Colosseum", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: 41.8902, lon: 12.4922, altKm: 1.5 })); showToast("🏛 Colosseum"); } },
+            { id: "flyToGrandCanyon", label: "Fly to the Grand Canyon", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: 36.0544, lon: -112.1401, altKm: 12 })); showToast("🏞 Grand Canyon"); } },
+            { id: "flyToVesuvius", label: "Fly to Mt Vesuvius (Pompeii)", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: 40.8217, lon: 14.4264, altKm: 8 })); showToast("🌋 Mt Vesuvius — Pompeii below"); } },
+            { id: "flyToYellowstone", label: "Fly to Yellowstone Caldera", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: 44.4280, lon: -110.5885, altKm: 80 })); showToast("🌋 Yellowstone supervolcano"); } },
+            { id: "flyToFukushima", label: "Fly to Fukushima Daiichi", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: 37.4225, lon: 141.0331, altKm: 12 })); showToast("☢ Fukushima Daiichi"); } },
+            { id: "flyToBaikal", label: "Fly to Lake Baikal (deepest lake)", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: 53.5587, lon: 108.1650, altKm: 200 })); showToast("🌊 Lake Baikal — 1,642 m deep"); } },
+            { id: "flyToSahara", label: "Fly over the Sahara", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: 23.4162, lon: 25.6628, altKm: 1500 })); showToast("🏜 Sahara — 9.2 million km²"); } },
+            { id: "flyToAmazon", label: "Fly over the Amazon Rainforest", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: -3.4653, lon: -62.2159, altKm: 600 })); showToast("🌳 Amazon Rainforest"); } },
+            { id: "flyToHimalayas", label: "Fly along the Himalayas", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: 28, lon: 86, altKm: 200 })); showToast("🏔 Himalayas"); } },
+            { id: "flyToAlaska", label: "Fly to Alaska / Denali", group: "View", icon: Mountain, run: () => { setFlyTo((p) => ({ id: p.id + 1, lat: 63.0692, lon: -151.0070, altKm: 80 })); showToast("🏔 Denali — N America's tallest"); } },
             { id: "easterEggHelp", label: "Easter eggs hint (Konami code lives here…)", group: "Tools", icon: Sparkles, run: () => {
               showToast("🎮 Try ↑↑↓↓←→←→ B A (anywhere on the page)");
             }},
