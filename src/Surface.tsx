@@ -524,8 +524,11 @@ export default function Surface({
       return String.fromCodePoint(c1, c2);
     };
     for (const country of COUNTRY_CENTROIDS) {
-      const farKm = country.tier === 1 ? 25_000 : 6_000;
-      const nearKm = 350;            // fade out below ~350km altitude
+      // Tier 1 labels visible at orbital view; tier 2 only at mid zoom.
+      // Cap at ~12000km so we don't paint 50+ labels across the whole
+      // hemisphere from one orbital view.
+      const farKm = country.tier === 1 ? 12_000 : 4_000;
+      const nearKm = 500;            // fade out below ~500km altitude
       const flag = codeToFlag(country.code);
       const labelText = `${flag} ${country.name.toUpperCase()}`;
       const entity = viewer.entities.add({
@@ -543,7 +546,11 @@ export default function Surface({
           verticalOrigin: Cesium.VerticalOrigin.CENTER,
           horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
           heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          // Depth-test the label past 5000km so labels on the FAR side
+          // of the globe are hidden by the earth (don't show through).
+          // Within 5000km we keep the label always-visible so it's not
+          // occluded by mountains right next to it.
+          disableDepthTestDistance: 5_000_000,
           distanceDisplayCondition: new Cesium.DistanceDisplayCondition(nearKm * 1000, farKm * 1000),
           translucencyByDistance: new Cesium.NearFarScalar(nearKm * 1000, 0.0, (nearKm + 600) * 1000, 1.0),
         },
@@ -1488,31 +1495,52 @@ export default function Surface({
       // drillPick so hovering the selected aircraft still resolves to its
       // billboard (the 3D model boxes / ring / label sit on top otherwise).
       const candidates = viewer.scene.drillPick(move.endPosition, 8);
-      let billboard: Cesium.Billboard | null = null;
+      let tipText: string | null = null;
+      // Aircraft billboard hover.
       for (const cand of candidates) {
         if (cand?.primitive instanceof Cesium.Billboard
             && aircraftBillboardIndexRef.current.has(cand.primitive)) {
-          billboard = cand.primitive;
+          const icao = aircraftBillboardIndexRef.current.get(cand.primitive);
+          if (icao && aircraft) {
+            const a = aircraft.find((x) => x.icao24 === icao);
+            if (a) {
+              const altFt = Math.round(a.altitudeM / 0.3048).toLocaleString();
+              tipText = `${a.callsign || a.icao24.toUpperCase()} · ${altFt} ft`;
+            }
+          }
           break;
         }
       }
-      if (billboard) {
-        const icao = aircraftBillboardIndexRef.current.get(billboard);
-        if (icao && aircraft) {
-          const a = aircraft.find((x) => x.icao24 === icao);
-          if (a) {
-            const altFt = Math.round(a.altitudeM / 0.3048).toLocaleString();
-            tooltip.textContent = `${a.callsign || a.icao24.toUpperCase()} · ${altFt} ft`;
-            tooltip.style.left = `${move.endPosition.x + 14}px`;
-            tooltip.style.top = `${move.endPosition.y + 14}px`;
-            tooltip.style.display = "block";
-            viewer.scene.canvas.style.cursor = "pointer";
-            return;
+      // Country / landmark / airport label hover — fall through if no
+      // aircraft was hit.
+      if (!tipText) {
+        for (const cand of candidates) {
+          const id = cand?.id;
+          if (!(id instanceof Cesium.Entity)) continue;
+          if (id.properties?.isCountry?.getValue()) {
+            tipText = `🌍 ${id.properties.countryCode?.getValue() || ""} — click to fly here`;
+            break;
+          }
+          if (id.properties?.isLandmark?.getValue()) {
+            tipText = `📍 ${id.label?.text?.getValue?.() || "Landmark"} — click to fly here`;
+            break;
+          }
+          if (id.properties?.isAirport?.getValue()) {
+            tipText = `✈ ${id.label?.text?.getValue?.() || "Airport"} — click to fly here`;
+            break;
           }
         }
       }
-      tooltip.style.display = "none";
-      viewer.scene.canvas.style.cursor = "default";
+      if (tipText) {
+        tooltip.textContent = tipText;
+        tooltip.style.left = `${move.endPosition.x + 14}px`;
+        tooltip.style.top = `${move.endPosition.y + 14}px`;
+        tooltip.style.display = "block";
+        viewer.scene.canvas.style.cursor = "pointer";
+      } else {
+        tooltip.style.display = "none";
+        viewer.scene.canvas.style.cursor = "default";
+      }
     }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
 
     return () => {
