@@ -3642,6 +3642,20 @@ function App() {
             { id: "openShortcuts", label: "Show keyboard shortcuts cheat sheet", group: "Tools", icon: Wand2, hint: "?", run: () => setShowShortcuts(true) },
             // Page reload (sometimes useful)
             { id: "hardReload", label: "Hard reload page (Cmd+Shift+R equivalent)", group: "Tools", icon: RotateCcw, run: () => window.location.reload() },
+            // Per-layer info commands — what does each layer do, where's
+            // the data from, how often does it refresh.
+            { id: "infoAircraft", label: "About: Aircraft layer", group: "Tools", icon: Plane, run: () => { showToast("✈ Aircraft: real-time ADS-B from airplanes.live (fallback adsb.fi). ~7000 planes globally. Refreshes every 12s desktop / 25s mobile."); } },
+            { id: "infoWeather", label: "About: Weather radar layer", group: "Tools", icon: Cloud, run: () => { showToast("⛈ Weather radar: live precipitation from RainViewer. Auto-fades below 250km altitude. Refreshes every 5min."); } },
+            { id: "infoEonet", label: "About: EONET layer", group: "Tools", icon: Sparkles, run: () => { showToast("🌍 EONET (NASA): wildfires, floods, severe storms, volcanoes, dust, snow, drought. Refreshes every 10min."); } },
+            { id: "infoQuakes", label: "About: Earthquakes layer", group: "Tools", icon: Sparkles, run: () => { showToast("💥 Earthquakes (USGS): all magnitudes from the past 24 hours. Pulse-animated when <60min old."); } },
+            { id: "infoVolcanoes", label: "About: Volcanoes layer", group: "Tools", icon: Mountain, run: () => { showToast("🌋 Volcanoes: 24 famous active volcanoes, alert color from USGS feed. Updated every 10 min."); } },
+            { id: "infoLaunches", label: "About: Launches layer", group: "Tools", icon: Sparkles, run: () => { showToast("🚀 Launches: upcoming rockets from Launch Library 2 (~30 day forward window). Pad coords."); } },
+            { id: "infoISS", label: "About: ISS / Tiangong / Hubble", group: "Tools", icon: Sparkles, run: () => { showToast("🛰 LEO: live positions from wheretheiss.at. ISS / Tiangong / Hubble all polled every 5-15s. Ground tracks from past 90min."); } },
+            { id: "infoStorms", label: "About: Storms layer", group: "Tools", icon: Cloud, run: () => { showToast("🌀 Storms: NOAA NHC active tropical cyclones. Saffir-Simpson tinted. Empty out of season."); } },
+            { id: "infoAurora", label: "About: Aurora layer", group: "Tools", icon: SunIcon, run: () => { showToast("🌌 Aurora: NOAA SWPC OVATION 30-min forecast + Kp index drives the oval radius (Surface mode)."); } },
+            { id: "infoTerminator", label: "About: Terminator layer (Surface mode)", group: "Tools", icon: SunIcon, run: () => { showToast("🌗 Terminator: live great-circle marking the day/night boundary. 60s redraw under requestRenderMode."); } },
+            { id: "infoCountries", label: "About: Country labels (Surface)", group: "Tools", icon: Compass, run: () => { showToast("🌍 Country labels: 50 curated centroids with flags. Tier-1 visible to 12,000km, tier-2 to 4,000km. Click to fly."); } },
+            { id: "infoBuildings", label: "About: 3D Buildings (Surface)", group: "Tools", icon: Mountain, run: () => { showToast("🏢 3D Buildings: Cesium OSM Buildings tileset. Off by default — heavy. Tinted soft-white when enabled."); } },
             { id: "easterEggHelp", label: "Easter eggs hint (Konami code lives here…)", group: "Tools", icon: Sparkles, run: () => {
               showToast("🎮 Try ↑↑↓↓←→←→ B A (anywhere on the page)");
             }},
