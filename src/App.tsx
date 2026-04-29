@@ -3049,6 +3049,30 @@ function App() {
         <CommandPalette
           onClose={() => setCommandPaletteOpen(false)}
           onGeocodeAndFly={async (q) => {
+            // Coordinate-direct fast path: if the query parses as 'lat,lon'
+            // or 'lat lon' (with optional ° / N S E W) — skip the geocode
+            // round-trip and fly straight there. Saves a Nominatim hit
+            // and works offline. Recognises:
+            //   "40.7, -74.0"          decimal
+            //   "40.7128 N, 74.006 W"  hemisphere letters
+            //   "-33.86, 151.2"        negative decimal
+            // Bails to geocode for anything else (place names, addresses).
+            const coordMatch = q.trim().match(
+              /^\s*(-?\d+(?:\.\d+)?)\s*°?\s*([NSns])?\s*[, ]\s*(-?\d+(?:\.\d+)?)\s*°?\s*([EWew])?\s*$/
+            );
+            if (coordMatch) {
+              let lat = parseFloat(coordMatch[1]);
+              let lon = parseFloat(coordMatch[3]);
+              if (coordMatch[2] && /[Ss]/.test(coordMatch[2])) lat = -Math.abs(lat);
+              if (coordMatch[2] && /[Nn]/.test(coordMatch[2])) lat = Math.abs(lat);
+              if (coordMatch[4] && /[Ww]/.test(coordMatch[4])) lon = -Math.abs(lon);
+              if (coordMatch[4] && /[Ee]/.test(coordMatch[4])) lon = Math.abs(lon);
+              if (Math.abs(lat) <= 90 && Math.abs(lon) <= 180) {
+                flyToBookmark({ id: `coord-${Date.now()}`, name: `${formatLat(lat)} ${formatLon(lon)}`, lat, lon, altKm: 5, savedAt: 0 }, { dropPin: true });
+                showToast(`📍 Flew to ${formatLat(lat)} ${formatLon(lon)}`);
+                return;
+              }
+            }
             // Geocode via Nominatim, fly to the first hit, drop a pin.
             // Optimistic toast so the user knows we heard them.
             showToast(`Searching for "${q}"…`);
@@ -3057,16 +3081,21 @@ function App() {
                 `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1`,
                 { headers: { Accept: "application/json" } }
               );
-              if (!res.ok) { showToast("Geocode failed"); return; }
+              // Nominatim's usage policy: 1 req/s. 429 means we hit it.
+              // Surface a more useful message than "geocode failed".
+              if (res.status === 429) { showToast("Too many searches — Nominatim rate limit. Try again in a moment."); return; }
+              if (res.status === 503) { showToast("Geocode service temporarily unavailable"); return; }
+              if (!res.ok) { showToast(`Geocode failed (HTTP ${res.status})`); return; }
               const data = await res.json() as Array<{ lat: string; lon: string; display_name: string }>;
-              if (data.length === 0) { showToast(`No matches for "${q}"`); return; }
+              if (data.length === 0) { showToast(`No matches for "${q}" — try a more specific name`); return; }
               const hit = data[0];
               const lat = Number(hit.lat);
               const lon = Number(hit.lon);
               const name = hit.display_name.split(",").slice(0, 2).join(",").trim();
               flyToBookmark({ id: `osm-${Date.now()}`, name, lat, lon, altKm: 5, savedAt: 0 }, { dropPin: true });
-            } catch {
-              showToast("Geocode failed (network)");
+            } catch (e) {
+              const msg = (e as Error).message || "network error";
+              showToast(`Geocode failed: ${msg}`);
             }
           }}
           items={[
