@@ -3219,6 +3219,47 @@ function App() {
               url.hash = `#@${c.lat.toFixed(4)},${c.lon.toFixed(4)},${c.altKm.toFixed(1)}km`;
               window.location.href = `mailto:?subject=${encodeURIComponent("Atlas Globe view")}&body=${encodeURIComponent(`${formatLat(c.lat)} ${formatLon(c.lon)}\n\n${url.toString()}`)}`;
             }},
+            // Time machine — jump the Surface clock back N hours.
+            { id: "timeBack1h", label: "Time machine: jump 1 hour back", group: "Imagery", icon: SunIcon, run: () => {
+              const now = new Date();
+              const hr = now.getUTCHours() - 1 + (now.getUTCMinutes() / 60);
+              updateGlobe({ realTimeSun: false });
+              setSurfaceManualHour((hr + 24) % 24);
+              showToast(`⏪ Clock: ${(hr + 24) % 24 | 0}h ago`);
+            }},
+            { id: "timeBack6h", label: "Time machine: jump 6 hours back", group: "Imagery", icon: SunIcon, run: () => {
+              const now = new Date();
+              const hr = now.getUTCHours() - 6 + (now.getUTCMinutes() / 60);
+              updateGlobe({ realTimeSun: false });
+              setSurfaceManualHour((hr + 24) % 24);
+              showToast(`⏪ Clock: 6h ago`);
+            }},
+            { id: "timeFwd6h", label: "Time machine: jump 6 hours forward", group: "Imagery", icon: SunIcon, run: () => {
+              const now = new Date();
+              const hr = now.getUTCHours() + 6 + (now.getUTCMinutes() / 60);
+              updateGlobe({ realTimeSun: false });
+              setSurfaceManualHour(hr % 24);
+              showToast(`⏩ Clock: 6h ahead`);
+            }},
+            { id: "timeFwd1h", label: "Time machine: jump 1 hour forward", group: "Imagery", icon: SunIcon, run: () => {
+              const now = new Date();
+              const hr = now.getUTCHours() + 1 + (now.getUTCMinutes() / 60);
+              updateGlobe({ realTimeSun: false });
+              setSurfaceManualHour(hr % 24);
+              showToast(`⏩ Clock: 1h ahead`);
+            }},
+            // Time-zone calculator at the camera-center longitude.
+            { id: "timezoneAtView", label: "Show approximate timezone offset at this view", group: "Tools", icon: Compass, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              // Mean solar time offset = lon / 15 hours
+              const offset = c.lon / 15;
+              const sign = offset >= 0 ? "+" : "-";
+              const abs = Math.abs(offset);
+              const hh = Math.floor(abs);
+              const mm = Math.round((abs - hh) * 60);
+              showToast(`🕐 Mean solar offset at ${formatLat(c.lat)} ${formatLon(c.lon)}: UTC${sign}${hh}h${mm > 0 ? `${mm}m` : ""}`);
+            }},
             { id: "cinematicSpin360", label: "Cinematic: 360° orbit around this point", group: "View", icon: Film, run: () => {
               const c = cameraStateRef.current;
               if (!c) return;
