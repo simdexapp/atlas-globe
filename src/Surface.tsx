@@ -1715,6 +1715,45 @@ export default function Surface({
       clampToGround: true,
     }).then((ds) => {
       if (!viewerRef.current) return;
+      // Strip all polygon graphics — Cesium creates them by default for
+      // each polygon feature even with fill = TRANSPARENT, and at close
+      // zoom they tear into gray triangles. We only want the outline.
+      // Re-create the outlines as polylines from each polygon's positions.
+      const polylinesToAdd: Cesium.Entity[] = [];
+      ds.entities.values.forEach((entity) => {
+        if (entity.polygon) {
+          // Pull the polygon's outer-ring positions, drop the polygon,
+          // and add a polyline entity for the boundary.
+          const hierarchy = entity.polygon.hierarchy?.getValue(Cesium.JulianDate.now());
+          if (hierarchy?.positions) {
+            polylinesToAdd.push(new Cesium.Entity({
+              polyline: {
+                positions: hierarchy.positions,
+                width: 1,
+                material: Cesium.Color.fromCssColorString("#ffd66b").withAlpha(0.55),
+                clampToGround: true,
+              },
+            }));
+            // Drop the holes too — they'd render as inner fill rings.
+            if (hierarchy.holes) {
+              for (const hole of hierarchy.holes) {
+                if (hole.positions) {
+                  polylinesToAdd.push(new Cesium.Entity({
+                    polyline: {
+                      positions: hole.positions,
+                      width: 1,
+                      material: Cesium.Color.fromCssColorString("#ffd66b").withAlpha(0.55),
+                      clampToGround: true,
+                    },
+                  }));
+                }
+              }
+            }
+          }
+          entity.polygon = undefined;
+        }
+      });
+      for (const e of polylinesToAdd) ds.entities.add(e);
       viewer.dataSources.add(ds);
       bordersDataSourceRef.current = ds;
       viewer.scene.requestRender();
@@ -1853,9 +1892,15 @@ export default function Surface({
       weatherImageryLayerRef.current = null;
     }
     if (!weatherTilePath) return;
+    // RainViewer's free tile pyramid maxes out around level 5 — beyond
+    // that the server returns a placeholder PNG that literally says
+    // "Zoom Level Not Supported" plastered across the tile, which the
+    // user reported as a "tear" when zooming into city level. Cap at 5
+    // so Cesium upscales lower-level tiles instead of requesting
+    // unsupported ones.
     const provider = new Cesium.UrlTemplateImageryProvider({
       url: `https://tilecache.rainviewer.com${weatherTilePath}/256/{z}/{x}/{y}/4/1_1.png`,
-      maximumLevel: 8,
+      maximumLevel: 5,
       credit: new Cesium.Credit("RainViewer", false),
     });
     const layer = viewer.imageryLayers.addImageryProvider(provider);
