@@ -3482,6 +3482,57 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: 36.4622, lon: -116.8669, altKm: 30 }));
               showToast("🏜 Death Valley — 56.7°C (134°F) all-time high (1913)");
             }},
+            // Faster bookmark / pin tours.
+            { id: "tourPinsFast", label: pins.length > 1 ? `Tour all pins (FAST — 1s each)` : "Tour pins (need 2+)", group: "View", icon: Film, run: () => {
+              if (pins.length < 2) { showToast("Need 2+ pins"); return; }
+              showToast(`🎬 Fast tour: ${pins.length} pins (~${pins.length}s)`);
+              pins.forEach((pin, i) => {
+                setTimeout(() => {
+                  setFlyTo((p) => ({ id: p.id + 1, lat: pin.lat, lon: pin.lon, altKm: 30 }));
+                  showToast(`📍 ${i + 1}/${pins.length}: ${pin.label}`);
+                }, i * 1000);
+              });
+            }},
+            { id: "tourBookmarksFast", label: bookmarks.length > 1 ? `Tour all bookmarks (FAST — 1s each)` : "Tour bookmarks (need 2+)", group: "View", icon: Film, run: () => {
+              if (bookmarks.length < 2) { showToast("Need 2+ bookmarks"); return; }
+              showToast(`🎬 Fast tour: ${bookmarks.length} bookmarks`);
+              bookmarks.forEach((bm, i) => {
+                setTimeout(() => {
+                  setFlyTo((p) => ({ id: p.id + 1, lat: bm.lat, lon: bm.lon, altKm: bm.altKm }));
+                  showToast(`📍 ${i + 1}/${bookmarks.length}: ${bm.name}`);
+                }, i * 1000);
+              });
+            }},
+            // Aircraft "ride along" — pick a random aircraft and switch to chase camera.
+            { id: "rideRandomFlight", label: "Ride along: pick random flight + chase camera", group: "View", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) {
+                showToast("Aircraft layer not loaded"); return;
+              }
+              // Prefer high-altitude commercial aircraft
+              const highflyers = aircraftSnapshot.aircraft.filter(a =>
+                a.altitudeM > 9000 && a.velocityMs > 150 && a.callsign && /^[A-Z]{3}\d/.test(a.callsign)
+              );
+              const pool = highflyers.length > 0 ? highflyers : aircraftSnapshot.aircraft.filter(a => a.altitudeM > 0);
+              if (pool.length === 0) { showToast("No suitable aircraft"); return; }
+              const a = pool[Math.floor(Math.random() * pool.length)];
+              setSelectedAircraftId(a.icao24);
+              setAircraftCameraMode("chase");
+              showToast(`✈ Riding along with ${a.callsign || a.icao24} @ ${Math.round(a.altitudeM / 0.3048)} ft`);
+            }},
+            { id: "rideAircraftCockpit", label: "Switch to cockpit camera (current aircraft)", group: "View", icon: Plane, run: () => {
+              if (!selectedAircraftId) { showToast("Select an aircraft first"); return; }
+              setAircraftCameraMode("cockpit");
+              showToast("🛩 Cockpit camera engaged");
+            }},
+            { id: "rideAircraftWing", label: "Switch to wing camera (current aircraft)", group: "View", icon: Plane, run: () => {
+              if (!selectedAircraftId) { showToast("Select an aircraft first"); return; }
+              setAircraftCameraMode("wing");
+              showToast("🛩 Wing camera engaged");
+            }},
+            { id: "exitAircraftCamera", label: "Exit aircraft camera (free orbit)", group: "View", icon: Plane, run: () => {
+              setAircraftCameraMode("off");
+              showToast("Free camera");
+            }},
             { id: "easterEggHelp", label: "Easter eggs hint (Konami code lives here…)", group: "Tools", icon: Sparkles, run: () => {
               showToast("🎮 Try ↑↑↓↓←→←→ B A (anywhere on the page)");
             }},
