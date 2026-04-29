@@ -54,6 +54,7 @@ import { fetchWikiSummary } from "./wiki";
 import { MAJOR_CITIES } from "./cities";
 import { LANDMARKS } from "./landmarks";
 import { AIRPORTS } from "./airports";
+import { aircraftTypeName } from "./aircraftTypes";
 
 const SurfaceMode = lazy(() => import("./Surface"));
 
@@ -1387,10 +1388,14 @@ function App() {
     setCameraState({ lat, lon, altKm });
   }, []);
 
-  // Click-to-drop-pin (with reverse geocoding)
-  const onGlobeClick = useCallback((lat: number, lon: number) => {
-    // Measure-mode short-circuit: don't drop a pin, just record the point
-    // and fire a toast with the running result.
+  // Click-on-globe handler. Three modes based on user state:
+  //   1. Measure mode → record A/B endpoints, no pin.
+  //   2. Pin tool active OR shift-click → drop a pin (legacy behavior).
+  //   3. Default → info-only: show coords + reverse-geocoded place name
+  //      as a toast. The user reported that auto-dropping pins on every
+  //      click made it impossible to just look around. Now you have to
+  //      opt in to pinning via the Pin Tool button or shift-click.
+  const onGlobeClick = useCallback((lat: number, lon: number, modifiers?: { shift?: boolean }) => {
     if (measureMode) {
       setMeasurePoints((prev) => {
         const next = prev.length >= 2 ? [{ lat, lon }] : [...prev, { lat, lon }];
@@ -1405,6 +1410,30 @@ function App() {
       });
       return;
     }
+
+    const wantsPin = pinTool || modifiers?.shift === true;
+
+    if (!wantsPin) {
+      // Info-only path. Toast the coords immediately so feedback is fast,
+      // then upgrade to a place-name toast when reverse geocode resolves.
+      showToast(`${formatLat(lat)} ${formatLon(lon)}`);
+      (async () => {
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10`, {
+            headers: { Accept: "application/json" }
+          });
+          if (!res.ok) return;
+          const data = await res.json() as { display_name?: string; address?: Record<string, string> };
+          if (data?.address) {
+            const a = data.address;
+            const name = a.city || a.town || a.village || a.county || a.state || a.country || data.display_name?.split(",")[0]?.trim();
+            if (name) showToast(`📍 ${name} · ${formatLat(lat)} ${formatLon(lon)}`);
+          }
+        } catch {/* ignore */}
+      })();
+      return;
+    }
+
     const id = `pin-${Date.now()}`;
     const color = PIN_COLORS[Math.floor(Math.random() * PIN_COLORS.length)];
     const pin: Pin = {
@@ -1419,7 +1448,8 @@ function App() {
     setSelectedPin(id);
     showToast(`Pin dropped at ${formatLat(lat)} ${formatLon(lon)}`);
 
-    // Reverse geocode (best-effort, async)
+    // Reverse geocode (best-effort, async) — upgrades the pin label to
+    // the place name once Nominatim responds.
     (async () => {
       try {
         const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10`, {
@@ -1436,7 +1466,7 @@ function App() {
         }
       } catch {/* ignore */}
     })();
-  }, [pins.length, showToast, measureMode]);
+  }, [pins.length, showToast, measureMode, pinTool]);
 
   const updatePin = useCallback((id: string, patch: Partial<Pin>) => {
     setPins((prev) => prev.map((p) => p.id === id ? { ...p, ...patch } : p));
@@ -4560,8 +4590,12 @@ function AircraftCard({ aircraft, onClose, onFlyTo }: {
 
       {detail && (detail.manufacturer || detail.owner) && (
         <div className="atlasAircraftIdent">
-          {detail.manufacturer && detail.model && (
-            <span className="atlasAircraftModel">{detail.manufacturer} {detail.icaoType || detail.model}</span>
+          {(detail.manufacturer || detail.icaoType || detail.model) && (
+            <span className="atlasAircraftModel">
+              {/* Prefer the curated friendly name (e.g. 'Boeing 737 MAX 8')
+                  over the ICAO code. Falls back to manufacturer + model. */}
+              {aircraftTypeName(detail.icaoType) || `${detail.manufacturer ?? ""} ${detail.model ?? ""}`.trim()}
+            </span>
           )}
           {detail.owner && (
             <span className="atlasAircraftOwner">{detail.owner}{detail.ownerCountry ? ` · ${detail.ownerCountry}` : ""}</span>
@@ -4573,7 +4607,7 @@ function AircraftCard({ aircraft, onClose, onFlyTo }: {
         <div><span>ICAO24</span><b>{a.icao24.toUpperCase()}</b></div>
         <div><span>Reg</span><b>{detail?.registration || a.registration || "—"}</b></div>
         <div><span>Squawk</span><b>{a.squawk || "—"}</b></div>
-        <div><span>Type</span><b>{detail?.icaoType || a.type || "—"}</b></div>
+        <div><span>Type</span><b title={detail?.icaoType || a.type || ""}>{aircraftTypeName(detail?.icaoType || a.type) || "—"}</b></div>
         <div><span>Altitude</span><b>{altitudeFt(a.altitudeM).toLocaleString()} ft</b></div>
         <div><span>Speed</span><b>{knotsFromMs(a.velocityMs)} kt</b></div>
         <div><span>Heading</span><b>{Math.round(a.headingDeg)}°</b></div>

@@ -131,7 +131,9 @@ export default function Surface({
 }: {
   token: string;
   onCameraChange: (lat: number, lon: number, altKm: number) => void;
-  onPickLocation?: (lat: number, lon: number) => void;
+  // The modifiers object lets App distinguish a default click (info-only)
+  // from a shift-click (drop-pin override).
+  onPickLocation?: (lat: number, lon: number, modifiers?: { shift?: boolean }) => void;
   flyTo: FlyToTarget;
   pins?: SurfacePin[];
   aircraft?: SurfaceAircraft[];
@@ -613,6 +615,16 @@ export default function Surface({
     viewer.camera.percentageChanged = isLow ? 0.05 : 0.01;
 
     // ===== left-click → emit lat/lon =====
+    // Track shift state via window key listeners since Cesium's
+    // PositionedEvent doesn't expose modifier keys directly. shiftHeld
+    // gets read in the handler below to upgrade an info-click into a
+    // pin-drop.
+    let shiftHeld = false;
+    const onKeyDown = (e: KeyboardEvent) => { if (e.key === "Shift") shiftHeld = true; };
+    const onKeyUp = (e: KeyboardEvent) => { if (e.key === "Shift") shiftHeld = false; };
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+
     const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
     handler.setInputAction((click: Cesium.ScreenSpaceEventHandler.PositionedEvent) => {
       // Pick on the actual terrain surface, not the ellipsoid — gives the
@@ -625,10 +637,12 @@ export default function Surface({
       const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
       const lat = Cesium.Math.toDegrees(cartographic.latitude);
       const lon = Cesium.Math.toDegrees(cartographic.longitude);
-      onPickLocation?.(lat, lon);
+      onPickLocation?.(lat, lon, { shift: shiftHeld });
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
     return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
       removeListener?.();
       handler.destroy();
       pinEntitiesRef.current.forEach((e) => viewer.entities.remove(e));
