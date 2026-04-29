@@ -3363,6 +3363,60 @@ function App() {
             { id: "easterEggHelp", label: "Easter eggs hint (Konami code lives here…)", group: "Tools", icon: Sparkles, run: () => {
               showToast("🎮 Try ↑↑↓↓←→←→ B A (anywhere on the page)");
             }},
+            // Quick-copy commands — paste-friendly outputs.
+            { id: "copyCoords", label: "Copy current coordinates as 'lat, lon'", group: "Tools", icon: Bookmark, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const text = `${c.lat.toFixed(6)}, ${c.lon.toFixed(6)}`;
+              navigator.clipboard?.writeText(text).then(
+                () => showToast(`Copied: ${text}`),
+                () => showToast(text)
+              );
+            }},
+            { id: "copyCoordsDms", label: "Copy current coordinates as DMS (51°30'N 0°7'W)", group: "Tools", icon: Bookmark, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const fmt = (deg: number, ne: string, sw: string) => {
+                const sign = deg >= 0 ? ne : sw;
+                const abs = Math.abs(deg);
+                const d = Math.floor(abs);
+                const m = Math.floor((abs - d) * 60);
+                const s = Math.round(((abs - d) * 60 - m) * 60);
+                return `${d}°${m}'${s}"${sign}`;
+              };
+              const text = `${fmt(c.lat, "N", "S")} ${fmt(c.lon, "E", "W")}`;
+              navigator.clipboard?.writeText(text).then(
+                () => showToast(`Copied: ${text}`),
+                () => showToast(text)
+              );
+            }},
+            { id: "copyOpenInGoogle", label: "Open this view in Google Maps (new tab)", group: "Tools", icon: Share2, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const zoom = Math.max(1, Math.min(19, Math.round(20 - Math.log2(c.altKm + 1))));
+              window.open(`https://www.google.com/maps/@${c.lat},${c.lon},${zoom}z`, "_blank");
+            }},
+            { id: "copyOpenInOpenStreetMap", label: "Open this view in OpenStreetMap (new tab)", group: "Tools", icon: Share2, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const zoom = Math.max(1, Math.min(19, Math.round(20 - Math.log2(c.altKm + 1))));
+              window.open(`https://www.openstreetmap.org/#map=${zoom}/${c.lat}/${c.lon}`, "_blank");
+            }},
+            { id: "copyOpenInWiki", label: "Search Wikipedia for places near this view", group: "Tools", icon: Share2, run: async () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              try {
+                const r = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gsradius=10000&gscoord=${c.lat}|${c.lon}&format=json&origin=*`);
+                const d = await r.json();
+                const first = d?.query?.geosearch?.[0];
+                if (first) {
+                  window.open(`https://en.wikipedia.org/wiki/${encodeURIComponent(first.title)}`, "_blank");
+                  showToast(`Opening: ${first.title}`);
+                } else {
+                  showToast("No nearby Wikipedia article");
+                }
+              } catch { showToast("Wikipedia query failed"); }
+            }},
             { id: "solarZenithHere", label: "Show solar zenith time (sun directly overhead) for this view", group: "Tools", icon: SunIcon, run: () => {
               const c = cameraStateRef.current;
               if (!c) return;
