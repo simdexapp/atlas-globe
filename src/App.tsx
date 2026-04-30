@@ -161,6 +161,9 @@ type LayerVisibility = {
   // Submarine cable map — major undersea fiber routes as polylines
   // (Surface mode only).
   submarineCables: boolean;
+  // Live World Stats widget — aggregator panel showing aircraft / quake
+  // / volcano / time at-a-glance for big-picture awareness.
+  liveStats: boolean;
 };
 
 type GlobeSettings = {
@@ -303,6 +306,7 @@ const defaultLayers: LayerVisibility = {
   viewHistory: false,
   ambientEarth: false,
   submarineCables: false,
+  liveStats: false,
   // 3D OSM Buildings tileset is heavy and renders with edge outlines
   // that disable imagery draping underneath, painting the screen with
   // dark olive boxes at low altitudes (the user's tear repro). Off by
@@ -4123,6 +4127,8 @@ function App() {
               const on = Object.entries(layers).filter(([_, v]) => v).map(([k]) => k);
               showToast(on.length === 0 ? "No layers active" : `Active layers (${on.length}): ${on.join(", ")}`);
             }},
+            // Toggle the new at-a-glance Live World Stats widget
+            { id: "toggleLiveStats", label: layers.liveStats ? "Hide Live World Stats widget" : "🌐 Show Live World Stats widget", group: "Widgets", icon: Globe2, run: () => toggleLayer("liveStats") },
             // 📖 Wikipedia summary for the current camera view location.
             // Two-step fetch: Nominatim reverse-geocode → place name →
             // Wikipedia REST API summary endpoint. Shows a 4-second toast
@@ -8679,6 +8685,20 @@ ${wpts}
         </Draggable>
       )}
 
+      {layers.liveStats && (
+        <Draggable id="liveStats" customizeMode={customizeUiMode} position={widgetPositions.liveStats} onMove={setWidgetPosition}>
+          <LiveStatsWidget
+            aircraftCount={aircraftSnapshot?.aircraft.length ?? 0}
+            quakesCount={earthquakes.length}
+            volcanoesCount={volcanoAlerts.size}
+            stormsCount={activeStorms.length}
+            launchesCount={launches.length}
+            cameraLat={cameraState.lat}
+            cameraLon={cameraState.lon}
+          />
+        </Draggable>
+      )}
+
       {recordingState === "recording" && (
         <div className="atlasRecordIndicator" role="status">
           <span className="atlasRecordDot" /> REC {formatSeconds(recordingSeconds)}
@@ -11499,6 +11519,90 @@ function PinInfoCard({ pin, onClose, onDelete, onUpdate, onFly }: { pin: Pin; on
         <button type="button" className="atlasPrimaryBtn small" style={{ background: "transparent" }} onClick={() => copy(`${pin.lat}, ${pin.lon}`)}><Bookmark size={11} /> Copy</button>
         <button type="button" className="atlasPrimaryBtn small" style={{ background: "transparent", color: "#ff8a8a" }} onClick={() => onDelete(pin.id)}><Trash2 size={11} /> Delete</button>
       </div>
+    </div>
+  );
+}
+
+// Live World Stats — at-a-glance dashboard combining all the live data
+// streams the app already polls. Shows aircraft / earthquakes / volcanoes /
+// storms / launches counts plus the camera-view local time. Updates
+// automatically as parent state changes (no internal polling needed).
+function LiveStatsWidget({
+  aircraftCount,
+  quakesCount,
+  volcanoesCount,
+  stormsCount,
+  launchesCount,
+  cameraLat,
+  cameraLon,
+}: {
+  aircraftCount: number;
+  quakesCount: number;
+  volcanoesCount: number;
+  stormsCount: number;
+  launchesCount: number;
+  cameraLat: number;
+  cameraLon: number;
+}) {
+  // Tick every minute so the local-time clock advances live (still cheap
+  // — re-render only this widget, not the whole tree).
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+  // Local solar time at camera longitude (1° lon = 4 minutes time)
+  const utcMs = now;
+  const utcDate = new Date(utcMs);
+  const utcHM = `${String(utcDate.getUTCHours()).padStart(2, "0")}:${String(utcDate.getUTCMinutes()).padStart(2, "0")}`;
+  // Local time at camera longitude (rough: doesn't account for DST or
+  // political timezone borders — pure mean solar time)
+  const localMs = (utcDate.getUTCHours() * 3600_000 + utcDate.getUTCMinutes() * 60_000 + cameraLon / 15 * 3600_000 + 86400_000) % 86400_000;
+  const lhh = Math.floor(localMs / 3600_000);
+  const lmm = Math.floor((localMs % 3600_000) / 60_000);
+  const localHM = `${String(lhh).padStart(2, "0")}:${String(lmm).padStart(2, "0")}`;
+  // Day or night at camera point (rough — mean solar; doesn't account
+  // for atmospheric refraction or twilight)
+  const isDay = lhh >= 6 && lhh < 18;
+  return (
+    <div className="atlasLiveStatsWidget" role="status" aria-label="Live world stats">
+      <div className="atlasLiveStatsHead">
+        <Globe2 size={11} />
+        <span>Live world stats</span>
+      </div>
+      <div className="atlasLiveStatsGrid">
+        <div className="atlasLiveStat">
+          <span className="atlasLiveStatIcon">✈</span>
+          <span className="atlasLiveStatValue">{aircraftCount.toLocaleString()}</span>
+          <span className="atlasLiveStatLabel">aircraft</span>
+        </div>
+        <div className="atlasLiveStat">
+          <span className="atlasLiveStatIcon">🌍</span>
+          <span className="atlasLiveStatValue">{quakesCount.toLocaleString()}</span>
+          <span className="atlasLiveStatLabel">quakes</span>
+        </div>
+        <div className="atlasLiveStat">
+          <span className="atlasLiveStatIcon">🌋</span>
+          <span className="atlasLiveStatValue">{volcanoesCount.toLocaleString()}</span>
+          <span className="atlasLiveStatLabel">volcanoes</span>
+        </div>
+        <div className="atlasLiveStat">
+          <span className="atlasLiveStatIcon">🌀</span>
+          <span className="atlasLiveStatValue">{stormsCount.toLocaleString()}</span>
+          <span className="atlasLiveStatLabel">storms</span>
+        </div>
+        <div className="atlasLiveStat">
+          <span className="atlasLiveStatIcon">🚀</span>
+          <span className="atlasLiveStatValue">{launchesCount.toLocaleString()}</span>
+          <span className="atlasLiveStatLabel">launches</span>
+        </div>
+        <div className="atlasLiveStat">
+          <span className="atlasLiveStatIcon">{isDay ? "☀️" : "🌙"}</span>
+          <span className="atlasLiveStatValue">{localHM}</span>
+          <span className="atlasLiveStatLabel">at view</span>
+        </div>
+      </div>
+      <div className="atlasLiveStatsFoot">UTC {utcHM} · {Math.abs(cameraLat).toFixed(1)}°{cameraLat >= 0 ? "N" : "S"} {Math.abs(cameraLon).toFixed(1)}°{cameraLon >= 0 ? "E" : "W"}</div>
     </div>
   );
 }
