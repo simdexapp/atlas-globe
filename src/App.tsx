@@ -4434,6 +4434,84 @@ function App() {
               try { window.localStorage.removeItem("atlas-onboarded-v2"); } catch { /* ignore */ }
               showToast("👋 Welcome to Atlas — Press / for search, Cmd+K for commands, ? for shortcuts");
             }},
+            // ===== Time / date / astronomy quick facts =====
+            { id: "factDateAtView", label: "📅 Date and day-of-week at current view longitude", group: "Tools", icon: Compass, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              // Local solar date at view longitude
+              const utcMs = Date.now();
+              const localMs = utcMs + c.lon / 15 * 3600_000;
+              const local = new Date(localMs);
+              const dow = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][local.getUTCDay()];
+              const dateStr = `${local.getUTCFullYear()}-${String(local.getUTCMonth() + 1).padStart(2, "0")}-${String(local.getUTCDate()).padStart(2, "0")}`;
+              showToast(`📅 ${dow}, ${dateStr} at ${formatLon(c.lon)} (mean solar time, ignores civil DST)`);
+            }},
+            { id: "factSunPosition", label: "🌞 Sun position now at current view (azimuth + altitude)", group: "Tools", icon: SunIcon, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              // Approximate solar position via simple formulae. Lat in
+              // degrees, hour angle from local solar time.
+              const now = new Date();
+              const dayOfYear = Math.floor((now.getTime() - new Date(Date.UTC(now.getUTCFullYear(), 0, 0)).getTime()) / 86400000);
+              // Solar declination (Spencer's approximation)
+              const decl = 23.44 * Math.sin((360/365 * (dayOfYear - 81)) * Math.PI / 180);
+              // Local solar hour
+              const utcHours = now.getUTCHours() + now.getUTCMinutes() / 60;
+              const localSolarH = (utcHours + c.lon / 15 + 24) % 24;
+              const hourAngle = (localSolarH - 12) * 15;  // degrees
+              const latRad = c.lat * Math.PI / 180;
+              const declRad = decl * Math.PI / 180;
+              const haRad = hourAngle * Math.PI / 180;
+              const altRad = Math.asin(Math.sin(latRad) * Math.sin(declRad) + Math.cos(latRad) * Math.cos(declRad) * Math.cos(haRad));
+              const altitude = altRad * 180 / Math.PI;
+              const azRad = Math.atan2(Math.sin(haRad), Math.cos(haRad) * Math.sin(latRad) - Math.tan(declRad) * Math.cos(latRad));
+              const azimuth = (azRad * 180 / Math.PI + 180 + 360) % 360;
+              const aboveHorizon = altitude > 0 ? "above horizon ☀" : altitude > -6 ? "civil twilight 🌆" : altitude > -12 ? "nautical twilight 🌇" : altitude > -18 ? "astronomical twilight 🌃" : "night 🌑";
+              showToast(`🌞 Sun: alt ${altitude.toFixed(1)}° · az ${azimuth.toFixed(0)}° · ${aboveHorizon}`);
+            }},
+            { id: "factMoonPhase", label: "🌙 Moon phase tonight", group: "Tools", icon: SunIcon, run: () => {
+              // Synodic month = 29.530588853 days. Reference: 2000-01-06 18:14 UTC = new moon.
+              const ref = new Date(Date.UTC(2000, 0, 6, 18, 14));
+              const days = (Date.now() - ref.getTime()) / 86400000;
+              const phase = ((days % 29.530588853) + 29.530588853) % 29.530588853;
+              const pct = (phase / 29.530588853 * 100).toFixed(0);
+              const labels = [
+                { n: 0, name: "🌑 New moon" },
+                { n: 1, name: "🌒 Waxing crescent" },
+                { n: 7.4, name: "🌓 First quarter" },
+                { n: 11, name: "🌔 Waxing gibbous" },
+                { n: 14.77, name: "🌕 Full moon" },
+                { n: 18, name: "🌖 Waning gibbous" },
+                { n: 22.1, name: "🌗 Last quarter" },
+                { n: 26, name: "🌘 Waning crescent" },
+              ];
+              let bestLabel = labels[0];
+              let bestDist = Infinity;
+              for (const l of labels) {
+                const d = Math.min(Math.abs(phase - l.n), 29.5 - Math.abs(phase - l.n));
+                if (d < bestDist) { bestDist = d; bestLabel = l; }
+              }
+              const ageDays = phase.toFixed(1);
+              showToast(`${bestLabel.name} · age ${ageDays} days · ${pct}% through cycle`);
+            }},
+            { id: "factDayOfYear", label: "📊 Day of year + week of year + season at current view", group: "Tools", icon: Compass, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const now = new Date();
+              const start = new Date(Date.UTC(now.getUTCFullYear(), 0, 0));
+              const dayOfYear = Math.floor((now.getTime() - start.getTime()) / 86400000);
+              const weekOfYear = Math.ceil(dayOfYear / 7);
+              // Northern hemisphere astronomical seasons (approx)
+              const month = now.getUTCMonth() + 1;
+              const day = now.getUTCDate();
+              const isNorth = c.lat >= 0;
+              let season: string;
+              if ((month === 12 && day >= 21) || month <= 2 || (month === 3 && day < 20)) season = isNorth ? "❄ Winter" : "☀ Summer";
+              else if ((month === 3 && day >= 20) || (month >= 4 && month <= 5) || (month === 6 && day < 21)) season = isNorth ? "🌷 Spring" : "🍂 Autumn";
+              else if ((month === 6 && day >= 21) || (month >= 7 && month <= 8) || (month === 9 && day < 23)) season = isNorth ? "☀ Summer" : "❄ Winter";
+              else season = isNorth ? "🍂 Autumn" : "🌷 Spring";
+              showToast(`📊 Day ${dayOfYear} of ${now.getUTCFullYear()} · Week ${weekOfYear} · ${season} (${isNorth ? "N hemisphere" : "S hemisphere"})`);
+            }},
             // ===== One-click themed view presets =====
             // Each preset turns ON a curated set of layers (and turns OFF
             // unrelated ones) to switch the entire view's vibe instantly.
