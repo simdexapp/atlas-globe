@@ -191,6 +191,8 @@ type LayerVisibility = {
   // Coordinates widget — multiple format outputs of current camera lat/lon
   // (DD, DMS, Maidenhead grid, Mercator XY, antipode). Educational.
   coordinates: boolean;
+  // Quick Layer Toggles widget — 6-button remote for common overlays.
+  quickToggles: boolean;
 };
 
 type GlobeSettings = {
@@ -526,6 +528,7 @@ const defaultLayers: LayerVisibility = {
   liveStats: false,
   distanceAnchors: false,
   coordinates: false,
+  quickToggles: false,
   // 3D OSM Buildings tileset is heavy and renders with edge outlines
   // that disable imagery draping underneath, painting the screen with
   // dark olive boxes at low altitudes (the user's tear repro). Off by
@@ -4467,6 +4470,7 @@ function App() {
             // Toggle the Distance-to-anchors widget — live distances to 5 cities
             { id: "toggleDistanceAnchors", label: layers.distanceAnchors ? "Hide Distance to anchor cities widget" : "📐 Show Distance to anchor cities widget (NYC/London/Tokyo/Sydney/Cape Town)", group: "Widgets", icon: Compass, run: () => toggleLayer("distanceAnchors") },
             { id: "toggleCoordinates", label: layers.coordinates ? "Hide Coordinates widget" : "📐 Show Coordinates widget (DD/DMS/Maidenhead/Mercator/Antipode)", group: "Widgets", icon: Compass, run: () => toggleLayer("coordinates") },
+            { id: "toggleQuickToggles", label: layers.quickToggles ? "Hide Quick layer toggles widget" : "⚡ Show Quick layer toggles widget (6 common layer buttons)", group: "Widgets", icon: Layers, run: () => toggleLayer("quickToggles") },
             // Show a random tip from the curated TIPS list — useful when
             // discovering features for the first time, or as a periodic
             // reminder of what's available.
@@ -10204,6 +10208,12 @@ ${wpts}
         </Draggable>
       )}
 
+      {layers.quickToggles && (
+        <Draggable id="quickToggles" customizeMode={customizeUiMode} position={widgetPositions.quickToggles} onMove={setWidgetPosition}>
+          <QuickTogglesWidget layers={layers} onToggle={toggleLayer} />
+        </Draggable>
+      )}
+
       {recordingState === "recording" && (
         <div className="atlasRecordIndicator" role="status">
           <span className="atlasRecordDot" /> REC {formatSeconds(recordingSeconds)}
@@ -13114,6 +13124,48 @@ function LiveStatsWidget({
         </div>
       </div>
       <div className="atlasLiveStatsFoot">UTC {utcHM} · {Math.abs(cameraLat).toFixed(1)}°{cameraLat >= 0 ? "N" : "S"} {Math.abs(cameraLon).toFixed(1)}°{cameraLon >= 0 ? "E" : "W"}</div>
+    </div>
+  );
+}
+
+// Quick layer toggles — a small "remote control" panel of 6 buttons
+// for the most-toggled overlays. Saves the user from opening the full
+// Layers inspector tab when they want to flick aircraft / weather /
+// quakes / aurora / ISS / EONET on or off.
+function QuickTogglesWidget({ layers, onToggle }: { layers: LayerVisibility; onToggle: (key: keyof LayerVisibility) => void }) {
+  const toggles: Array<{ key: keyof LayerVisibility; emoji: string; label: string }> = [
+    { key: "aircraft",    emoji: "✈",  label: "Aircraft" },
+    { key: "weather",     emoji: "☁",  label: "Weather" },
+    { key: "earthquakes", emoji: "🌍", label: "Quakes" },
+    { key: "eonet",       emoji: "🔥", label: "Events" },
+    { key: "iss",         emoji: "🛰", label: "ISS" },
+    { key: "aurora",      emoji: "🌌", label: "Aurora" },
+  ];
+  return (
+    <div className="atlasQuickTogglesWidget" role="region" aria-label="Quick layer toggles">
+      <div className="atlasQuickTogglesHead">
+        <Layers size={11} />
+        <span>Quick toggles</span>
+      </div>
+      <div className="atlasQuickTogglesGrid">
+        {toggles.map(({ key, emoji, label }) => {
+          const on = !!layers[key];
+          return (
+            <button
+              key={key}
+              type="button"
+              className={`atlasQuickToggleBtn${on ? " active" : ""}`}
+              onClick={() => onToggle(key)}
+              title={`${on ? "Hide" : "Show"} ${label}`}
+              aria-pressed={on}
+              aria-label={`${label}: ${on ? "on" : "off"}`}
+            >
+              <span className="atlasQuickToggleIcon">{emoji}</span>
+              <span className="atlasQuickToggleLabel">{label}</span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
