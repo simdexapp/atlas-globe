@@ -4915,6 +4915,94 @@ function App() {
             // 📸 Photo gallery — opens a popup with all pins-with-photos
             // as a grid. Click thumbnail to fly to the pin. Personal
             // travel scrapbook view.
+            // 🖼 Generate a shareable photo mosaic — composes all
+            // pins-with-photos onto a single 1200x1200 canvas as a grid,
+            // with location labels overlaid. Downloadable as PNG.
+            // Perfect for Instagram, Twitter, blog hero images.
+            ...(pins.filter(p => p.photo).length > 0 ? [{
+              id: "photoMosaic" as const,
+              label: `🖼 Generate photo mosaic from ${pins.filter(p => p.photo).length} photo pin${pins.filter(p => p.photo).length === 1 ? "" : "s"} (downloadable PNG)`,
+              group: "Tools" as const,
+              icon: Camera,
+              run: async () => {
+                const withPhotos = pins.filter(p => p.photo);
+                if (withPhotos.length === 0) return;
+                showToast("🖼 Generating mosaic…");
+                // Pick grid size based on photo count
+                const cols = withPhotos.length <= 4 ? 2
+                          : withPhotos.length <= 9 ? 3
+                          : withPhotos.length <= 16 ? 4
+                          : 5;
+                const rows = Math.ceil(withPhotos.length / cols);
+                const cellW = 1200 / cols;
+                const cellH = 1200 / cols;     // square cells
+                const canvas = document.createElement("canvas");
+                canvas.width = 1200;
+                canvas.height = cellH * rows;
+                const ctx = canvas.getContext("2d");
+                if (!ctx) { showToast("Canvas unavailable"); return; }
+                // Background gradient (matches dark theme)
+                const bg = ctx.createLinearGradient(0, 0, 0, canvas.height);
+                bg.addColorStop(0, "#0a1120");
+                bg.addColorStop(1, "#050a14");
+                ctx.fillStyle = bg;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                // Load + draw each photo
+                await Promise.all(withPhotos.slice(0, cols * rows).map((p, i) => new Promise<void>((resolve) => {
+                  const img = new Image();
+                  img.onload = () => {
+                    const r = Math.floor(i / cols);
+                    const c = i % cols;
+                    const x = c * cellW;
+                    const y = r * cellH;
+                    // Cover-fit
+                    const scale = Math.max(cellW / img.width, cellH / img.height);
+                    const dw = img.width * scale;
+                    const dh = img.height * scale;
+                    const dx = x + (cellW - dw) / 2;
+                    const dy = y + (cellH - dh) / 2;
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.rect(x + 4, y + 4, cellW - 8, cellH - 8);
+                    ctx.clip();
+                    ctx.drawImage(img, dx, dy, dw, dh);
+                    // Bottom-left label overlay
+                    const grad = ctx.createLinearGradient(0, y + cellH - 80, 0, y + cellH);
+                    grad.addColorStop(0, "rgba(0,0,0,0)");
+                    grad.addColorStop(1, "rgba(0,0,0,0.85)");
+                    ctx.fillStyle = grad;
+                    ctx.fillRect(x + 4, y + cellH - 84, cellW - 8, 80);
+                    ctx.fillStyle = "#fff";
+                    ctx.font = "700 18px Inter, sans-serif";
+                    ctx.fillText(p.label.slice(0, 24), x + 16, y + cellH - 36);
+                    ctx.fillStyle = "rgba(255,255,255,0.7)";
+                    ctx.font = "12px ui-monospace, monospace";
+                    ctx.fillText(`${p.lat.toFixed(2)}, ${p.lon.toFixed(2)}${p.date ? " · " + p.date : ""}`, x + 16, y + cellH - 16);
+                    ctx.restore();
+                    resolve();
+                  };
+                  img.onerror = () => resolve();
+                  img.src = p.photo!;
+                })));
+                // Watermark in corner
+                ctx.fillStyle = "rgba(255,255,255,0.5)";
+                ctx.font = "700 14px Inter, sans-serif";
+                ctx.textAlign = "right";
+                ctx.fillText("ATLAS · " + withPhotos.length + " places", canvas.width - 16, canvas.height - 14);
+                ctx.textAlign = "left";
+                // Download
+                canvas.toBlob((blob) => {
+                  if (!blob) { showToast("Couldn't generate mosaic"); return; }
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `atlas-mosaic-${new Date().toISOString().slice(0, 10)}.png`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                  showToast(`🖼 Mosaic ready · ${cols}×${rows} grid · downloaded`);
+                }, "image/png");
+              },
+            }] : []),
             ...(pins.filter(p => p.photo).length > 0 ? [{
               id: "photoGallery" as const,
               label: `📸 Open photo gallery (${pins.filter(p => p.photo).length} pin${pins.filter(p => p.photo).length === 1 ? "" : "s"} with photos)`,
