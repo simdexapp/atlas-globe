@@ -3499,7 +3499,10 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
    6 financial centers at a glance with market-open status badge. */
 .atlasWorldClocksWidget {
   position: fixed;
-  top: 88px;
+  /* Anchored to the BOTTOM-LEFT (above the pin-mini list) so it never
+     collides with the aircraft flight controls panel that occupies
+     top-left when the aircraft layer is on. */
+  bottom: 60px;
   left: 64px;
   z-index: 6;
   width: 240px;

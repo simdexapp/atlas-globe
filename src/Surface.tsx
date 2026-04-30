@@ -2608,11 +2608,18 @@ export default function Surface({
           color,
           rotation: rotationRad,
           alignedAxis: Cesium.Cartesian3.UNIT_Z,
-          scaleByDistance: new Cesium.NearFarScalar(1.0e3, 0.5, 5.0e6, 0.18),
+          // Bumped close-range scale 0.5 → 0.85 and far-range 0.18 → 0.32
+          // so planes are bigger AND have a bigger click hitbox. Users were
+          // missing tiny planes when trying to click them.
+          scaleByDistance: new Cesium.NearFarScalar(1.0e3, 0.85, 5.0e6, 0.32),
           translucencyByDistance: new Cesium.NearFarScalar(5.0e5, 1.0, 1.0e7, 0.4),
           verticalOrigin: Cesium.VerticalOrigin.CENTER,
           horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
           sizeInMeters: false,
+          // Disable depth test so planes always render in front of terrain
+          // and pin entities, making them clickable even when ground-level
+          // pins overlap.
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
         });
         byIcao.set(a.icao24, bb);
         billboardIndex.set(bb, a.icao24);
