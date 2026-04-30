@@ -57,6 +57,7 @@ import { REGIONAL_CITIES } from "./citiesRegional";
 import { LANDMARKS } from "./landmarks";
 import { AIRPORTS } from "./airports";
 import { COUNTRY_CENTROIDS } from "./countries";
+import { SUBMARINE_CABLES } from "./submarineCables";
 import { aircraftTypeName } from "./aircraftTypes";
 
 const SurfaceMode = lazy(() => import("./Surface"));
@@ -156,6 +157,9 @@ type LayerVisibility = {
   // Ambient Earth mode — kiosk-style display: hides chrome, auto-orbits,
   // shows a single comprehensive live-data widget for big-screen displays.
   ambientEarth: boolean;
+  // Submarine cable map — major undersea fiber routes as polylines
+  // (Surface mode only).
+  submarineCables: boolean;
 };
 
 type GlobeSettings = {
@@ -297,6 +301,7 @@ const defaultLayers: LayerVisibility = {
   worldClocks: false,
   viewHistory: false,
   ambientEarth: false,
+  submarineCables: false,
   // 3D OSM Buildings tileset is heavy and renders with edge outlines
   // that disable imagery draping underneath, painting the screen with
   // dark olive boxes at low altitudes (the user's tear repro). Off by
@@ -3626,6 +3631,7 @@ function App() {
               resetHeadingCommand={resetHeadingCmd}
               showLandmarks={layers.landmarks}
               showAirports={layers.airports}
+              submarineCables={layers.submarineCables ? SUBMARINE_CABLES : undefined}
             />
           </Suspense>
         )}
@@ -4210,6 +4216,10 @@ function App() {
             { id: "layerBuildings", label: layers.buildings3D ? "Hide 3D buildings (Surface)" : "Show 3D buildings (Surface)", group: "Layers", icon: Mountain, run: () => toggleLayer("buildings3D") },
             { id: "layerTerminator", label: layers.terminator ? "Hide day/night terminator" : "Show day/night terminator", group: "Layers", icon: Compass, run: () => toggleLayer("terminator") },
             { id: "layerSubsolar", label: layers.subsolar ? "Hide subsolar point" : "Show subsolar point (sun overhead)", group: "Layers", icon: SunIcon, run: () => toggleLayer("subsolar") },
+            { id: "layerSubmarineCables", label: layers.submarineCables ? "Hide submarine cable map" : "🌊 Show submarine fiber cables (~30 major routes — Surface mode only)", group: "Layers", icon: Sparkles, run: () => {
+              if (mode !== "surface") setMode("surface");
+              toggleLayer("submarineCables");
+            }},
             // Reset every layer to its default state — useful after a
             // user has toggled many things on and wants a clean slate
             // without losing pins/bookmarks (those don't reset).
@@ -9684,6 +9694,7 @@ function LayersPanel({ layers, onToggle, bordersLoading, mode }: { layers: Layer
     { key: "buildings3D", label: "Cesium 3D buildings (Surface mode)", icon: Mountain, modes: ["surface"] },
     { key: "landmarks", label: "Famous landmarks (Cesium Surface)", icon: Mountain, modes: ["surface"] },
     { key: "airports", label: "Major airports (Cesium Surface)", icon: Plane, modes: ["surface"] },
+    { key: "submarineCables", label: "Submarine fiber cables (~30 major undersea routes)", icon: Sparkles, modes: ["surface"] },
     // ===== Widget toggles (always relevant) =====
     { key: "compass", label: "Compass / heading widget", icon: Navigation },
     { key: "miniMap", label: "Mini-map widget", icon: Compass }

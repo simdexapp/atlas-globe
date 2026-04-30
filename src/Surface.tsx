@@ -133,7 +133,8 @@ export default function Surface({
   bordersGeoJson,
   resetHeadingCommand,
   showLandmarks,
-  showAirports
+  showAirports,
+  submarineCables,
 }: {
   token: string;
   onCameraChange: (lat: number, lon: number, altKm: number) => void;
@@ -236,6 +237,16 @@ export default function Surface({
   showLandmarks?: boolean;
   // Toggles the major-airports layer (~80 hubs).
   showAirports?: boolean;
+  // Major submarine fiber-optic cables — array of cable definitions.
+  // When present, renders each as a glowing cyan polyline + name label
+  // at the midpoint. undefined = layer off.
+  submarineCables?: Array<{
+    id: string;
+    name: string;
+    fromLat: number; fromLon: number;
+    toLat: number;   toLon: number;
+    capacityTbps?: number;
+  }>;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Cesium.Viewer | null>(null);
@@ -2095,6 +2106,67 @@ export default function Surface({
       landmarkEntitiesRef.current.push(e);
     }
   }, [showLandmarks]);
+
+  // ===== Submarine cables layer =====
+  // Major undersea fiber-optic cables rendered as glowing cyan polylines
+  // (great-circle arcs) between landing-station coordinates. Each cable
+  // gets a name + capacity label at the midpoint, hidden past 8000km
+  // so the globe-wide view doesn't drown in text.
+  const submarineCableEntitiesRef = useRef<Cesium.Entity[]>([]);
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    for (const e of submarineCableEntitiesRef.current) viewer.entities.remove(e);
+    submarineCableEntitiesRef.current = [];
+    if (!submarineCables) return;
+    for (const c of submarineCables) {
+      // The polyline itself — clamped to ground (terrain follows ocean
+      // floor approximately at sea level), great-circle arc.
+      const line = viewer.entities.add({
+        id: `cable-${c.id}`,
+        polyline: {
+          positions: [
+            Cesium.Cartesian3.fromDegrees(c.fromLon, c.fromLat),
+            Cesium.Cartesian3.fromDegrees(c.toLon, c.toLat),
+          ],
+          width: 2,
+          arcType: Cesium.ArcType.GEODESIC,
+          material: new Cesium.PolylineGlowMaterialProperty({
+            color: Cesium.Color.fromCssColorString("rgba(80, 220, 255, 0.85)"),
+            glowPower: 0.18,
+            taperPower: 0.95,
+          }),
+          clampToGround: true,
+        },
+      });
+      submarineCableEntitiesRef.current.push(line);
+      // Midpoint label
+      const midLat = (c.fromLat + c.toLat) / 2;
+      const midLon = (c.fromLon + c.toLon) / 2;
+      const labelText = c.capacityTbps ? `${c.name} · ${c.capacityTbps} Tbps` : c.name;
+      const lbl = viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(midLon, midLat, 0),
+        id: `cable-lbl-${c.id}`,
+        label: {
+          text: labelText,
+          font: "600 10.5px ui-monospace, monospace",
+          fillColor: Cesium.Color.fromCssColorString("rgba(140, 230, 255, 0.95)"),
+          outlineColor: Cesium.Color.fromCssColorString("rgba(0,15,30,0.92)"),
+          outlineWidth: 4,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          verticalOrigin: Cesium.VerticalOrigin.CENTER,
+          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+          showBackground: true,
+          backgroundColor: Cesium.Color.fromCssColorString("rgba(0, 15, 30, 0.78)"),
+          backgroundPadding: new Cesium.Cartesian2(6, 3),
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 8_000_000),
+        },
+      });
+      submarineCableEntitiesRef.current.push(lbl);
+    }
+  }, [submarineCables]);
 
   // ===== Major airports layer =====
   // ~80 IATA hub airports as small ✈ markers + labels. Visible inside
