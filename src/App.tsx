@@ -80,6 +80,15 @@ type Pin = {
   // marker in Atlas mode. Mostly used for pinning aircraft positions
   // or 'I am here at 36,000ft' style annotations.
   altitudeM?: number;
+  // Optional photo as data URL — uploaded by user, downsampled to
+  // ~800px max edge and ~80KB JPEG to stay within localStorage limits.
+  // Turns pins into a personal travel journal: 'Eiffel Tower 2024
+  // (with photo)'.
+  photo?: string;
+  // Optional date string the user associates with this pin (visited on,
+  // event happened on). Different from createdAt (when pin was made).
+  // ISO format YYYY-MM-DD.
+  date?: string;
 };
 
 const PIN_COLORS = ["#5cb5ff", "#ffd66b", "#ff7be0", "#7cffb1", "#ff8a4d", "#a8a8ff", "#ff5a5a", "#ffffff"];
@@ -2247,6 +2256,55 @@ function App() {
   const updatePin = useCallback((id: string, patch: Partial<Pin>) => {
     setPins((prev) => prev.map((p) => p.id === id ? { ...p, ...patch } : p));
   }, []);
+
+  // Photo upload to a pin — reads a file, downsamples via canvas to
+  // 800px max edge, converts to ~80KB JPEG data URL, stores on the pin.
+  // localStorage caps around 5-10MB so we cap individual photos to keep
+  // dozens of pins-with-photos workable.
+  const attachPhotoToPin = useCallback((pinId: string) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      try {
+        // Read the file
+        const reader = new FileReader();
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+        // Downsample via canvas
+        const img = new Image();
+        await new Promise<void>((resolve, reject) => {
+          img.onload = () => resolve();
+          img.onerror = reject;
+          img.src = dataUrl;
+        });
+        const maxEdge = 800;
+        const scale = Math.min(1, maxEdge / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { showToast("Couldn't process image"); return; }
+        ctx.drawImage(img, 0, 0, w, h);
+        // JPEG at quality 0.78 — gives roughly 30-100KB for 800x600 photos
+        const compressed = canvas.toDataURL("image/jpeg", 0.78);
+        const sizeKb = Math.round(compressed.length * 0.75 / 1024);  // base64 → bytes
+        // Store
+        updatePin(pinId, { photo: compressed });
+        showToast(`📷 Photo attached (${w}×${h}, ~${sizeKb}kb)`);
+      } catch (e) {
+        showToast(`Photo upload failed: ${(e as Error).message}`);
+      }
+    };
+    input.click();
+  }, [updatePin, showToast]);
 
   // Time-lapse animation: scrub date over a range and export as GIF
   const runTimelapse = useCallback(async (days: number, fps: number) => {
@@ -4506,6 +4564,108 @@ function App() {
                 setTimeout(tick, 500);
               };
               tick();
+            }},
+            // ===== Personal Earth Diary — Year in review =====
+            // Like Spotify Wrapped for travel: walks pins by date,
+            // computes total distance traveled, countries visited,
+            // furthest point, etc. Animated console output.
+            { id: "yearInReview", label: "📊 Year in review — your travels this year (story report)", group: "Tools", icon: Sparkles, run: () => {
+              const year = new Date().getUTCFullYear();
+              const yearStart = Date.UTC(year, 0, 1);
+              const yearEnd = Date.UTC(year + 1, 0, 1);
+              // Use pin createdAt OR pin.date (parse) to find pins this year
+              const yearPins = pins.filter(p => {
+                if (p.date) {
+                  const t = Date.parse(p.date + "T00:00:00Z");
+                  return t >= yearStart && t < yearEnd;
+                }
+                return p.createdAt >= yearStart && p.createdAt < yearEnd;
+              });
+              if (yearPins.length === 0) {
+                showToast(`📊 No pins from ${year} yet — start your travel journal!`);
+                return;
+              }
+              // Total path distance
+              const sorted = [...yearPins].sort((a, b) => {
+                const ta = a.date ? Date.parse(a.date + "T00:00:00Z") : a.createdAt;
+                const tb = b.date ? Date.parse(b.date + "T00:00:00Z") : b.createdAt;
+                return ta - tb;
+              });
+              let totalKm = 0;
+              for (let i = 1; i < sorted.length; i++) {
+                totalKm += haversineKm(sorted[i-1].lat, sorted[i-1].lon, sorted[i].lat, sorted[i].lon);
+              }
+              // Bounding extent
+              let minLat = 90, maxLat = -90, minLon = 180, maxLon = -180;
+              for (const p of yearPins) {
+                if (p.lat < minLat) minLat = p.lat;
+                if (p.lat > maxLat) maxLat = p.lat;
+                if (p.lon < minLon) minLon = p.lon;
+                if (p.lon > maxLon) maxLon = p.lon;
+              }
+              // Furthest pair
+              let furthest = { km: 0, a: yearPins[0], b: yearPins[0] };
+              for (let i = 0; i < yearPins.length; i++) {
+                for (let j = i + 1; j < yearPins.length; j++) {
+                  const km = haversineKm(yearPins[i].lat, yearPins[i].lon, yearPins[j].lat, yearPins[j].lon);
+                  if (km > furthest.km) furthest = { km, a: yearPins[i], b: yearPins[j] };
+                }
+              }
+              // Photos count
+              const withPhotos = yearPins.filter(p => p.photo).length;
+              // Northmost / southmost
+              const north = yearPins.reduce((m, p) => p.lat > m.lat ? p : m, yearPins[0]);
+              const south = yearPins.reduce((m, p) => p.lat < m.lat ? p : m, yearPins[0]);
+              const report = `📊 Your ${year} on Atlas Globe\n\n` +
+                `  Pins this year:    ${yearPins.length}\n` +
+                `  Photos attached:   ${withPhotos}\n` +
+                `  Total path:        ${formatDistKm(totalKm, unitsImperial)}\n` +
+                `  Lat span:          ${(maxLat - minLat).toFixed(1)}°\n` +
+                `  Lon span:          ${(maxLon - minLon).toFixed(1)}°\n` +
+                `  Furthest pair:     ${furthest.a.label} ↔ ${furthest.b.label} (${formatDistKm(furthest.km, unitsImperial)})\n` +
+                `  Northmost:         ${north.label} at ${formatLat(north.lat)}\n` +
+                `  Southmost:         ${south.label} at ${formatLat(south.lat)}\n` +
+                `\n  Your pins, in order:\n` +
+                sorted.map((p, i) => `  ${i + 1}. ${p.label} (${p.date || new Date(p.createdAt).toISOString().slice(0, 10)})`).join("\n");
+              console.log(report);
+              showToast(`📊 ${year}: ${yearPins.length} pins · ${formatDistKm(totalKm, unitsImperial)} total · furthest ${furthest.a.label}↔${furthest.b.label} — full report in console`);
+            }},
+            // ===== Custom CSV → Layer studio =====
+            // Power-user feature: paste a CSV of points and they
+            // become live pins on the globe. Skip header optionally.
+            { id: "csvImport", label: "📑 Import points from CSV (paste lat,lon,label)", group: "Tools", icon: BookmarkPlus, run: () => {
+              const csv = window.prompt(
+                "Paste CSV (one point per line, format: lat,lon,label[,color])\nExample:\n40.7128,-74.0060,New York\n51.5074,-0.1278,London\n\nOr just lat,lon (label auto):",
+                ""
+              );
+              if (!csv) return;
+              const lines = csv.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+              const newPins: Pin[] = [];
+              const stamp = Date.now();
+              for (const line of lines) {
+                // Skip header line if it looks like one
+                if (/^[a-zA-Z]/.test(line)) continue;
+                const parts = line.split(",").map(p => p.trim());
+                if (parts.length < 2) continue;
+                const lat = parseFloat(parts[0]);
+                const lon = parseFloat(parts[1]);
+                if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+                if (Math.abs(lat) > 90 || Math.abs(lon) > 180) continue;
+                const label = parts[2] || `${lat.toFixed(2)}, ${lon.toFixed(2)}`;
+                const color = parts[3] && /^#[0-9a-fA-F]{6}$/.test(parts[3]) ? parts[3]
+                  : PIN_COLORS[Math.floor(Math.random() * PIN_COLORS.length)];
+                newPins.push({
+                  id: `csv-${stamp}-${newPins.length}`,
+                  lat, lon, label, color,
+                  createdAt: stamp + newPins.length,
+                });
+              }
+              if (newPins.length === 0) {
+                showToast("No valid coordinates found in CSV");
+                return;
+              }
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`📑 Imported ${newPins.length} pin${newPins.length === 1 ? "" : "s"} from CSV`);
             }},
             // ===== Backup / restore all user data =====
             // Single bundled export of EVERYTHING the user has created:
@@ -6833,6 +6993,44 @@ function App() {
                 if (newNote === null) return;       // cancel
                 updatePin(selectedPin, { note: newNote.trim() || undefined });
                 showToast(newNote.trim() ? `📝 Note saved` : `📝 Note cleared`);
+              },
+            }, {
+              id: "pinPhoto" as const,
+              label: "📷 Attach photo to selected pin (downsamples to ~80kb)",
+              group: "Tools" as const,
+              icon: Camera,
+              run: () => {
+                const p = pins.find((x) => x.id === selectedPin);
+                if (!p) return;
+                attachPhotoToPin(selectedPin);
+              },
+            }, {
+              id: "pinPhotoRemove" as const,
+              label: "🚫 Remove photo from selected pin",
+              group: "Tools" as const,
+              icon: Camera,
+              run: () => {
+                const p = pins.find((x) => x.id === selectedPin);
+                if (!p?.photo) { showToast("This pin has no photo"); return; }
+                updatePin(selectedPin, { photo: undefined });
+                showToast("📷 Photo removed");
+              },
+            }, {
+              id: "pinDate" as const,
+              label: "📅 Set visit date for selected pin (YYYY-MM-DD)",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const p = pins.find((x) => x.id === selectedPin);
+                if (!p) return;
+                const cur = p.date || new Date().toISOString().slice(0, 10);
+                const inp = window.prompt(`Visit date for "${p.label}" (YYYY-MM-DD, blank to clear):`, cur);
+                if (inp === null) return;
+                const trimmed = inp.trim();
+                if (!trimmed) { updatePin(selectedPin, { date: undefined }); showToast("📅 Date cleared"); return; }
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) { showToast("Use YYYY-MM-DD format"); return; }
+                updatePin(selectedPin, { date: trimmed });
+                showToast(`📅 Visit date: ${trimmed}`);
               },
             }, {
               id: "pinAltitude" as const,
@@ -10023,6 +10221,12 @@ function PinInfoCard({ pin, onClose, onDelete, onUpdate, onFly }: { pin: Pin; on
         {sun === "polar-day" && <div><span>Today</span><strong>Polar day (sun never sets)</strong></div>}
         {sun === "polar-night" && <div><span>Today</span><strong>Polar night (sun never rises)</strong></div>}
       </div>
+      {pin.photo && (
+        <div className="atlasPinPhoto">
+          <img src={pin.photo} alt={`Photo of ${pin.label}`} />
+          {pin.date && <span className="atlasPinPhotoDate">📅 {pin.date}</span>}
+        </div>
+      )}
       {wiki && wiki.extract && (
         <div className="atlasPinWiki">
           <p>{wiki.extract.length > 200 ? wiki.extract.slice(0, 197) + "…" : wiki.extract}</p>
