@@ -4794,6 +4794,59 @@ function App() {
               const fractionEarth = horizonKm / (Math.PI * EARTH_RADIUS_KM);
               showToast(`↻ From ${formatDistKm(h, unitsImperial)} altitude, horizon is ${formatDistKm(horizonKm, unitsImperial)} away — ${(fractionEarth * 100).toFixed(1)}% of the way around Earth`);
             }},
+            // ===== Pin creation utilities =====
+            { id: "pinDropRandom", label: "🎲 Drop a pin at a random famous landmark", group: "Tools", icon: BookmarkPlus, run: () => {
+              if (LANDMARKS.length === 0) return;
+              const l = LANDMARKS[Math.floor(Math.random() * LANDMARKS.length)];
+              const id = `pin-rand-${Date.now()}`;
+              const color = PIN_COLORS[Math.floor(Math.random() * PIN_COLORS.length)];
+              const newPin: Pin = { id, lat: l.lat, lon: l.lon, label: l.name, color, createdAt: Date.now() };
+              setPins((prev) => [...prev, newPin]);
+              setSelectedPin(id);
+              setFlyTo((c) => ({ id: c.id + 1, lat: l.lat, lon: l.lon, altKm: l.zoomKm }));
+              showToast(`📍 Dropped pin at ${l.emoji} ${l.name}`);
+            }},
+            { id: "pinDropAtAntipode", label: "🌐 Drop a pin at antipode of current view", group: "Tools", icon: BookmarkPlus, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const aLat = -c.lat;
+              const aLon = c.lon > 0 ? c.lon - 180 : c.lon + 180;
+              const id = `pin-anti-${Date.now()}`;
+              const color = PIN_COLORS[Math.floor(Math.random() * PIN_COLORS.length)];
+              const newPin: Pin = { id, lat: aLat, lon: aLon, label: `Antipode of ${formatLat(c.lat)} ${formatLon(c.lon)}`, color, createdAt: Date.now() };
+              setPins((prev) => [...prev, newPin]);
+              setSelectedPin(id);
+              setFlyTo((p) => ({ id: p.id + 1, lat: aLat, lon: aLon, altKm: 5000 }));
+              showToast(`🌐 Dropped pin at antipode: ${formatLat(aLat)} ${formatLon(aLon)}`);
+            }},
+            // Drop pin at the geographic centroid of all current pins.
+            // Useful for "where's my travel center of mass" + having that
+            // computed location available for further calculations.
+            ...(pins.length >= 2 ? [{
+              id: "pinDropAtCentroid" as const,
+              label: `🎯 Drop a pin at geographic centroid of ${pins.length} pins`,
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                let x = 0, y = 0, z = 0;
+                for (const p of pins) {
+                  const phi = p.lat * Math.PI / 180;
+                  const lam = p.lon * Math.PI / 180;
+                  x += Math.cos(phi) * Math.cos(lam);
+                  y += Math.cos(phi) * Math.sin(lam);
+                  z += Math.sin(phi);
+                }
+                x /= pins.length; y /= pins.length; z /= pins.length;
+                const lat = Math.atan2(z, Math.sqrt(x*x + y*y)) * 180 / Math.PI;
+                const lon = Math.atan2(y, x) * 180 / Math.PI;
+                const id = `pin-centroid-${Date.now()}`;
+                const newPin: Pin = { id, lat, lon, label: `Centroid of ${pins.length} pins`, color: "#7cffb1", createdAt: Date.now() };
+                setPins((prev) => [...prev, newPin]);
+                setSelectedPin(id);
+                setFlyTo((c) => ({ id: c.id + 1, lat, lon, altKm: 5000 }));
+                showToast(`🎯 Dropped centroid pin: ${formatLat(lat)} ${formatLon(lon)}`);
+              },
+            }] : []),
             // ===== Navigation utilities =====
             { id: "navEquator", label: "🎯 Fly to equator at current longitude", group: "View", icon: Compass, run: () => {
               const c = cameraStateRef.current;
