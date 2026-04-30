@@ -748,6 +748,8 @@ export default function Surface({
       //   1) Aircraft billboard (drillPick the stack, prefer registered icao24)
       //   2) Country / landmark / airport entity label → flyTo
       //   3) Fallback: terrain pick → onPickLocation (info toast / pin drop)
+      // eslint-disable-next-line no-console
+      console.log("[atlas-click] left-click at", click.position.x, click.position.y);
 
       // ---- 1) Aircraft drillPick ----
       // drillPick walks every primitive under the click point, sorted by
@@ -755,10 +757,14 @@ export default function Surface({
       // ensures the underlying billboard is reachable even when overlay
       // decor (selection ring, callsign label, 3D model boxes) covers it.
       const drillPickCandidates = viewer.scene.drillPick(click.position, 24);
+      // eslint-disable-next-line no-console
+      console.log("[atlas-click] drillPick candidates:", drillPickCandidates.length, "billboard-index size:", aircraftBillboardIndexRef.current.size);
       for (const cand of drillPickCandidates) {
         if (cand?.primitive instanceof Cesium.Billboard) {
           const icao = aircraftBillboardIndexRef.current.get(cand.primitive);
           if (icao && onSelectAircraftRef.current) {
+            // eslint-disable-next-line no-console
+            console.log("[atlas-click] AIRCRAFT HIT:", icao);
             onSelectAircraftRef.current(icao);
             return;
           }
