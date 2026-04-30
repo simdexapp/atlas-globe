@@ -4803,6 +4803,83 @@ function App() {
               const fractionEarth = horizonKm / (Math.PI * EARTH_RADIUS_KM);
               showToast(`↻ From ${formatDistKm(h, unitsImperial)} altitude, horizon is ${formatDistKm(horizonKm, unitsImperial)} away — ${(fractionEarth * 100).toFixed(1)}% of the way around Earth`);
             }},
+            // ===== Country quick-facts =====
+            // Look up the country at current view + show capital +
+            // currency + calling code in one toast. Uses cached reverse-
+            // geocode for the country detection, then a static lookup
+            // table for the metadata.
+            { id: "factCountryHere", label: "🌍 Country at current view + capital + currency + calling code", group: "Tools", icon: Globe2, run: async () => {
+              const c = cameraStateRef.current;
+              if (!c) { showToast("No camera state"); return; }
+              showToast("🌍 Looking up this country…");
+              const data = await cachedReverseGeocode(c.lat, c.lon, 3);
+              const code = data?.address?.country_code?.toUpperCase();
+              const name = data?.address?.country;
+              if (!code || !name) { showToast("📍 No country detected (probably ocean/Antarctic)"); return; }
+              // Curated lookup of the ~80 most-used countries. Falls back
+              // to "🌍 X" with just the name when not in the table.
+              const facts: Record<string, { capital: string; currency: string; calling: string; flag: string }> = {
+                US: { capital: "Washington, DC",   currency: "USD",  calling: "+1",     flag: "🇺🇸" },
+                CA: { capital: "Ottawa",           currency: "CAD",  calling: "+1",     flag: "🇨🇦" },
+                MX: { capital: "Mexico City",      currency: "MXN",  calling: "+52",    flag: "🇲🇽" },
+                GB: { capital: "London",           currency: "GBP",  calling: "+44",    flag: "🇬🇧" },
+                FR: { capital: "Paris",            currency: "EUR",  calling: "+33",    flag: "🇫🇷" },
+                DE: { capital: "Berlin",           currency: "EUR",  calling: "+49",    flag: "🇩🇪" },
+                IT: { capital: "Rome",             currency: "EUR",  calling: "+39",    flag: "🇮🇹" },
+                ES: { capital: "Madrid",           currency: "EUR",  calling: "+34",    flag: "🇪🇸" },
+                PT: { capital: "Lisbon",           currency: "EUR",  calling: "+351",   flag: "🇵🇹" },
+                NL: { capital: "Amsterdam",        currency: "EUR",  calling: "+31",    flag: "🇳🇱" },
+                BE: { capital: "Brussels",         currency: "EUR",  calling: "+32",    flag: "🇧🇪" },
+                CH: { capital: "Bern",             currency: "CHF",  calling: "+41",    flag: "🇨🇭" },
+                AT: { capital: "Vienna",           currency: "EUR",  calling: "+43",    flag: "🇦🇹" },
+                IE: { capital: "Dublin",           currency: "EUR",  calling: "+353",   flag: "🇮🇪" },
+                SE: { capital: "Stockholm",        currency: "SEK",  calling: "+46",    flag: "🇸🇪" },
+                NO: { capital: "Oslo",             currency: "NOK",  calling: "+47",    flag: "🇳🇴" },
+                DK: { capital: "Copenhagen",       currency: "DKK",  calling: "+45",    flag: "🇩🇰" },
+                FI: { capital: "Helsinki",         currency: "EUR",  calling: "+358",   flag: "🇫🇮" },
+                IS: { capital: "Reykjavík",        currency: "ISK",  calling: "+354",   flag: "🇮🇸" },
+                PL: { capital: "Warsaw",           currency: "PLN",  calling: "+48",    flag: "🇵🇱" },
+                CZ: { capital: "Prague",           currency: "CZK",  calling: "+420",   flag: "🇨🇿" },
+                GR: { capital: "Athens",           currency: "EUR",  calling: "+30",    flag: "🇬🇷" },
+                TR: { capital: "Ankara",           currency: "TRY",  calling: "+90",    flag: "🇹🇷" },
+                RU: { capital: "Moscow",           currency: "RUB",  calling: "+7",     flag: "🇷🇺" },
+                CN: { capital: "Beijing",          currency: "CNY",  calling: "+86",    flag: "🇨🇳" },
+                JP: { capital: "Tokyo",            currency: "JPY",  calling: "+81",    flag: "🇯🇵" },
+                KR: { capital: "Seoul",            currency: "KRW",  calling: "+82",    flag: "🇰🇷" },
+                IN: { capital: "New Delhi",        currency: "INR",  calling: "+91",    flag: "🇮🇳" },
+                ID: { capital: "Jakarta",          currency: "IDR",  calling: "+62",    flag: "🇮🇩" },
+                TH: { capital: "Bangkok",          currency: "THB",  calling: "+66",    flag: "🇹🇭" },
+                VN: { capital: "Hanoi",            currency: "VND",  calling: "+84",    flag: "🇻🇳" },
+                PH: { capital: "Manila",           currency: "PHP",  calling: "+63",    flag: "🇵🇭" },
+                MY: { capital: "Kuala Lumpur",     currency: "MYR",  calling: "+60",    flag: "🇲🇾" },
+                SG: { capital: "Singapore",        currency: "SGD",  calling: "+65",    flag: "🇸🇬" },
+                AU: { capital: "Canberra",         currency: "AUD",  calling: "+61",    flag: "🇦🇺" },
+                NZ: { capital: "Wellington",       currency: "NZD",  calling: "+64",    flag: "🇳🇿" },
+                BR: { capital: "Brasília",         currency: "BRL",  calling: "+55",    flag: "🇧🇷" },
+                AR: { capital: "Buenos Aires",     currency: "ARS",  calling: "+54",    flag: "🇦🇷" },
+                CL: { capital: "Santiago",         currency: "CLP",  calling: "+56",    flag: "🇨🇱" },
+                CO: { capital: "Bogotá",           currency: "COP",  calling: "+57",    flag: "🇨🇴" },
+                PE: { capital: "Lima",             currency: "PEN",  calling: "+51",    flag: "🇵🇪" },
+                EG: { capital: "Cairo",            currency: "EGP",  calling: "+20",    flag: "🇪🇬" },
+                ZA: { capital: "Pretoria",         currency: "ZAR",  calling: "+27",    flag: "🇿🇦" },
+                NG: { capital: "Abuja",            currency: "NGN",  calling: "+234",   flag: "🇳🇬" },
+                KE: { capital: "Nairobi",          currency: "KES",  calling: "+254",   flag: "🇰🇪" },
+                MA: { capital: "Rabat",            currency: "MAD",  calling: "+212",   flag: "🇲🇦" },
+                AE: { capital: "Abu Dhabi",        currency: "AED",  calling: "+971",   flag: "🇦🇪" },
+                SA: { capital: "Riyadh",           currency: "SAR",  calling: "+966",   flag: "🇸🇦" },
+                IL: { capital: "Jerusalem",        currency: "ILS",  calling: "+972",   flag: "🇮🇱" },
+                IR: { capital: "Tehran",           currency: "IRR",  calling: "+98",    flag: "🇮🇷" },
+                PK: { capital: "Islamabad",        currency: "PKR",  calling: "+92",    flag: "🇵🇰" },
+                BD: { capital: "Dhaka",            currency: "BDT",  calling: "+880",   flag: "🇧🇩" },
+                UA: { capital: "Kyiv",             currency: "UAH",  calling: "+380",   flag: "🇺🇦" },
+              };
+              const fact = facts[code];
+              if (fact) {
+                showToast(`${fact.flag} ${name} · 🏛 ${fact.capital} · 💱 ${fact.currency} · 📞 ${fact.calling}`);
+              } else {
+                showToast(`🌍 ${name} (${code}) — facts not in lookup table`);
+              }
+            }},
             // ===== Maintenance / debug commands =====
             // Storage usage — total size of all atlas-* localStorage keys,
             // plus warning when nearing the typical 5MB browser cap.
