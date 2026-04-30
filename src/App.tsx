@@ -12663,20 +12663,85 @@ function AircraftLayer({
     halo.instanceMatrix.needsUpdate = true;
   }, [selectedAircraft, scratch]);
 
-  // Click → pick instance
-  const handleClick = useCallback((e: any) => {
-    if (typeof e.instanceId !== "number") return;
-    e.stopPropagation();
-    const a = aircraft[e.instanceId];
-    if (a) onSelect(a.icao24);
-  }, [aircraft, onSelect]);
+  // ===== ATLAS-MODE SCREEN-SPACE PICKER =====
+  // R3F's default raycaster doesn't work for our aircraft because the
+  // shader does its own scaling (`vec3 scaled = position * uPxScale * d`)
+  // — the geometry sent to the raycaster is the unscaled 1×1 plane, not
+  // the ~12px visual quad. Result: the raycaster's hit area is microscopic
+  // and the user almost never lands a click on it. The default
+  // onPointerDown via R3F never fired.
+  //
+  // Fix: install our own canvas-level pointerdown listener. For each
+  // aircraft, project (lat, lon, alt) → screen XY using the live camera,
+  // then pick the closest aircraft within a 16px radius of the click.
+  //
+  // Refs (not deps) for aircraft + onSelect so the listener stays
+  // attached across the every-poll-cycle aircraft prop change.
+  const aircraftRef = useRef(aircraft);
+  useEffect(() => { aircraftRef.current = aircraft; }, [aircraft]);
+  const onSelectRef = useRef(onSelect);
+  useEffect(() => { onSelectRef.current = onSelect; }, [onSelect]);
+  const three = useThree();
+  useEffect(() => {
+    const gl = three?.gl;
+    const camera = three?.camera;
+    if (!gl || !camera) return;
+    const canvas = gl.domElement as HTMLCanvasElement | undefined;
+    if (!canvas) return;
+    const PICK_RADIUS_PX = 16;
+    const v = new THREE.Vector3();
+    const onPointerDown = (e: PointerEvent) => {
+      if (e.button !== 0) return;
+      // Only react to clicks landing directly on the canvas.
+      if (e.target !== canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      const cx = e.clientX - rect.left;
+      const cy = e.clientY - rect.top;
+      const w = rect.width;
+      const h = rect.height;
+      const list = aircraftRef.current;
+      if (!list || list.length === 0) return;
+      let bestI = -1;
+      let bestDist = Infinity;
+      for (let i = 0; i < list.length; i++) {
+        const a = list[i];
+        const altKm = Math.max(0, a.altitudeM / 1000);
+        const radius = 1 + altKm / EARTH_RADIUS_KM + 0.005;
+        const phi = (90 - a.lat) * Math.PI / 180;
+        const theta = -a.lon * Math.PI / 180;
+        v.set(
+          radius * Math.sin(phi) * Math.cos(theta),
+          radius * Math.cos(phi),
+          radius * Math.sin(phi) * Math.sin(theta),
+        );
+        v.project(camera);
+        if (v.z < -1 || v.z > 1) continue;
+        const sx = (v.x * 0.5 + 0.5) * w;
+        const sy = (1 - (v.y * 0.5 + 0.5)) * h;
+        const dx = sx - cx;
+        const dy = sy - cy;
+        const d = Math.sqrt(dx*dx + dy*dy);
+        if (d < bestDist && d <= PICK_RADIUS_PX) {
+          bestDist = d;
+          bestI = i;
+        }
+      }
+      if (bestI >= 0) {
+        e.stopPropagation();
+        onSelectRef.current(list[bestI].icao24);
+      }
+    };
+    canvas.addEventListener("pointerdown", onPointerDown, true);
+    return () => canvas.removeEventListener("pointerdown", onPointerDown, true);
+    // No prop deps → effect runs ONCE per mount. Refs supply the live values.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [three]);
 
   return (
     <>
       <instancedMesh
         ref={meshRef}
         args={[triGeometry, triMaterial, Math.max(1, aircraft.length)]}
-        onPointerDown={handleClick}
         onPointerMove={(e: any) => {
           if (typeof e.instanceId !== "number") return;
           const a = aircraft[e.instanceId];
