@@ -619,6 +619,30 @@ function App() {
     };
   }, []);
   const [toast, setToast] = useState<{ id: number; text: string } | null>(null);
+  // ===== UI customization mode =====
+  // When on, all draggable widgets show a dashed outline and can be
+  // repositioned by mouse-drag. Positions are persisted per widget ID
+  // in localStorage so layouts survive reloads. Users solve all UI
+  // overlap / preference issues themselves.
+  const [customizeUiMode, setCustomizeUiMode] = useState(false);
+  const [widgetPositions, setWidgetPositions] = useState<Record<string, { x: number; y: number }>>(() => {
+    try {
+      const raw = window.localStorage.getItem("atlas-widget-positions");
+      if (raw) return JSON.parse(raw);
+    } catch { /* ignore */ }
+    return {};
+  });
+  const setWidgetPosition = useCallback((id: string, pos: { x: number; y: number }) => {
+    setWidgetPositions((prev) => {
+      const next = { ...prev, [id]: pos };
+      try { window.localStorage.setItem("atlas-widget-positions", JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
+  const resetWidgetPositions = useCallback(() => {
+    setWidgetPositions({});
+    try { window.localStorage.removeItem("atlas-widget-positions"); } catch { /* ignore */ }
+  }, []);
   // Voice narration — when on, toasts are also spoken via the browser's
   // SpeechSynthesis API. Useful for accessibility, hands-free use,
   // ambient/screensaver mode. Persisted across reloads.
@@ -4289,6 +4313,18 @@ function App() {
             // Ambient Earth — kiosk/big-screen mode. Hides UI chrome,
             // starts auto-orbit, shows comprehensive live-data overlay.
             // Made for office TVs, conference displays, screensavers.
+            // ===== UI customization mode =====
+            // Drag-to-rearrange any widget. Position persists across reloads.
+            { id: "customizeUi", label: customizeUiMode ? "✓ Exit UI customization mode" : "🎨 Enter UI customization mode (drag widgets anywhere)", group: "Widgets", icon: MousePointer2, run: () => {
+              setCustomizeUiMode((v) => !v);
+              showToast(customizeUiMode ? "UI customization off" : "🎨 Drag any widget to rearrange · Click again to exit");
+            }},
+            { id: "customizeReset", label: Object.keys(widgetPositions).length > 0 ? `🗑 Reset all widget positions (${Object.keys(widgetPositions).length} customized)` : "Widget positions are at defaults", group: "Widgets", icon: RotateCcw, run: () => {
+              if (Object.keys(widgetPositions).length === 0) { showToast("Nothing to reset"); return; }
+              if (!window.confirm(`Reset all ${Object.keys(widgetPositions).length} customized widget positions to defaults?`)) return;
+              resetWidgetPositions();
+              showToast("✓ All widget positions reset");
+            }},
             { id: "ambientEarth", label: layers.ambientEarth ? "🛑 Exit Ambient Earth (kiosk mode)" : "🌍 Enter Ambient Earth (kiosk mode — auto-orbit + live data)", group: "Widgets", icon: Globe2, run: () => {
               const willActivate = !layers.ambientEarth;
               toggleLayer("ambientEarth");
@@ -8540,37 +8576,41 @@ ${wpts}
 
       {/* Aircraft Radar widget — closest 5 aircraft to current view.
           Live-updating from aircraftSnapshot which polls every 8s. */}
-      {layers.aircraftRadar && aircraftSnapshot && aircraftSnapshot.aircraft.length > 0 && (() => {
-        const c = cameraState;
-        const ranked = aircraftSnapshot.aircraft
-          .filter(a => !a.onGround)
-          .map(a => ({ a, km: haversineKm(c.lat, c.lon, a.lat, a.lon) }))
-          .sort((x, y) => x.km - y.km)
-          .slice(0, 5);
-        if (ranked.length === 0) return null;
-        return (
-          <div className="atlasRadarWidget" role="status" aria-label="Aircraft radar">
-            <div className="atlasRadarHead">
-              <Plane size={12} />
-              <strong>Closest aircraft</strong>
-              <span>{aircraftSnapshot.aircraft.length} live</span>
-            </div>
-            <ul className="atlasRadarList">
-              {ranked.map(({ a, km }) => (
-                <li key={a.icao24}>
-                  <button type="button" className="atlasRadarRow" onClick={() => {
-                    setSelectedAircraftId(a.icao24);
-                    setFlyTo((p) => ({ id: p.id + 1, lat: a.lat, lon: a.lon, altKm: 50 }));
-                  }}>
-                    <strong>{a.callsign || a.icao24.toUpperCase()}</strong>
-                    <em>{formatDistKm(km, unitsImperial)} · {Math.round(a.altitudeM / 0.3048).toLocaleString()} ft · {Math.round(a.velocityMs * 1.94384)} kt</em>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        );
-      })()}
+      {layers.aircraftRadar && aircraftSnapshot && aircraftSnapshot.aircraft.length > 0 && (
+        <Draggable id="aircraftRadar" customizeMode={customizeUiMode} position={widgetPositions.aircraftRadar} onMove={setWidgetPosition}>
+          {(() => {
+            const c = cameraState;
+            const ranked = aircraftSnapshot.aircraft
+              .filter(a => !a.onGround)
+              .map(a => ({ a, km: haversineKm(c.lat, c.lon, a.lat, a.lon) }))
+              .sort((x, y) => x.km - y.km)
+              .slice(0, 5);
+            if (ranked.length === 0) return null;
+            return (
+              <div className="atlasRadarWidget" role="status" aria-label="Aircraft radar">
+                <div className="atlasRadarHead">
+                  <Plane size={12} />
+                  <strong>Closest aircraft</strong>
+                  <span>{aircraftSnapshot.aircraft.length} live</span>
+                </div>
+                <ul className="atlasRadarList">
+                  {ranked.map(({ a, km }) => (
+                    <li key={a.icao24}>
+                      <button type="button" className="atlasRadarRow" onClick={() => {
+                        setSelectedAircraftId(a.icao24);
+                        setFlyTo((p) => ({ id: p.id + 1, lat: a.lat, lon: a.lon, altKm: 50 }));
+                      }}>
+                        <strong>{a.callsign || a.icao24.toUpperCase()}</strong>
+                        <em>{formatDistKm(km, unitsImperial)} · {Math.round(a.altitudeM / 0.3048).toLocaleString()} ft · {Math.round(a.velocityMs * 1.94384)} kt</em>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })()}
+        </Draggable>
+      )}
 
       {/* Ambient Earth — kiosk/big-screen comprehensive live overlay.
           Renders OUTSIDE the hideUi gate so it shows even when chrome
@@ -8649,6 +8689,7 @@ ${wpts}
 
       {/* View History widget — recently-visited views, click to revisit. */}
       {layers.viewHistory && viewHistory.length > 0 && (
+        <Draggable id="viewHistory" customizeMode={customizeUiMode} position={widgetPositions.viewHistory} onMove={setWidgetPosition}>
         <div className="atlasViewHistoryWidget" role="status" aria-label="Recent views">
           <div className="atlasViewHistoryHead">
             <RotateCcw size={12} />
@@ -8675,10 +8716,14 @@ ${wpts}
             })}
           </ul>
         </div>
+        </Draggable>
       )}
 
-      {/* World clocks — financial-centers local time + market-open badge. */}
-      {layers.worldClocks && (() => {
+      {/* World clocks — financial-centers local time + market-open badge.
+          Wrapped in Draggable so user can reposition in customize mode. */}
+      {layers.worldClocks && (
+        <Draggable id="worldClocks" customizeMode={customizeUiMode} position={widgetPositions.worldClocks} onMove={setWidgetPosition}>
+          {(() => {
         const CENTERS = [
           { city: "New York",  lon: -74.006,  open: 9.5,  close: 16,    label: "NYSE" },
           { city: "London",    lon: -0.128,   open: 8,    close: 16.5,  label: "LSE" },
@@ -8719,10 +8764,13 @@ ${wpts}
           </div>
         );
       })()}
+        </Draggable>
+      )}
 
-      {/* Tonight in the sky — combines moon phase, planets, ISS pass,
-          sun events at current view location. Updates live with camera. */}
-      {layers.skyTonight && (() => {
+      {/* Tonight in the sky — wrapped in Draggable for customize mode. */}
+      {layers.skyTonight && (
+        <Draggable id="skyTonight" customizeMode={customizeUiMode} position={widgetPositions.skyTonight} onMove={setWidgetPosition}>
+          {(() => {
         const c = cameraState;
         // Moon phase
         const synodic = 29.530588853;
@@ -8803,6 +8851,8 @@ ${wpts}
           </div>
         );
       })()}
+        </Draggable>
+      )}
 
       {/* Tour player caption + progress HUD. */}
       {playingTour && (() => {
@@ -9446,6 +9496,7 @@ ${wpts}
       )}
 
       {layers.aircraft && (
+        <Draggable id="flightControls" customizeMode={customizeUiMode} position={widgetPositions.flightControls} onMove={setWidgetPosition}>
         <div className="atlasFlightControls" role="status">
           <div className="atlasFlightPillInline">
             <Plane size={11} />
@@ -9513,6 +9564,7 @@ ${wpts}
             </label>
           </div>
         </div>
+        </Draggable>
       )}
 
       {selectedAircraftId && aircraftSnapshot && (() => {
@@ -9570,6 +9622,27 @@ ${wpts}
 
       {toast && (
         <div className="atlasToast" role="status" key={toast.id}>{toast.text}</div>
+      )}
+
+      {/* Customize-mode banner — shows at top while UI customization is on */}
+      {customizeUiMode && (
+        <div className="atlasCustomizeBanner" role="status">
+          <strong>🎨 Customize mode</strong>
+          <span>Drag any dashed widget to rearrange · Position auto-saves</span>
+          <button type="button" className="atlasPrimaryBtn small" onClick={() => setCustomizeUiMode(false)}>
+            ✓ Done
+          </button>
+          {Object.keys(widgetPositions).length > 0 && (
+            <button type="button" className="atlasIconBtn" onClick={() => {
+              if (window.confirm(`Reset all ${Object.keys(widgetPositions).length} customized positions?`)) {
+                resetWidgetPositions();
+                showToast("Positions reset");
+              }
+            }} aria-label="Reset positions" title="Reset all positions">
+              <RotateCcw size={12} />
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
@@ -11230,6 +11303,89 @@ function formatAreaKm2(km2: number, imperial: boolean): string {
 function formatElevM(m: number, imperial: boolean): string {
   if (imperial) return `${Math.round(m * 3.28084).toLocaleString()} ft`;
   return `${Math.round(m).toLocaleString()} m`;
+}
+
+// Draggable widget wrapper — when customizeUiMode is on, the widget
+// can be repositioned by mouse drag. Position persists via the
+// onMove callback. When NOT in customize mode, just renders children
+// as-is so existing CSS positioning takes effect.
+function Draggable({
+  id,
+  customizeMode,
+  position,
+  onMove,
+  children,
+}: {
+  id: string;
+  customizeMode: boolean;
+  position?: { x: number; y: number };
+  onMove: (id: string, pos: { x: number; y: number }) => void;
+  children: React.ReactNode;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{ origX: number; origY: number; startX: number; startY: number } | null>(null);
+  const [dragging, setDragging] = useState(false);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (!customizeMode) return;
+    e.preventDefault();
+    const rect = ref.current?.getBoundingClientRect();
+    if (!rect) return;
+    dragRef.current = {
+      origX: rect.left,
+      origY: rect.top,
+      startX: e.clientX,
+      startY: e.clientY,
+    };
+    setDragging(true);
+  }, [customizeMode]);
+
+  useEffect(() => {
+    if (!dragging) return;
+    const onMove2 = (e: MouseEvent) => {
+      const d = dragRef.current;
+      if (!d) return;
+      const newX = d.origX + (e.clientX - d.startX);
+      const newY = d.origY + (e.clientY - d.startY);
+      // Clamp to viewport
+      const rect = ref.current?.getBoundingClientRect();
+      const w = rect?.width || 0;
+      const h = rect?.height || 0;
+      const clampedX = Math.max(0, Math.min(window.innerWidth - w, newX));
+      const clampedY = Math.max(0, Math.min(window.innerHeight - h, newY));
+      onMove(id, { x: clampedX, y: clampedY });
+    };
+    const onUp = () => {
+      setDragging(false);
+      dragRef.current = null;
+    };
+    window.addEventListener("mousemove", onMove2);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove2);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [dragging, id, onMove]);
+
+  // Apply user-defined position via inline style override. When customize
+  // mode is on, also wrap with a dashed outline + grab cursor so the user
+  // sees the widget is draggable.
+  const styleOverride: React.CSSProperties = position
+    ? { position: "fixed", top: position.y, left: position.x, right: "auto", bottom: "auto" }
+    : {};
+  const customizeStyle: React.CSSProperties = customizeMode
+    ? { outline: "2px dashed var(--accent)", outlineOffset: 4, cursor: dragging ? "grabbing" : "grab" }
+    : {};
+  return (
+    <div
+      ref={ref}
+      onMouseDown={handleMouseDown}
+      style={{ ...styleOverride, ...customizeStyle }}
+      data-customize={customizeMode ? "" : undefined}
+    >
+      {children}
+    </div>
+  );
 }
 
 function ChallengeInput({ onSubmit }: { onSubmit: (city: string) => void }) {
