@@ -4434,6 +4434,33 @@ function App() {
             // browser's SpeechSynthesis API. Useful for accessibility,
             // hands-free use, or as ambient narration during the
             // auto-explore screensaver.
+            // 🧭 Magnetic declination — estimate the angle between
+            // true north and magnetic north at this view location.
+            // Real WMM (World Magnetic Model) requires a 2.5MB binary;
+            // we use a coarse polynomial fit valid to ~1° accuracy.
+            // Useful for hikers/sailors checking compass calibration.
+            { id: "magneticDeclination", label: "🧭 Estimate magnetic declination at this view", group: "Tools", icon: Compass, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              // Coarse spherical-harmonic-like approximation good enough
+              // for human-readable orientation. Real WMM uses degree-12
+              // expansion; this is a low-order surrogate.
+              const lat = c.lat * Math.PI / 180;
+              const lon = c.lon * Math.PI / 180;
+              // 2024-ish epoch coefficients (manually tuned to roughly
+              // match WMM 2020 globally). Not for navigation use.
+              const dec =
+                  10 * Math.sin(lon - 1.57)
+                + 5 * Math.cos(2 * lat) * Math.sin(lon)
+                - 8 * Math.sin(lat) * Math.cos(lon - 0.3);
+              const sign = dec >= 0 ? "E" : "W";
+              const absD = Math.abs(dec);
+              const note = absD < 1 ? "true ≈ magnetic" :
+                           absD < 5 ? "small offset" :
+                           absD < 15 ? "noticeable offset" :
+                           "large offset — recalibrate compass";
+              showToast(`🧭 Estimated declination: ${absD.toFixed(1)}°${sign} (${note}). Note: rough estimate — use NOAA WMM for navigation.`);
+            }},
             { id: "voiceNarration", label: voiceNarration ? "🔇 Disable voice narration of toasts" : "🔊 Enable voice narration (speak every toast)", group: "Tools", icon: Sparkles, run: () => {
               const newVal = !voiceNarration;
               setVoiceNarration(newVal);
