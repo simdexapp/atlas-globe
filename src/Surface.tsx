@@ -1634,7 +1634,11 @@ export default function Surface({
       // the full stack we can prefer a Billboard with a registered
       // icao24, which gives consistent click-to-select behavior even on
       // the currently-selected plane.
-      const candidates = viewer.scene.drillPick(click.position, 8);
+      // Bumped from 8 → 24 because at low zooms the imagery + country
+      // labels + cities + EONET events stack up before reaching the
+      // aircraft billboard at click point. With 6000+ planes on screen
+      // and any other active layer, 8 wasn't enough.
+      const candidates = viewer.scene.drillPick(click.position, 24);
 
       // First pass: prefer an aircraft billboard.
       for (const cand of candidates) {
@@ -1693,7 +1697,8 @@ export default function Surface({
     handler.setInputAction((move: Cesium.ScreenSpaceEventHandler.MotionEvent) => {
       // drillPick so hovering the selected aircraft still resolves to its
       // billboard (the 3D model boxes / ring / label sit on top otherwise).
-      const candidates = viewer.scene.drillPick(move.endPosition, 8);
+      // Higher limit (16) so hover tooltips work in dense aircraft regions.
+      const candidates = viewer.scene.drillPick(move.endPosition, 16);
       let tipText: string | null = null;
       // Aircraft billboard hover.
       for (const cand of candidates) {

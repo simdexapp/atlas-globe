@@ -2006,6 +2006,22 @@ function App() {
     setUiTheme((t) => order[(order.indexOf(t) + 1) % order.length]);
   }, []);
 
+  // ===== One-time imagery date safety clamp =====
+  // GIBS satellite imagery has a ~2-day publishing lag for VIIRS True
+  // Color and other day layers. If a stale localStorage from a previous
+  // session has a date too recent, we'll get a wave of 400 errors.
+  // Clamp on mount: if persisted date > today-2, snap back to today-2.
+  useEffect(() => {
+    const safeMax = todayUTC();   // already today-2 days
+    if (imagery.date > safeMax) {
+      // Use functional update so we don't fight a concurrent setter.
+      setImagery((prev) => prev.date > safeMax ? { ...prev, date: safeMax } : prev);
+    }
+    // Run only once on mount — explicit user time-machine commands can
+    // still override afterward.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Fetch day + night GIBS composites whenever imagery settings change (debounced)
   useEffect(() => {
     if (imagery.source !== "live") {
@@ -4851,6 +4867,15 @@ function App() {
             // These commands snap imagery.date to historical points so
             // users can see how the world looked then. Only meaningful
             // when imagery.source is 'live' (NASA GIBS).
+            // 🩹 Imagery recovery — if console is full of GIBS 400s,
+            // snap back to a known-good 3-days-ago date.
+            { id: "imageryFix", label: "🩹 Fix NASA imagery 400 errors (reset to 3 days ago)", group: "Tools", icon: Cloud, run: () => {
+              const d = new Date();
+              d.setUTCDate(d.getUTCDate() - 3);
+              const iso = d.toISOString().slice(0, 10);
+              setImagery((prev) => ({ ...prev, date: iso, source: "live" }));
+              showToast(`🩹 Imagery date set to ${iso} (known-good)`);
+            }},
             { id: "timeMachineToday", label: "🕰 Time machine: jump to today's imagery", group: "Tools", icon: SunIcon, run: () => {
               if (imagery.source !== "live") {
                 showToast("Switch imagery to 'NASA live' first (Imagery panel) to time-travel");
