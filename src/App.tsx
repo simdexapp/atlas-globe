@@ -6814,6 +6814,55 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: a.lat, lon: a.lon, altKm: 100 }));
               showToast(`🚀 ${a.callsign || a.icao24} @ ${Math.round(a.altitudeM / 0.3048).toLocaleString()} ft`);
             }},
+            // 🔎 Track-by-callsign — type a callsign or ICAO24 in a prompt,
+            // find and select that specific aircraft. Useful when someone
+            // tells you "go look at WZZ509" or you spot a tail number.
+            { id: "trackCallsign", label: "🔎 Track a specific callsign / ICAO24 (e.g. WZZ509, 471F6B)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) {
+                showToast("Aircraft layer not loaded — turn it on first");
+                return;
+              }
+              const inp = window.prompt("Callsign or ICAO24 hex (e.g. UAL123, WZZ509, 471F6B):", "");
+              if (!inp) return;
+              const q = inp.trim().toUpperCase();
+              const hit = aircraftSnapshot.aircraft.find(
+                (a) => a.callsign?.toUpperCase() === q || a.icao24?.toUpperCase() === q
+              ) || aircraftSnapshot.aircraft.find(
+                (a) => a.callsign?.toUpperCase().startsWith(q) || a.icao24?.toUpperCase().startsWith(q)
+              );
+              if (!hit) {
+                showToast(`No live aircraft matches "${q}" — it may have landed or be out of feed coverage`);
+                return;
+              }
+              setSelectedAircraftId(hit.icao24);
+              setFlyTo((p) => ({ id: p.id + 1, lat: hit.lat, lon: hit.lon, altKm: 100 }));
+              showToast(`✈ ${hit.callsign || hit.icao24.toUpperCase()} found · ${formatLat(hit.lat)} ${formatLon(hit.lon)}`);
+            }},
+            // ✈ Aircraft over MY location (uses geolocation) — find the
+            // closest live aircraft to where the user is physically.
+            { id: "aircraftOverMe", label: "📍 Find the aircraft directly over me (uses geolocation)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) {
+                showToast("Aircraft layer not loaded");
+                return;
+              }
+              if (!navigator.geolocation) { showToast("Geolocation not available"); return; }
+              showToast("📍 Locating you, then finding closest plane…");
+              navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                  const myLat = pos.coords.latitude, myLon = pos.coords.longitude;
+                  const airborne = aircraftSnapshot.aircraft.filter(a => !a.onGround);
+                  if (airborne.length === 0) { showToast("No airborne aircraft in feed"); return; }
+                  const closest = airborne
+                    .map(a => ({ a, km: haversineKm(myLat, myLon, a.lat, a.lon) }))
+                    .sort((x, y) => x.km - y.km)[0];
+                  setSelectedAircraftId(closest.a.icao24);
+                  setFlyTo((p) => ({ id: p.id + 1, lat: closest.a.lat, lon: closest.a.lon, altKm: 80 }));
+                  showToast(`✈ ${closest.a.callsign || closest.a.icao24.toUpperCase()} — ${formatDistKm(closest.km, unitsImperial)} away @ ${Math.round(closest.a.altitudeM / 0.3048).toLocaleString()} ft`);
+                },
+                (err) => showToast(`Location error: ${err.message}`),
+                { timeout: 10000, enableHighAccuracy: false }
+              );
+            }},
             { id: "fastestAircraft", label: "Find fastest aircraft", group: "Tools", icon: Plane, run: () => {
               if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("Aircraft layer not loaded"); return; }
               const a = aircraftSnapshot.aircraft.reduce((max, c) => c.velocityMs > max.velocityMs ? c : max);
