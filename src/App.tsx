@@ -249,17 +249,33 @@ class RenderModeErrorBoundary extends Component<
   { error: Error | null }
 > {
   state = { error: null as Error | null };
+  retryTimer: ReturnType<typeof setTimeout> | null = null;
   static getDerivedStateFromError(error: Error) {
     return { error };
   }
   componentDidCatch(error: Error, info: { componentStack?: string }) {
     // eslint-disable-next-line no-console
     console.error(`[atlas:${this.props.label}] caught render error`, error, info);
+    // Most errors that hit this boundary in practice are TRANSIENT
+    // — Cesium throws a TypeError during sibling unmount, the
+    // Three.js scene throws a one-frame raycaster glitch, etc. The
+    // recovery UI is jarring for these cases. Auto-retry after 500ms;
+    // if the next render succeeds, clear the error and return to
+    // normal. If it fails again, the boundary catches it again.
+    // 500ms is short enough to be invisible (a single dropped frame),
+    // long enough that the unmount completes first.
+    if (this.retryTimer) clearTimeout(this.retryTimer);
+    this.retryTimer = setTimeout(() => {
+      if (this.state.error) this.setState({ error: null });
+    }, 500);
   }
   componentDidUpdate(prevProps: { resetKey?: string | number }) {
     if (prevProps.resetKey !== this.props.resetKey && this.state.error) {
       this.setState({ error: null });
     }
+  }
+  componentWillUnmount() {
+    if (this.retryTimer) clearTimeout(this.retryTimer);
   }
   render() {
     if (this.state.error) {
