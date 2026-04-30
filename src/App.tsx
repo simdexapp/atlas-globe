@@ -626,6 +626,9 @@ const KEYBOARD_HINTS = [
   { keys: "O", desc: "Toggle camera auto-orbit (Atlas mode)" },
   { keys: "C", desc: "Copy current view's coordinates to clipboard" },
   { keys: "Y", desc: "Yank — copy share-link to current view" },
+  { keys: "Q", desc: "Quick exit any active tool (measure / pin / customize)" },
+  { keys: "V", desc: "Toggle voice narration (speak toasts via SpeechSynthesis)" },
+  { keys: "Shift+R", desc: "Fly to a random famous landmark (surprise me)" },
   { keys: "N", desc: "Fly to next bookmark (closest unvisited)" },
   { keys: "J / K", desc: "Cycle through pins (vim-style prev/next)" },
   // ===== Pan / zoom =====
@@ -3458,7 +3461,16 @@ function App() {
           break;
         case "r":
           event.preventDefault();
-          resetView();
+          if (event.shiftKey) {
+            // Shift+R = surprise exploration: random famous landmark
+            if (LANDMARKS.length > 0) {
+              const l = LANDMARKS[Math.floor(Math.random() * LANDMARKS.length)];
+              setFlyTo((c) => ({ id: c.id + 1, lat: l.lat, lon: l.lon, altKm: l.zoomKm }));
+              showToast(`${l.emoji} ${l.name}`);
+            }
+          } else {
+            resetView();
+          }
           break;
         case "f":
           event.preventDefault();
@@ -3745,6 +3757,37 @@ function App() {
               () => showToast(`🔗 ${link}`)
             );
           }
+          break;
+        case "q":
+          // Quick exit any active tool (measure / pin / customize).
+          // Single-key alternative to ESC for one-handed users. ESC still
+          // works (and clears modals first); Q ONLY clears active tools.
+          event.preventDefault();
+          if (measureMode) {
+            setMeasureMode(false);
+            setMeasurePoints([]);
+            showToast("Measure off");
+          } else if (pinTool) {
+            setPinTool(false);
+            showToast("Pin tool off");
+          } else if (customizeUiMode) {
+            setCustomizeUiMode(false);
+            showToast("Customize mode off");
+          } else {
+            showToast("No tool active");
+          }
+          break;
+        case "v":
+          // Toggle voice narration. When on, toasts are spoken via the
+          // browser's SpeechSynthesis API. Useful for accessibility,
+          // hands-free use, kiosk/screensaver mode.
+          event.preventDefault();
+          setVoiceNarration((v) => {
+            const next = !v;
+            try { window.localStorage.setItem("atlas-voice-narration", String(next)); } catch { /* ignore */ }
+            showToast(next ? "🔊 Voice narration on" : "🔇 Voice narration off");
+            return next;
+          });
           break;
         case "j":
           // Vim-style — go to previous pin. Useful for stepping through pins.
