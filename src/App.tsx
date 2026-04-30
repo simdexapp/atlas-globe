@@ -64,6 +64,26 @@ import { aircraftTypeName } from "./aircraftTypes";
 
 const SurfaceMode = lazy(() => import("./Surface"));
 
+// Prefetch the Surface bundle in the background after the page loads,
+// so when the user presses S to switch modes the bundle is already in
+// the browser cache (saves the 47KB Surface chunk + 1.5MB Cesium chunk
+// download from the critical path of mode switch). Uses requestIdleCallback
+// when available so we don't compete with initial render work.
+if (typeof window !== "undefined") {
+  const prefetch = () => {
+    // Triggering the dynamic import primes the module cache. Errors are
+    // ignored — if the prefetch fails the actual mode switch will retry.
+    import("./Surface").catch(() => {});
+  };
+  const w = window as unknown as { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number };
+  if (typeof w.requestIdleCallback === "function") {
+    w.requestIdleCallback(prefetch, { timeout: 5000 });
+  } else {
+    // Fallback for Safari (no requestIdleCallback): wait 2s post-load.
+    setTimeout(prefetch, 2000);
+  }
+}
+
 type IconComponent = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
 type Mode = "atlas" | "surface";
 type InspectorTab = "globe" | "layers" | "bookmarks" | "data" | "imagery";
