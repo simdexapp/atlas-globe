@@ -4319,6 +4319,45 @@ function App() {
             }},
             // Toggle the new at-a-glance Live World Stats widget
             { id: "toggleLiveStats", label: layers.liveStats ? "Hide Live World Stats widget" : "🌐 Show Live World Stats widget", group: "Widgets", icon: Globe2, run: () => toggleLayer("liveStats") },
+            // Quick-fact palette commands — read-only computations on
+            // current camera state, no network needed.
+            { id: "factDistancesNSEQ", label: "📐 Distance to equator + both poles from this view", group: "Tools", icon: Compass, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const equatorKm = haversineKm(c.lat, c.lon, 0, c.lon);
+              const npoleKm = haversineKm(c.lat, c.lon, 90, c.lon);
+              const spoleKm = haversineKm(c.lat, c.lon, -90, c.lon);
+              showToast(`📐 Equator ${formatDistKm(equatorKm, unitsImperial)} · N Pole ${formatDistKm(npoleKm, unitsImperial)} · S Pole ${formatDistKm(spoleKm, unitsImperial)}`);
+            }},
+            { id: "factTimezoneOffset", label: "🕒 Solar time offset from UTC at current view longitude", group: "Tools", icon: Compass, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              // Mean solar time offset = lon × 4min/° (1° = 4min)
+              const offsetH = c.lon / 15;
+              const sign = offsetH >= 0 ? "+" : "-";
+              const absH = Math.abs(offsetH);
+              const wholeH = Math.floor(absH);
+              const mm = Math.round((absH - wholeH) * 60);
+              showToast(`🕒 Solar time at ${formatLon(c.lon)}: UTC${sign}${wholeH}h${mm > 0 ? mm + "m" : ""} (mean solar — ignores civil time zones / DST)`);
+            }},
+            { id: "factDistanceToISS", label: "🛰 Straight-line distance from current view to ISS", group: "Tools", icon: Telescope, run: () => {
+              const c = cameraStateRef.current;
+              if (!c || !issPosition) { showToast(issPosition ? "No camera state" : "ISS position not loaded yet"); return; }
+              const surfaceKm = haversineKm(c.lat, c.lon, issPosition.lat, issPosition.lon);
+              // ISS orbits ~408km up; total slant distance from observer is sqrt(surfaceKm² + 408²)
+              const slantKm = Math.sqrt(surfaceKm * surfaceKm + 408 * 408);
+              showToast(`🛰 ISS is ${formatDistKm(slantKm, unitsImperial)} away · (${formatDistKm(surfaceKm, unitsImperial)} ground · 408 km altitude)`);
+            }},
+            { id: "factHorizonDistance", label: "↻ Horizon distance from current altitude", group: "Tools", icon: Compass, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              if (c.altKm <= 0) { showToast("At ground level — horizon is ~0 km"); return; }
+              // sqrt(2Rh + h²) — geometric horizon
+              const h = c.altKm;
+              const horizonKm = Math.sqrt(2 * EARTH_RADIUS_KM * h + h * h);
+              const fractionEarth = horizonKm / (Math.PI * EARTH_RADIUS_KM);
+              showToast(`↻ From ${formatDistKm(h, unitsImperial)} altitude, horizon is ${formatDistKm(horizonKm, unitsImperial)} away — ${(fractionEarth * 100).toFixed(1)}% of the way around Earth`);
+            }},
             // Performance / debug: drop the local geocode + Wikipedia cache.
             // Useful if a stale entry needs refreshing or to test fresh fetches.
             { id: "clearAtlasCache", label: (() => {
