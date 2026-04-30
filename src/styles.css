@@ -226,6 +226,22 @@ input:focus-visible,
   50% { opacity: 0.9; }
 }
 
+/* When a Draggable wrapper has measured/saved coords, it becomes a
+   position:fixed box at those coords. The inner widget would normally
+   be position:fixed itself with its own top/left/right/bottom — that
+   would override the wrapper. Force it static so it sits inside the
+   wrapper instead, letting the wrapper drive its on-screen location. */
+[data-draggable-id] > * {
+  position: static !important;
+  top: auto !important;
+  left: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  margin: 0 !important;
+  /* Keep transforms working for inner-widget animations, but reset any
+     positioning transforms set on the root child. */
+}
+
 /* Skip-to-content link — visually hidden until keyboard-focused. The
    classic 1×1px clip pattern keeps it discoverable by screen readers
    while invisible to mouse users. On Tab focus, it pops back into view

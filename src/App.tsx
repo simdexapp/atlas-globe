@@ -3,6 +3,7 @@ import {
   lazy,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState
@@ -11346,8 +11347,18 @@ function formatElevM(m: number, imperial: boolean): string {
 
 // Draggable widget wrapper — when customizeUiMode is on, the widget
 // can be repositioned by mouse OR touch drag. Position persists via
-// the onMove callback. When NOT in customize mode, renders children
-// as-is so existing CSS positioning takes effect.
+// the onMove callback. When NOT in customize mode AND no saved
+// position, renders as display:contents so the child's own CSS
+// positioning (usually position:fixed top/left/right/bottom) is what
+// places it on screen.
+//
+// The tricky part: child widgets are themselves position:fixed/absolute,
+// so a plain wrapper would collapse to 0×0. We can't drag a 0×0
+// element — pointer offset math breaks. So when we need to drag, we:
+//   1. Measure the child's natural CSS position (display:contents pass)
+//   2. Switch the wrapper to position:fixed at that location
+//   3. Force the inner child to position:static via a CSS rule on
+//      [data-draggable-id], so it sits inside the (now-sized) wrapper.
 //
 // Supports both pointer types: a single pointerdown handler covers
 // mouse + touch + stylus uniformly via the Pointer Events API.
@@ -11367,6 +11378,29 @@ function Draggable({
   const ref = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ origX: number; origY: number; startX: number; startY: number; pointerId: number } | null>(null);
   const [dragging, setDragging] = useState(false);
+  // Natural position measured from the child's CSS-driven layout. Set
+  // when customize mode is on but no saved position exists yet — gives
+  // the wrapper coordinates to anchor at, so dragging math works.
+  const [naturalPos, setNaturalPos] = useState<{ x: number; y: number } | null>(null);
+
+  // Measure child's natural position once customize mode turns on without
+  // a saved position. Synchronous (useLayoutEffect) so the user never
+  // sees the child jump from natural→fixed location.
+  useLayoutEffect(() => {
+    if (!customizeMode || position) {
+      // Either we don't need a measurement (no customize, or have saved
+      // pos) — clear any stale measurement.
+      if (naturalPos !== null) setNaturalPos(null);
+      return;
+    }
+    if (naturalPos) return; // already measured
+    const child = ref.current?.firstElementChild as HTMLElement | null;
+    if (!child) return;
+    const r = child.getBoundingClientRect();
+    if (r.width === 0 && r.height === 0) return; // not laid out yet
+    setNaturalPos({ x: r.left, y: r.top });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customizeMode, position]);
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     if (!customizeMode) return;
@@ -11376,7 +11410,9 @@ function Draggable({
     if (target.closest("button, input, textarea, select, a, [role='button']")) return;
     e.preventDefault();
     const rect = ref.current?.getBoundingClientRect();
-    if (!rect) return;
+    // Bail if wrapper still 0×0 (measurement hasn't happened yet) — drag
+    // math would be wrong. Next click will work once natural pos is set.
+    if (!rect || rect.width === 0 || rect.height === 0) return;
     dragRef.current = {
       origX: rect.left,
       origY: rect.top,
@@ -11430,31 +11466,55 @@ function Draggable({
     };
   }, [dragging, id, onMove]);
 
-  // Apply user-defined position via inline style override. When customize
-  // mode is on, also wrap with a dashed outline + grab cursor so the user
-  // sees the widget is draggable.
-  const styleOverride: React.CSSProperties = position
-    ? { position: "fixed", top: position.y, left: position.x, right: "auto", bottom: "auto" }
-    : {};
-  const customizeStyle: React.CSSProperties = customizeMode
-    ? {
-        outline: "2px dashed var(--accent)",
-        outlineOffset: 4,
-        cursor: dragging ? "grabbing" : "grab",
-        // Disable browser touch panning so phone drag works smoothly.
-        touchAction: "none",
-        // Premium feel: gently scale-up while dragging
-        transform: dragging ? "scale(1.04)" : undefined,
-        boxShadow: dragging ? "0 16px 40px rgba(92, 181, 255, 0.35)" : undefined,
-        transition: dragging ? "transform 80ms ease, box-shadow 120ms" : "outline-color 200ms",
-        zIndex: dragging ? 100 : undefined,
-      }
-    : {};
+  // Effective position: saved position takes precedence over measured one.
+  const effectivePos = position ?? naturalPos;
+  // We use the fixed-positioned wrapper whenever we have coords to apply.
+  // Otherwise (no customize, no saved pos) render display:contents so the
+  // child's own CSS handles placement.
+  const useFixedWrapper = !!effectivePos;
+
+  if (!useFixedWrapper) {
+    // Pre-measurement / inert mode: invisible wrapper, child renders
+    // wherever its own CSS puts it. Pointer events still bubble through
+    // for the customize-mode case (wrapper just hasn't been measured yet
+    // — useLayoutEffect will fire after this render and re-render with
+    // useFixedWrapper=true on the next pass).
+    return (
+      <div
+        ref={ref}
+        onPointerDown={handlePointerDown}
+        style={{ display: "contents" }}
+        data-draggable-pending={customizeMode ? id : undefined}
+      >
+        {children}
+      </div>
+    );
+  }
+
+  // Positioned mode: wrapper takes a real box, child is forced static
+  // via CSS rule [data-draggable-id] > * (in styles.css).
   return (
     <div
       ref={ref}
       onPointerDown={handlePointerDown}
-      style={{ ...styleOverride, ...customizeStyle }}
+      style={{
+        position: "fixed",
+        top: effectivePos.y,
+        left: effectivePos.x,
+        zIndex: dragging ? 100 : undefined,
+        ...(customizeMode ? {
+          outline: "2px dashed var(--accent)",
+          outlineOffset: 4,
+          cursor: dragging ? "grabbing" : "grab",
+          // Disable browser touch panning so phone drag works smoothly.
+          touchAction: "none",
+          // Premium feel: gently scale-up while dragging
+          transform: dragging ? "scale(1.04)" : undefined,
+          boxShadow: dragging ? "0 16px 40px rgba(92, 181, 255, 0.35)" : undefined,
+          transition: dragging ? "transform 80ms ease, box-shadow 120ms" : "outline-color 200ms",
+        } : {}),
+      }}
+      data-draggable-id={id}
       data-customize={customizeMode ? "" : undefined}
       data-dragging={dragging ? "" : undefined}
     >
