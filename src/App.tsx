@@ -188,6 +188,9 @@ type LayerVisibility = {
   // Distance-to-anchors widget — live great-circle distances from
   // current view to 5 famous cities. Educational + travel-planning.
   distanceAnchors: boolean;
+  // Coordinates widget — multiple format outputs of current camera lat/lon
+  // (DD, DMS, Maidenhead grid, Mercator XY, antipode). Educational.
+  coordinates: boolean;
 };
 
 type GlobeSettings = {
@@ -522,6 +525,7 @@ const defaultLayers: LayerVisibility = {
   submarineCables: false,
   liveStats: false,
   distanceAnchors: false,
+  coordinates: false,
   // 3D OSM Buildings tileset is heavy and renders with edge outlines
   // that disable imagery draping underneath, painting the screen with
   // dark olive boxes at low altitudes (the user's tear repro). Off by
@@ -4462,6 +4466,7 @@ function App() {
             { id: "toggleLiveStats", label: layers.liveStats ? "Hide Live World Stats widget" : "🌐 Show Live World Stats widget", group: "Widgets", icon: Globe2, run: () => toggleLayer("liveStats") },
             // Toggle the Distance-to-anchors widget — live distances to 5 cities
             { id: "toggleDistanceAnchors", label: layers.distanceAnchors ? "Hide Distance to anchor cities widget" : "📐 Show Distance to anchor cities widget (NYC/London/Tokyo/Sydney/Cape Town)", group: "Widgets", icon: Compass, run: () => toggleLayer("distanceAnchors") },
+            { id: "toggleCoordinates", label: layers.coordinates ? "Hide Coordinates widget" : "📐 Show Coordinates widget (DD/DMS/Maidenhead/Mercator/Antipode)", group: "Widgets", icon: Compass, run: () => toggleLayer("coordinates") },
             // Show a random tip from the curated TIPS list — useful when
             // discovering features for the first time, or as a periodic
             // reminder of what's available.
@@ -9960,6 +9965,12 @@ ${wpts}
         </Draggable>
       )}
 
+      {layers.coordinates && (
+        <Draggable id="coordinates" customizeMode={customizeUiMode} position={widgetPositions.coordinates} onMove={setWidgetPosition}>
+          <CoordinatesWidget cameraLat={cameraState.lat} cameraLon={cameraState.lon} />
+        </Draggable>
+      )}
+
       {recordingState === "recording" && (
         <div className="atlasRecordIndicator" role="status">
           <span className="atlasRecordDot" /> REC {formatSeconds(recordingSeconds)}
@@ -12870,6 +12881,97 @@ function LiveStatsWidget({
         </div>
       </div>
       <div className="atlasLiveStatsFoot">UTC {utcHM} · {Math.abs(cameraLat).toFixed(1)}°{cameraLat >= 0 ? "N" : "S"} {Math.abs(cameraLon).toFixed(1)}°{cameraLon >= 0 ? "E" : "W"}</div>
+    </div>
+  );
+}
+
+// Coordinates display widget — shows the current view's lat/lon in
+// multiple coordinate format conventions, all at once. Educational
+// for navigation buffs and useful for ham-radio operators (Maidenhead),
+// pilots (DMS), and developers (Mercator XY).
+function CoordinatesWidget({ cameraLat, cameraLon }: { cameraLat: number; cameraLon: number }) {
+  // Maidenhead grid locator — 2 letters (field 20°×10°) + 2 digits
+  // (square 2°×1°) + 2 letters (subsquare 5'×2.5'). Used by amateur
+  // radio operators worldwide to identify their station's location.
+  const maidenhead = useMemo(() => {
+    let lon = cameraLon + 180;
+    let lat = cameraLat + 90;
+    const A = "A".charCodeAt(0);
+    const f1 = String.fromCharCode(A + Math.floor(lon / 20));
+    const f2 = String.fromCharCode(A + Math.floor(lat / 10));
+    lon = lon % 20;
+    lat = lat % 10;
+    const s1 = String.fromCharCode("0".charCodeAt(0) + Math.floor(lon / 2));
+    const s2 = String.fromCharCode("0".charCodeAt(0) + Math.floor(lat / 1));
+    lon = (lon % 2) * 12;
+    lat = (lat % 1) * 24;
+    const sq1 = String.fromCharCode("a".charCodeAt(0) + Math.floor(lon));
+    const sq2 = String.fromCharCode("a".charCodeAt(0) + Math.floor(lat));
+    return `${f1}${f2}${s1}${s2}${sq1}${sq2}`;
+  }, [cameraLat, cameraLon]);
+
+  // DMS — degrees / minutes / seconds with cardinal letters
+  const dms = useMemo(() => {
+    const fmt = (deg: number, posChar: string, negChar: string) => {
+      const sign = deg >= 0 ? posChar : negChar;
+      const a = Math.abs(deg);
+      const d = Math.floor(a);
+      const m = Math.floor((a - d) * 60);
+      const s = ((a - d) * 60 - m) * 60;
+      return `${d}°${String(m).padStart(2, "0")}'${s.toFixed(1).padStart(4, "0")}"${sign}`;
+    };
+    return `${fmt(cameraLat, "N", "S")} ${fmt(cameraLon, "E", "W")}`;
+  }, [cameraLat, cameraLon]);
+
+  // Web Mercator pixel XY at zoom 0 (256×256 single tile). Used by
+  // map tile servers to address content.
+  const mercator = useMemo(() => {
+    const lonRad = cameraLon * Math.PI / 180;
+    const latRad = cameraLat * Math.PI / 180;
+    const x = (lonRad + Math.PI) / (2 * Math.PI) * 256;
+    const y = (1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * 256;
+    return `${x.toFixed(1)}, ${y.toFixed(1)}`;
+  }, [cameraLat, cameraLon]);
+
+  // Antipode — diametrically opposite point on Earth
+  const antipode = useMemo(() => {
+    const aLat = -cameraLat;
+    const aLon = cameraLon > 0 ? cameraLon - 180 : cameraLon + 180;
+    return `${aLat.toFixed(2)}°, ${aLon.toFixed(2)}°`;
+  }, [cameraLat, cameraLon]);
+
+  return (
+    <div
+      className="atlasCoordinatesWidget"
+      role="status"
+      aria-label="Coordinates of current view in multiple formats: decimal, DMS, Maidenhead grid, Mercator pixel, antipode"
+    >
+      <div className="atlasCoordinatesHead">
+        <Compass size={11} />
+        <span>Coordinates</span>
+      </div>
+      <div className="atlasCoordinatesGrid">
+        <div className="atlasCoordRow">
+          <span className="atlasCoordLabel">DD</span>
+          <span className="atlasCoordValue">{cameraLat.toFixed(4)}°, {cameraLon.toFixed(4)}°</span>
+        </div>
+        <div className="atlasCoordRow">
+          <span className="atlasCoordLabel">DMS</span>
+          <span className="atlasCoordValue">{dms}</span>
+        </div>
+        <div className="atlasCoordRow">
+          <span className="atlasCoordLabel">Grid</span>
+          <span className="atlasCoordValue" title="Maidenhead grid locator (ham radio)">{maidenhead}</span>
+        </div>
+        <div className="atlasCoordRow">
+          <span className="atlasCoordLabel">XY</span>
+          <span className="atlasCoordValue" title="Web Mercator pixel position at zoom 0">{mercator}</span>
+        </div>
+        <div className="atlasCoordRow">
+          <span className="atlasCoordLabel">Anti</span>
+          <span className="atlasCoordValue" title="Antipode — diametrically opposite point">{antipode}</span>
+        </div>
+      </div>
     </div>
   );
 }

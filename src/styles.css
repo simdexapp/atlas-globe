@@ -226,6 +226,67 @@ input:focus-visible,
   50% { opacity: 0.9; }
 }
 
+/* Coordinates display widget — multiple format outputs of current view's lat/lon */
+.atlasCoordinatesWidget {
+  position: fixed;
+  top: 270px;
+  right: 360px;
+  z-index: 7;
+  width: 240px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-3);
+  background: var(--surface-elevated);
+  backdrop-filter: blur(14px);
+  box-shadow: var(--shadow-2);
+  color: var(--gray-12);
+  font-family: ui-monospace, monospace;
+}
+.atlasCoordinatesHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--gray-9);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+.atlasCoordinatesHead svg { color: var(--accent); }
+.atlasCoordinatesGrid {
+  display: grid;
+  gap: 4px;
+}
+.atlasCoordRow {
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: var(--gray-1);
+  font-size: 10.5px;
+}
+.atlasCoordLabel {
+  color: var(--gray-9);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 9px;
+}
+.atlasCoordValue {
+  color: var(--gray-12);
+  font-weight: 700;
+  font-size: 10.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width: 980px) { .atlasCoordinatesWidget { display: none; } }
+
 /* Distance-to-anchors widget — live distances from current view to 5 cities */
 .atlasDistanceAnchorsWidget {
   position: fixed;
