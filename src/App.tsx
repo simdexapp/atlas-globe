@@ -4799,6 +4799,76 @@ function App() {
               const fractionEarth = horizonKm / (Math.PI * EARTH_RADIUS_KM);
               showToast(`↻ From ${formatDistKm(h, unitsImperial)} altitude, horizon is ${formatDistKm(horizonKm, unitsImperial)} away — ${(fractionEarth * 100).toFixed(1)}% of the way around Earth`);
             }},
+            // ===== Copy-current-view-as-X commands =====
+            // Each writes to clipboard (where supported) with a clear toast.
+            { id: "copyAsDMS", label: "📋 Copy current view as DMS coordinates", group: "Tools", icon: Compass, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const fmt = (deg: number, posChar: string, negChar: string) => {
+                const sign = deg >= 0 ? posChar : negChar;
+                const a = Math.abs(deg);
+                const d = Math.floor(a);
+                const m = Math.floor((a - d) * 60);
+                const s = ((a - d) * 60 - m) * 60;
+                return `${d}°${String(m).padStart(2, "0")}'${s.toFixed(1)}"${sign}`;
+              };
+              const text = `${fmt(c.lat, "N", "S")} ${fmt(c.lon, "E", "W")}`;
+              navigator.clipboard?.writeText(text).then(
+                () => showToast(`📋 Copied DMS: ${text}`),
+                () => showToast(`📋 DMS: ${text}`)
+              );
+            }},
+            { id: "copyAsMaidenhead", label: "📋 Copy current view as Maidenhead grid", group: "Tools", icon: Compass, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              let lon = c.lon + 180;
+              let lat = c.lat + 90;
+              const A = "A".charCodeAt(0);
+              const f1 = String.fromCharCode(A + Math.floor(lon / 20));
+              const f2 = String.fromCharCode(A + Math.floor(lat / 10));
+              lon = lon % 20;
+              lat = lat % 10;
+              const s1 = String.fromCharCode("0".charCodeAt(0) + Math.floor(lon / 2));
+              const s2 = String.fromCharCode("0".charCodeAt(0) + Math.floor(lat));
+              lon = (lon % 2) * 12;
+              lat = (lat % 1) * 24;
+              const sq1 = String.fromCharCode("a".charCodeAt(0) + Math.floor(lon));
+              const sq2 = String.fromCharCode("a".charCodeAt(0) + Math.floor(lat));
+              const grid = `${f1}${f2}${s1}${s2}${sq1}${sq2}`;
+              navigator.clipboard?.writeText(grid).then(
+                () => showToast(`📋 Copied Maidenhead: ${grid}`),
+                () => showToast(`📋 Grid: ${grid}`)
+              );
+            }},
+            { id: "copyViewAsJson", label: "📋 Copy current view as JSON", group: "Tools", icon: Compass, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const json = JSON.stringify({
+                lat: parseFloat(c.lat.toFixed(6)),
+                lon: parseFloat(c.lon.toFixed(6)),
+                altKm: parseFloat(c.altKm.toFixed(2)),
+                timestamp: new Date().toISOString(),
+              }, null, 2);
+              navigator.clipboard?.writeText(json).then(
+                () => showToast(`📋 Copied JSON · ${json.length} bytes`),
+                () => showToast("📋 Couldn't copy JSON")
+              );
+            }},
+            ...(pins.length > 0 ? [{
+              id: "copyPinsAsMarkdown" as const,
+              label: `📋 Copy ${pins.length} pin${pins.length === 1 ? "" : "s"} as Markdown table`,
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const header = "| # | Name | Lat | Lon | Color |\n|---|------|------|------|--------|\n";
+                const rows = pins.map((p, i) => `| ${i + 1} | ${p.label.replace(/\|/g, "\\|")} | ${p.lat.toFixed(4)} | ${p.lon.toFixed(4)} | ${p.color} |`).join("\n");
+                const md = header + rows;
+                navigator.clipboard?.writeText(md).then(
+                  () => showToast(`📋 Copied ${pins.length} pin${pins.length === 1 ? "" : "s"} as Markdown table`),
+                  () => showToast("📋 Couldn't copy Markdown")
+                );
+              },
+            }] : []),
             // ===== Coordinate-input fly-to commands =====
             // Fly to a Maidenhead grid square — paste a 4 or 6-character
             // grid like "JN58td" and we decode it back to lat/lon.
