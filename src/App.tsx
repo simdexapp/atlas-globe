@@ -4799,6 +4799,61 @@ function App() {
               const fractionEarth = horizonKm / (Math.PI * EARTH_RADIUS_KM);
               showToast(`↻ From ${formatDistKm(h, unitsImperial)} altitude, horizon is ${formatDistKm(horizonKm, unitsImperial)} away — ${(fractionEarth * 100).toFixed(1)}% of the way around Earth`);
             }},
+            // ===== Maintenance / debug commands =====
+            // Storage usage — total size of all atlas-* localStorage keys,
+            // plus warning when nearing the typical 5MB browser cap.
+            { id: "storageUsage", label: "💾 Show localStorage usage (atlas-*)", group: "Tools", icon: Compass, run: () => {
+              try {
+                let totalBytes = 0;
+                let count = 0;
+                const keys = Object.keys(localStorage).filter(k => k.startsWith("atlas-"));
+                for (const k of keys) {
+                  const v = localStorage.getItem(k);
+                  if (v) {
+                    // 2 bytes per char (UTF-16). Approximate but close enough.
+                    totalBytes += (k.length + v.length) * 2;
+                    count++;
+                  }
+                }
+                const kb = (totalBytes / 1024).toFixed(1);
+                const pct = ((totalBytes / (5 * 1024 * 1024)) * 100).toFixed(1);
+                const warn = totalBytes > 4 * 1024 * 1024 ? " ⚠ Near limit!" : "";
+                showToast(`💾 ${count} atlas-* keys · ${kb} KB (~${pct}% of typical 5MB cap)${warn}`);
+              } catch {
+                showToast("Couldn't access localStorage");
+              }
+            }},
+            // List all keyboard shortcuts in console — useful for power
+            // users learning the bindings or for screenshot prep.
+            { id: "printShortcuts", label: "🖨 Print all keyboard shortcuts to browser console", group: "Tools", icon: Compass, run: () => {
+              // eslint-disable-next-line no-console
+              console.table(KEYBOARD_HINTS);
+              showToast(`🖨 Printed ${KEYBOARD_HINTS.length} shortcuts to DevTools console`);
+            }},
+            // "What's saved?" snapshot — count pins, bookmarks, saved
+            // measurements, view history, etc. Helps users understand
+            // what'll be in their backup file.
+            { id: "savedSnapshot", label: "📊 Show snapshot of everything saved (counts)", group: "Tools", icon: Compass, run: () => {
+              const userBmks = bookmarks.filter(b => b.savedAt > 0).length;
+              const widgetPos = Object.keys(widgetPositions).length;
+              let savedMeasurements = 0;
+              try {
+                const sm = localStorage.getItem("atlas-saved-measurements");
+                if (sm) savedMeasurements = JSON.parse(sm).length;
+              } catch { /* ignore */ }
+              showToast(`📊 ${pins.length} pins · ${userBmks} user bookmarks · ${savedMeasurements} measurements · ${widgetPos} widget positions · ${homeLocation ? "home set" : "no home"}`);
+            }},
+            // Toggle ALL data layers ON at once — maximum-info view.
+            // Useful for showcasing the app or seeing everything at once.
+            { id: "allLayersOn", label: "🌐 Turn ALL data layers ON (max-info mode)", group: "View", icon: Sparkles, run: () => {
+              const layerKeys = Object.keys(layers) as Array<keyof typeof layers>;
+              setLayers((prev) => {
+                const next = { ...prev };
+                for (const k of layerKeys) next[k] = true;
+                return next;
+              });
+              showToast(`🌐 All ${layerKeys.length} layers ON — heads-up display max info`);
+            }},
             // ===== Copy-current-view-as-X commands =====
             // Each writes to clipboard (where supported) with a clear toast.
             { id: "copyAsDMS", label: "📋 Copy current view as DMS coordinates", group: "Tools", icon: Compass, run: () => {
