@@ -4799,6 +4799,52 @@ function App() {
               const fractionEarth = horizonKm / (Math.PI * EARTH_RADIUS_KM);
               showToast(`↻ From ${formatDistKm(h, unitsImperial)} altitude, horizon is ${formatDistKm(horizonKm, unitsImperial)} away — ${(fractionEarth * 100).toFixed(1)}% of the way around Earth`);
             }},
+            // ===== Coordinate-input fly-to commands =====
+            // Fly to a Maidenhead grid square — paste a 4 or 6-character
+            // grid like "JN58td" and we decode it back to lat/lon.
+            { id: "flyMaidenhead", label: "📡 Fly to Maidenhead grid (ham radio)…", group: "Tools", icon: Navigation, run: () => {
+              const grid = window.prompt("Maidenhead grid locator (e.g. JN58td or FN31):");
+              if (!grid) return;
+              const g = grid.trim().toUpperCase();
+              if (g.length < 4) { showToast("Grid must be at least 4 chars (e.g. JN58)"); return; }
+              const A = "A".charCodeAt(0);
+              const Z0 = "0".charCodeAt(0);
+              try {
+                let lon = (g.charCodeAt(0) - A) * 20 - 180;
+                let lat = (g.charCodeAt(1) - A) * 10 - 90;
+                lon += (g.charCodeAt(2) - Z0) * 2;
+                lat += (g.charCodeAt(3) - Z0) * 1;
+                if (g.length >= 6) {
+                  lon += (g.toLowerCase().charCodeAt(4) - "a".charCodeAt(0)) * (5 / 60);
+                  lat += (g.toLowerCase().charCodeAt(5) - "a".charCodeAt(0)) * (2.5 / 60);
+                  // Center the subsquare
+                  lon += 2.5 / 60;
+                  lat += 1.25 / 60;
+                } else {
+                  // 4-char: center the square (1° lat × 2° lon)
+                  lon += 1;
+                  lat += 0.5;
+                }
+                if (Math.abs(lat) > 90 || Math.abs(lon) > 180) { showToast("Invalid grid format"); return; }
+                setFlyTo((c) => ({ id: c.id + 1, lat, lon, altKm: g.length >= 6 ? 100 : 500 }));
+                showToast(`📡 Grid ${g}: ${formatLat(lat)} ${formatLon(lon)}`);
+              } catch {
+                showToast("Couldn't parse grid — use format like JN58td");
+              }
+            }},
+            // Fly to a specific lat/lon by typing as "lat,lon" — quicker
+            // than the full coordinate input modal for casual use.
+            { id: "flyToLatLon", label: "📍 Fly to lat,lon (quick prompt)…", group: "Tools", icon: Navigation, run: () => {
+              const input = window.prompt("Enter coords as 'lat,lon' (e.g. 35.68,139.65 for Tokyo):");
+              if (!input) return;
+              const m = input.match(/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/);
+              if (!m) { showToast("Couldn't parse — use format like '35.68,139.65'"); return; }
+              const lat = parseFloat(m[1]);
+              const lon = parseFloat(m[2]);
+              if (Math.abs(lat) > 90 || Math.abs(lon) > 180) { showToast("Out of range — lat ±90, lon ±180"); return; }
+              setFlyTo((c) => ({ id: c.id + 1, lat, lon, altKm: 500 }));
+              showToast(`📍 Flying to ${formatLat(lat)} ${formatLon(lon)}`);
+            }},
             // ===== Pin creation utilities =====
             { id: "pinDropRandom", label: "🎲 Drop a pin at a random famous landmark", group: "Tools", icon: BookmarkPlus, run: () => {
               if (LANDMARKS.length === 0) return;
