@@ -4705,6 +4705,70 @@ function App() {
               const fractionEarth = horizonKm / (Math.PI * EARTH_RADIUS_KM);
               showToast(`↻ From ${formatDistKm(h, unitsImperial)} altitude, horizon is ${formatDistKm(horizonKm, unitsImperial)} away — ${(fractionEarth * 100).toFixed(1)}% of the way around Earth`);
             }},
+            // ===== Comparison commands =====
+            // Find places (bookmarks + pins) within a given range of
+            // current view. 1000km is a "reasonable drive/short-flight"
+            // radius — shows what's accessible nearby.
+            ...(bookmarks.length + pins.length >= 3 ? [{
+              id: "nearbyPlaces" as const,
+              label: `📍 Find bookmarks/pins within 1,000 km of current view`,
+              group: "Tools" as const,
+              icon: Compass,
+              run: () => {
+                const c = cameraStateRef.current;
+                if (!c) return;
+                const all = [
+                  ...bookmarks.map(b => ({ name: b.name, lat: b.lat, lon: b.lon, kind: "bookmark" })),
+                  ...pins.map(p => ({ name: p.label, lat: p.lat, lon: p.lon, kind: "pin" })),
+                ];
+                const within = all.map(x => ({ ...x, km: haversineKm(c.lat, c.lon, x.lat, x.lon) }))
+                  .filter(x => x.km <= 1000)
+                  .sort((a, b) => a.km - b.km);
+                if (within.length === 0) { showToast("📍 No bookmarks/pins within 1,000 km of this view"); return; }
+                const top5 = within.slice(0, 5).map(x => `${x.name} (${formatDistKm(x.km, unitsImperial)})`).join(", ");
+                showToast(`📍 ${within.length} within 1,000 km · top 5: ${top5}`);
+              },
+            }] : []),
+            // Time difference between current view and home location
+            ...(homeLocation ? [{
+              id: "compareViewVsHome" as const,
+              label: `🕒 Time + distance: current view vs ${homeLocation.name} (home)`,
+              group: "Tools" as const,
+              icon: Compass,
+              run: () => {
+                const c = cameraStateRef.current;
+                if (!c) return;
+                const km = haversineKm(c.lat, c.lon, homeLocation.lat, homeLocation.lon);
+                const bearing = bearingDeg(c.lat, c.lon, homeLocation.lat, homeLocation.lon);
+                // Mean solar time difference
+                const lonDiff = c.lon - homeLocation.lon;
+                let normalizedDiff = lonDiff;
+                while (normalizedDiff > 180) normalizedDiff -= 360;
+                while (normalizedDiff < -180) normalizedDiff += 360;
+                const hourDiff = normalizedDiff / 15;
+                const sign = hourDiff >= 0 ? "+" : "-";
+                const absH = Math.abs(hourDiff);
+                const wholeH = Math.floor(absH);
+                const mm = Math.round((absH - wholeH) * 60);
+                showToast(`🕒 ${formatDistKm(km, unitsImperial)} ${compassDir(bearing)} of home · ${sign}${wholeH}h${mm > 0 ? mm + "m" : ""} time offset (mean solar)`);
+              },
+            }] : []),
+            // Sort bookmarks by distance from current view, top 5
+            ...(bookmarks.length >= 3 ? [{
+              id: "bmkSortByDistance" as const,
+              label: `📐 Sort bookmarks by distance from current view (top 5)`,
+              group: "Tools" as const,
+              icon: Compass,
+              run: () => {
+                const c = cameraStateRef.current;
+                if (!c) return;
+                const ranked = bookmarks.map(b => ({ b, km: haversineKm(c.lat, c.lon, b.lat, b.lon) }))
+                  .sort((a, b) => a.km - b.km)
+                  .slice(0, 5);
+                const list = ranked.map(({ b, km }) => `${b.name} (${formatDistKm(km, unitsImperial)})`).join(", ");
+                showToast(`📐 Closest 5 of ${bookmarks.length} bookmarks: ${list}`);
+              },
+            }] : []),
             // ===== Bookmark power-user commands =====
             // Fly to the bookmark closest to current view (skips current).
             ...(bookmarks.length >= 2 ? [{
