@@ -4458,6 +4458,86 @@ function App() {
               const kmh = Math.round((fastest.velocityMs ?? 0) * 3.6);
               showToast(`✈ Fastest: ${fastest.callsign?.trim() || fastest.icao24.toUpperCase()} · ${knots} kt (${kmh} km/h)`);
             }},
+            // Emergency squawk codes: 7500=hijack, 7600=radio failure,
+            // 7700=general emergency. Most users will see "0 emergency"
+            // — that's the safe outcome. When non-zero, fly to the first
+            // one as a quick "what's going on" lookup.
+            { id: "aircraftEmergency", label: "⚠ Find aircraft squawking emergency codes (7500/7600/7700)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const emergency = aircraftSnapshot.aircraft.filter(a => a.squawk === "7500" || a.squawk === "7600" || a.squawk === "7700");
+              if (emergency.length === 0) { showToast("✓ No aircraft squawking emergency codes — all clear"); return; }
+              const first = emergency[0];
+              setSelectedAircraftId(first.icao24);
+              setFlyTo((p) => ({ id: p.id + 1, lat: first.lat, lon: first.lon, altKm: 50 }));
+              const codeMeaning: Record<string, string> = {
+                "7500": "🚨 hijack",
+                "7600": "📡 radio failure",
+                "7700": "🆘 general emergency"
+              };
+              const summary = emergency.map(a => `${a.callsign?.trim() || a.icao24} (${codeMeaning[a.squawk!] || a.squawk})`).join(", ");
+              showToast(`⚠ ${emergency.length} emergency squawk: ${summary}`);
+            }},
+            // Aircraft squawk distribution — most are 1200 (VFR uncontrolled)
+            // or various ATC-assigned codes. Lets users see the noise floor.
+            { id: "aircraftSquawkDist", label: "📡 Aircraft squawk-code distribution (top 5)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const counts: Record<string, number> = {};
+              for (const a of aircraftSnapshot.aircraft) {
+                if (!a.squawk) continue;
+                counts[a.squawk] = (counts[a.squawk] || 0) + 1;
+              }
+              const top = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+              const total = aircraftSnapshot.aircraft.length;
+              const summary = top.map(([sq, n]) => `${sq}: ${n} (${(n/total*100).toFixed(1)}%)`).join(" · ");
+              showToast(`📡 Top squawks: ${summary}`);
+            }},
+            // Long-haul filter: cruising commercial jets. >= 35000 ft
+            // altitude AND >= 200 m/s ground speed (~720 km/h, typical
+            // Mach 0.8 cruise).
+            { id: "aircraftLongHaul", label: "🌐 Count long-haul cruising flights (>35k ft, >720 km/h)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const longHaul = aircraftSnapshot.aircraft.filter(a => a.altitudeM > 10668 && (a.velocityMs ?? 0) > 200);
+              const pct = (longHaul.length / aircraftSnapshot.aircraft.length * 100).toFixed(1);
+              showToast(`🌐 ${longHaul.length.toLocaleString()} cruising long-haul flights (${pct}% of ${aircraftSnapshot.aircraft.length.toLocaleString()} airborne)`);
+            }},
+            // Decode the airline from the SELECTED aircraft's callsign
+            // prefix. Useful for "what airline is this?" without leaving
+            // the app to look it up.
+            ...(selectedAircraftId && aircraftSnapshot ? (() => {
+              const a = aircraftSnapshot.aircraft.find(x => x.icao24 === selectedAircraftId);
+              if (!a) return [];
+              const prefix = (a.callsign || "").trim().slice(0, 3).toUpperCase();
+              const airlineMap: Record<string, string> = {
+                UAL: "United Airlines", AAL: "American Airlines", DAL: "Delta", SWA: "Southwest",
+                BAW: "British Airways", DLH: "Lufthansa", AFR: "Air France", KLM: "KLM",
+                JAL: "Japan Airlines", ANA: "All Nippon Airways", QFA: "Qantas", QTR: "Qatar Airways",
+                EMR: "Emirates", UAE: "Emirates", ETD: "Etihad", SIA: "Singapore Airlines",
+                CPA: "Cathay Pacific", THA: "Thai Airways", ACA: "Air Canada", IBE: "Iberia",
+                ITY: "ITA Airways", AZA: "Alitalia/ITA", VIR: "Virgin Atlantic", JBU: "JetBlue",
+                FFT: "Frontier", NKS: "Spirit", ASA: "Alaska Airlines", HAL: "Hawaiian Airlines",
+                FDX: "FedEx", UPS: "UPS Airlines", GTI: "Atlas Air", RYR: "Ryanair",
+                EZY: "easyJet", WJA: "WestJet", AVA: "Avianca", AMX: "Aeroméxico",
+                CAL: "China Airlines", CCA: "Air China", CES: "China Eastern", CSN: "China Southern",
+                KAL: "Korean Air", OZR: "Asiana", EVA: "EVA Air", AIC: "Air India",
+                SAS: "SAS", SWR: "SWISS", AUA: "Austrian", LOT: "LOT Polish",
+                FIN: "Finnair", TAP: "TAP Portugal", ROT: "TAROM", WZZ: "Wizz Air",
+                RCH: "USAF Reach", PAT: "US Army Patriot", REA: "Royal Air Force",
+              };
+              const airline = airlineMap[prefix];
+              return [{
+                id: "aircraftDecodeAirline" as const,
+                label: airline ? `✈ Selected: ${a.callsign?.trim()} → ${airline}` : `✈ Selected callsign prefix "${prefix}" not in airline DB`,
+                group: "Tools" as const,
+                icon: Plane,
+                run: () => {
+                  if (airline) {
+                    showToast(`✈ ${a.callsign?.trim()}: ${airline}`);
+                  } else {
+                    showToast(`✈ Prefix "${prefix}" — try icao24.org or flightaware for full lookup`);
+                  }
+                },
+              }];
+            })() : []),
             { id: "exploreRandomQuake", label: earthquakes.length > 0 ? `🎲 Fly to a random recent earthquake (${earthquakes.length} loaded)` : "Fly to random earthquake (no quake data loaded — toggle Earthquakes layer first)", group: "Tools", icon: Sparkles, run: () => {
               if (earthquakes.length === 0) { showToast("Toggle Earthquakes layer first"); return; }
               const q = earthquakes[Math.floor(Math.random() * earthquakes.length)];
