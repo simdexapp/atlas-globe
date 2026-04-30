@@ -4249,6 +4249,83 @@ function App() {
             // 🎲 Random Wikipedia article that has geographic coords —
             // fetches up to 10 random pages, picks the first one with
             // coordinates, flies there + shows summary toast.
+            // ===== Live Near Me =====
+            // Geolocation + multi-source roundup. Asks for the user's
+            // location once, then queries: closest active aircraft,
+            // current weather, recent earthquakes, ISS distance, time
+            // until next dawn. One Cmd+K → comprehensive 'what's near me'.
+            { id: "liveNearMe", label: "📍 Live near me — aircraft + weather + quakes + ISS (uses geolocation)", group: "Tools", icon: Navigation, run: () => {
+              if (!navigator.geolocation) { showToast("Geolocation not available"); return; }
+              showToast("📍 Locating you, then fetching live data…");
+              navigator.geolocation.getCurrentPosition(async (pos) => {
+                const { latitude: myLat, longitude: myLon } = pos.coords;
+                showToast(`📍 You: ${formatLat(myLat)} ${formatLon(myLon)} — fetching live data…`);
+                // Aircraft (uses existing snapshot if loaded; else nothing)
+                let aircraftSummary = "";
+                if (aircraftSnapshot && aircraftSnapshot.aircraft.length > 0) {
+                  const closest = aircraftSnapshot.aircraft
+                    .filter(a => !a.onGround)
+                    .map(a => ({ a, km: haversineKm(myLat, myLon, a.lat, a.lon) }))
+                    .sort((x, y) => x.km - y.km)[0];
+                  if (closest) {
+                    aircraftSummary = `\n  ✈ Closest aircraft: ${closest.a.callsign || closest.a.icao24} ${formatDistKm(closest.km, unitsImperial)} away @ ${Math.round(closest.a.altitudeM / 0.3048).toLocaleString()} ft`;
+                  }
+                } else {
+                  aircraftSummary = "\n  ✈ Aircraft layer not loaded — turn it on for live traffic";
+                }
+                // Weather
+                let weatherSummary = "";
+                try {
+                  const wr = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${myLat}&longitude=${myLon}&current=temperature_2m,weather_code,relative_humidity_2m`, { cache: "no-store" });
+                  if (wr.ok) {
+                    const wj = await wr.json();
+                    const cur = wj?.current;
+                    if (cur) {
+                      const w = wmoLabel(cur.weather_code);
+                      weatherSummary = `\n  ☁ Weather: ${w.emoji} ${Math.round(cur.temperature_2m)}°C — ${w.label}, RH ${cur.relative_humidity_2m}%`;
+                    }
+                  }
+                } catch { /* ignore */ }
+                // Recent earthquakes within 200km
+                let quakeSummary = "";
+                try {
+                  const qr = await fetch(`https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&minlatitude=${myLat - 1.8}&maxlatitude=${myLat + 1.8}&minlongitude=${myLon - 1.8}&maxlongitude=${myLon + 1.8}&starttime=${new Date(Date.now() - 86_400_000).toISOString()}&minmagnitude=2`, { cache: "no-store" });
+                  if (qr.ok) {
+                    const qj = await qr.json();
+                    const features = qj?.features ?? [];
+                    if (features.length > 0) {
+                      const top = features.sort((a: any, b: any) => b.properties.mag - a.properties.mag)[0];
+                      quakeSummary = `\n  🌋 ${features.length} earthquake${features.length === 1 ? "" : "s"} M2+ within ~200km / 24h — strongest M${top.properties.mag.toFixed(1)} ${top.properties.place}`;
+                    } else {
+                      quakeSummary = "\n  🌋 No earthquakes M2+ near you in 24h";
+                    }
+                  }
+                } catch { /* ignore */ }
+                // ISS distance
+                let issSummary = "";
+                if (issPosition) {
+                  const km = haversineKm(myLat, myLon, issPosition.lat, issPosition.lon);
+                  issSummary = `\n  🛰 ISS: ${km.toLocaleString(undefined, { maximumFractionDigits: 0 })} km away (alt ~408km — visible if sky is dark + ISS is illuminated)`;
+                }
+                // Sun position now
+                const sun = solarTimes(myLat, myLon, new Date());
+                let sunSummary = "";
+                if (sun !== "polar-day" && sun !== "polar-night") {
+                  const utcH = new Date().getUTCHours() + new Date().getUTCMinutes() / 60;
+                  const nextEvent = utcH < sun.sunrise ? `next sunrise in ${(sun.sunrise - utcH).toFixed(1)}h` :
+                                    utcH < sun.sunset ? `sunset in ${(sun.sunset - utcH).toFixed(1)}h` :
+                                    `next sunrise in ${((sun.sunrise + 24 - utcH) % 24).toFixed(1)}h`;
+                  sunSummary = `\n  ☀ ${nextEvent}`;
+                }
+                const report = `📍 Live near me at ${formatLat(myLat)} ${formatLon(myLon)}:${aircraftSummary}${weatherSummary}${quakeSummary}${issSummary}${sunSummary}`;
+                console.log(report);
+                showToast(`📍 Live snapshot ready — full report in console (open DevTools)`);
+                // Also fly camera there
+                setFlyTo((p) => ({ id: p.id + 1, lat: myLat, lon: myLon, altKm: 50 }));
+              }, (err) => {
+                showToast(`Location error: ${err.message}`);
+              }, { timeout: 10000, enableHighAccuracy: false });
+            }},
             { id: "wikiRandomGeo", label: "🎲 Surprise me — fly to a random place from Wikipedia", group: "Tools", icon: Sparkles, run: async () => {
               showToast("Hunting for a random geographic article…");
               try {
