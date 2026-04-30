@@ -4507,6 +4507,74 @@ function App() {
               };
               tick();
             }},
+            // ===== Backup / restore all user data =====
+            // Single bundled export of EVERYTHING the user has created:
+            // pins, bookmarks (user-saved only), tours, annotations,
+            // layer presets, home location, search history. One JSON
+            // file = full transferable backup.
+            { id: "backupAll", label: "💾 Backup everything (pins + bookmarks + tours + annotations + presets) as JSON", group: "Tools", icon: BookmarkPlus, run: () => {
+              const userBookmarks = bookmarks.filter(b => b.savedAt > 0);
+              const backup = {
+                version: 1,
+                exportedAt: new Date().toISOString(),
+                pins,
+                bookmarks: userBookmarks,
+                tours: savedTours,
+                annotations,
+                layerPresets,
+                homeLocation,
+                searchHistory,
+                viewHistory,
+              };
+              const json = JSON.stringify(backup, null, 2);
+              const blob = new Blob([json], { type: "application/json" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `atlas-globe-backup-${new Date().toISOString().slice(0, 10)}.json`;
+              a.click();
+              URL.revokeObjectURL(url);
+              const total = pins.length + userBookmarks.length + savedTours.length + annotations.length + layerPresets.length;
+              showToast(`💾 Backup saved · ${pins.length} pins · ${userBookmarks.length} bookmarks · ${savedTours.length} tours · ${annotations.length} annotations · ${layerPresets.length} presets (${total} items)`);
+            }},
+            { id: "restoreAll", label: "📥 Restore from a backup JSON file (replaces everything)", group: "Tools", icon: BookmarkPlus, run: () => {
+              const input = document.createElement("input");
+              input.type = "file";
+              input.accept = "application/json,.json";
+              input.onchange = async () => {
+                const file = input.files?.[0];
+                if (!file) return;
+                try {
+                  const text = await file.text();
+                  const data = JSON.parse(text);
+                  if (data.version !== 1) {
+                    if (!window.confirm(`Backup version ${data.version} differs from current (1). Try anyway?`)) return;
+                  }
+                  if (!window.confirm(`Restore will REPLACE all current pins/bookmarks/tours/annotations/presets. Continue?`)) return;
+                  let restored = 0;
+                  if (Array.isArray(data.pins)) { setPins(data.pins); restored += data.pins.length; }
+                  if (Array.isArray(data.bookmarks)) {
+                    // Merge user bookmarks back with seed cities
+                    const userIds = new Set(data.bookmarks.map((b: Bookmark) => b.id));
+                    setBookmarks([...data.bookmarks, ...cityBookmarks.filter(c => !userIds.has(c.id))]);
+                    restored += data.bookmarks.length;
+                  }
+                  if (Array.isArray(data.tours)) { persistTours(data.tours); restored += data.tours.length; }
+                  if (Array.isArray(data.annotations)) { persistAnnotations(data.annotations); restored += data.annotations.length; }
+                  if (Array.isArray(data.layerPresets)) { persistLayerPresets(data.layerPresets); restored += data.layerPresets.length; }
+                  if (data.homeLocation && typeof data.homeLocation.lat === "number") {
+                    setHomeLocation(data.homeLocation);
+                    try { window.localStorage.setItem("atlas-home-location", JSON.stringify(data.homeLocation)); } catch { /* ignore */ }
+                  }
+                  if (Array.isArray(data.searchHistory)) setSearchHistory(data.searchHistory);
+                  if (Array.isArray(data.viewHistory)) setViewHistory(data.viewHistory);
+                  showToast(`📥 Restored ${restored} items from backup`);
+                } catch (e) {
+                  showToast(`Restore failed: ${(e as Error).message}`);
+                }
+              };
+              input.click();
+            }},
             // ===== Globe Annotations =====
             { id: "annotateHere", label: "📝 Drop a text annotation at this view (Surface mode)", group: "Tools", icon: BookmarkPlus, run: addAnnotation },
             ...(annotations.length > 0 ? [{
