@@ -1,4 +1,5 @@
 import {
+  Component,
   Suspense,
   lazy,
   useCallback,
@@ -8,7 +9,7 @@ import {
   useRef,
   useState
 } from "react";
-import type { CSSProperties, ComponentType } from "react";
+import type { CSSProperties, ComponentType, ReactNode } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, Stars, useTexture } from "@react-three/drei";
 import {
@@ -229,6 +230,83 @@ type PersistedState = {
 // boxes covering the imagery at low altitudes.
 const STORAGE_KEY = "atlas-globe-state-v16";
 const EARTH_RADIUS_KM = 6371;
+
+// ===== Error boundary for the heavy render-mode trees =====
+// Cesium's internal lifecycle occasionally throws TypeErrors during
+// React commits (most notably during mode-switch teardown when a Cesium
+// CallbackProperty is read after the viewer is destroyed). Without an
+// error boundary, React 19 unmounts the ENTIRE app tree on any
+// uncaught commit-phase error — which is exactly what made
+// "press S to switch modes" a one-way ticket to a blank page.
+//
+// This boundary catches any such error, logs it, swaps in a small
+// recovery UI with a "Reload" button + the underlying error message,
+// and keeps the rest of the React tree alive. resetKey lets a parent
+// re-mount the boundary after a state change (e.g. mode flip) so a
+// new attempt can start clean.
+class RenderModeErrorBoundary extends Component<
+  { children: ReactNode; resetKey?: string | number; label: string },
+  { error: Error | null }
+> {
+  state = { error: null as Error | null };
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+  componentDidCatch(error: Error, info: { componentStack?: string }) {
+    // eslint-disable-next-line no-console
+    console.error(`[atlas:${this.props.label}] caught render error`, error, info);
+  }
+  componentDidUpdate(prevProps: { resetKey?: string | number }) {
+    if (prevProps.resetKey !== this.props.resetKey && this.state.error) {
+      this.setState({ error: null });
+    }
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{
+          position: "fixed",
+          inset: "44px 340px 28px 52px",
+          display: "grid",
+          placeItems: "center",
+          background: "radial-gradient(ellipse at center, #1a1224, #04050a)",
+          color: "#fff",
+          fontFamily: "ui-sans-serif, system-ui",
+          textAlign: "center",
+          padding: 24,
+          zIndex: 50,
+        }}>
+          <div style={{ maxWidth: 420 }}>
+            <div style={{ fontSize: 32, marginBottom: 8 }}>🌍</div>
+            <h2 style={{ margin: "0 0 8px", fontSize: 18 }}>
+              {this.props.label === "surface" ? "Surface mode hit a snag" : "Globe view hit a snag"}
+            </h2>
+            <p style={{ color: "rgba(255,255,255,0.7)", fontSize: 13, margin: "0 0 16px" }}>
+              {this.state.error.message?.slice(0, 200) || "Something unexpected happened during render."}
+            </p>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              style={{
+                padding: "8px 18px",
+                border: 0,
+                borderRadius: 99,
+                background: "#5cb5ff",
+                color: "#04060c",
+                fontWeight: 700,
+                cursor: "pointer",
+                fontSize: 13,
+              }}
+            >
+              Reload
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // ===== Cached fetch helper for reverse-geocode + Wikipedia =====
 // Many features call Nominatim and Wikipedia REST APIs with the same
@@ -3703,6 +3781,7 @@ function App() {
         Skip to command palette
       </a>
       <div className="globeLayer" aria-label="3D viewport" id="atlasMain">
+        <RenderModeErrorBoundary label={mode} resetKey={mode}>
         {mode === "atlas" ? (
           <GlobeCanvas
             globe={globe}
@@ -3825,6 +3904,7 @@ function App() {
             />
           </Suspense>
         )}
+        </RenderModeErrorBoundary>
       </div>
 
       {showFps && <FpsOverlay />}
