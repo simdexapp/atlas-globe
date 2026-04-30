@@ -9434,8 +9434,11 @@ ${wpts}
         return (
           <AircraftCard
             aircraft={a}
-            onClose={() => setSelectedAircraftId(null)}
+            onClose={() => { setSelectedAircraftId(null); setFollowSelectedAircraft(false); }}
             onFlyTo={() => setFlyTo((c) => ({ id: c.id + 1, lat: a.lat, lon: a.lon, altKm: 600 }))}
+            onFollow={() => setFollowSelectedAircraft((v) => !v)}
+            following={followSelectedAircraft}
+            unitsImperial={unitsImperial}
           />
         );
       })()}
@@ -10684,15 +10687,40 @@ function VolcanoCard({ volcano, alertLabel, alertColor, onClose, onFlyTo }: {
 // Live aircraft info card with lazy-loaded enrichment from adsbdb.com.
 // Shows the full picture: operator + manufacturer + model + flight route
 // (origin/destination airports + airline) on top of the live ADS-B telemetry.
-function AircraftCard({ aircraft, onClose, onFlyTo }: {
+// Now includes: aircraft photo, ETA to destination, distance from user.
+function AircraftCard({ aircraft, onClose, onFlyTo, onFollow, following, unitsImperial }: {
   aircraft: Aircraft;
   onClose: () => void;
   onFlyTo: () => void;
+  onFollow?: () => void;
+  following?: boolean;
+  unitsImperial?: boolean;
 }) {
   const [detail, setDetail] = useState<AircraftDetail | null>(null);
   const [route, setRoute] = useState<FlightRoute | null>(null);
   const [enriching, setEnriching] = useState(false);
-
+  // User's geolocation for "distance from you" — best-effort, asks once.
+  const [userLoc, setUserLoc] = useState<{ lat: number; lon: number } | null>(null);
+  useEffect(() => {
+    if (userLoc || !navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (p) => setUserLoc({ lat: p.coords.latitude, lon: p.coords.longitude }),
+      () => { /* ignore — distance section just doesn't show */ },
+      { timeout: 5000, enableHighAccuracy: false, maximumAge: 600_000 }
+    );
+  }, [userLoc]);
+  // Distance from user if known
+  const distFromUser = userLoc ? haversineKm(userLoc.lat, userLoc.lon, aircraft.lat, aircraft.lon) : null;
+  // ETA to destination if route + airborne + reasonable speed
+  const etaInfo = (() => {
+    if (!route?.destination || aircraft.onGround || aircraft.velocityMs < 50) return null;
+    const remainingKm = haversineKm(aircraft.lat, aircraft.lon, route.destination.lat, route.destination.lon);
+    const speedKmH = aircraft.velocityMs * 3.6;
+    const hoursLeft = remainingKm / speedKmH;
+    const minutesLeft = Math.round(hoursLeft * 60);
+    const arrival = new Date(Date.now() + minutesLeft * 60_000);
+    return { remainingKm, minutesLeft, arrival };
+  })();
   // Fetch enrichment when the selected aircraft changes
   useEffect(() => {
     let cancelled = false;
@@ -10723,6 +10751,12 @@ function AircraftCard({ aircraft, onClose, onFlyTo }: {
         <button className="atlasIconBtn" onClick={onClose} aria-label="Close"><X size={14} /></button>
       </div>
 
+      {detail?.photoUrl && (
+        <div className="atlasAircraftPhoto">
+          <img src={detail.photoUrl} alt={`${detail.manufacturer || "Aircraft"} ${detail.model || ""}`} loading="lazy" />
+        </div>
+      )}
+
       {(route?.origin || route?.destination) && (
         <div className="atlasAircraftRoute">
           <div className="atlasAircraftAirport">
@@ -10734,6 +10768,20 @@ function AircraftCard({ aircraft, onClose, onFlyTo }: {
             <strong>{route.destination?.iata || "—"}</strong>
             <span>{route.destination?.city || (route.destination?.country || "")}</span>
           </div>
+        </div>
+      )}
+
+      {etaInfo && (
+        <div className="atlasAircraftEta">
+          <span>ETA</span>
+          <strong>{etaInfo.minutesLeft >= 60 ? `${Math.floor(etaInfo.minutesLeft / 60)}h ${etaInfo.minutesLeft % 60}m` : `${etaInfo.minutesLeft}m`}</strong>
+          <em>{formatDistKm(etaInfo.remainingKm, !!unitsImperial)} to go · arriving {etaInfo.arrival.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</em>
+        </div>
+      )}
+
+      {distFromUser !== null && (
+        <div className="atlasAircraftDist">
+          📍 <strong>{formatDistKm(distFromUser, !!unitsImperial)}</strong> from you
         </div>
       )}
 
@@ -10770,7 +10818,13 @@ function AircraftCard({ aircraft, onClose, onFlyTo }: {
 
       <div className="atlasAircraftCardActions">
         <button className="atlasBtn" onClick={onFlyTo}>Fly to</button>
+        {onFollow && (
+          <button className={following ? "atlasBtn active" : "atlasBtn"} onClick={onFollow}>
+            {following ? "✓ Following" : "🎯 Follow"}
+          </button>
+        )}
         <a className="atlasBtn" href={`https://globe.airplanes.live/?icao=${a.icao24}`} target="_blank" rel="noreferrer">Track ↗</a>
+        <a className="atlasBtn" href={`https://www.flightradar24.com/${a.callsign || a.icao24}`} target="_blank" rel="noreferrer">FR24 ↗</a>
       </div>
     </div>
   );

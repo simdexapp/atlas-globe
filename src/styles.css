@@ -4218,6 +4218,79 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
   letter-spacing: 0.04em;
 }
 
+/* Aircraft photo from adsbdb.com — small banner image */
+.atlasAircraftPhoto {
+  margin-bottom: var(--s-3);
+  border-radius: var(--r-2);
+  overflow: hidden;
+  background: var(--gray-1);
+  border: 1px solid var(--border-subtle);
+}
+.atlasAircraftPhoto img {
+  display: block;
+  width: 100%;
+  max-height: 140px;
+  object-fit: cover;
+}
+
+/* ETA chip — shows when route + airborne */
+.atlasAircraftEta {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-bottom: var(--s-3);
+  border-radius: var(--r-2);
+  background: color-mix(in srgb, var(--accent), transparent 86%);
+  border: 1px solid color-mix(in srgb, var(--accent), transparent 60%);
+  font-size: 12px;
+}
+.atlasAircraftEta span {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--gray-9);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.atlasAircraftEta strong {
+  font-family: ui-monospace, monospace;
+  font-size: 16px;
+  color: var(--accent);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.atlasAircraftEta em {
+  font-style: normal;
+  font-size: 10.5px;
+  color: var(--gray-10);
+  text-align: right;
+}
+
+/* Distance from user chip */
+.atlasAircraftDist {
+  padding: 6px 10px;
+  margin-bottom: var(--s-3);
+  border-radius: var(--r-2);
+  background: var(--gray-1);
+  font-size: 11.5px;
+  color: var(--gray-11);
+  text-align: center;
+}
+.atlasAircraftDist strong {
+  color: var(--gray-12);
+  font-family: ui-monospace, monospace;
+  font-weight: 700;
+  margin: 0 4px;
+}
+
+/* Active state for the Follow button */
+.atlasAircraftCardActions .atlasBtn.active {
+  background: var(--accent);
+  color: var(--bg);
+  border-color: var(--accent);
+}
+
 .atlasAircraftRoute {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
