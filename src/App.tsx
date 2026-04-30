@@ -4803,6 +4803,72 @@ function App() {
               const fractionEarth = horizonKm / (Math.PI * EARTH_RADIUS_KM);
               showToast(`↻ From ${formatDistKm(h, unitsImperial)} altitude, horizon is ${formatDistKm(horizonKm, unitsImperial)} away — ${(fractionEarth * 100).toFixed(1)}% of the way around Earth`);
             }},
+            // ===== Discovery / preset adventures =====
+            // Drop pins at the 7 continents — a curated starter set so
+            // new users have an immediate visual sense of pin coverage
+            // and can build a "world tour" plan from there.
+            { id: "pinAllContinents", label: "🌍 Drop a pin at each of the 7 continents (preset)", group: "Tools", icon: BookmarkPlus, run: () => {
+              const continents: Array<{ name: string; emoji: string; lat: number; lon: number; color: string }> = [
+                { name: "North America (Denali, Alaska)", emoji: "🌎", lat: 63.0692,  lon: -151.0070, color: "#5cb5ff" },
+                { name: "South America (Christ the Redeemer, Rio)", emoji: "🌎", lat: -22.9519, lon: -43.2105, color: "#ffd66b" },
+                { name: "Europe (Eiffel Tower, Paris)", emoji: "🇪🇺", lat: 48.8584,  lon: 2.2945,    color: "#ff7be0" },
+                { name: "Africa (Mt. Kilimanjaro)", emoji: "🌍", lat: -3.0674,  lon: 37.3556,   color: "#7cffb1" },
+                { name: "Asia (Mt. Everest)", emoji: "🌏", lat: 27.9881,  lon: 86.9250,   color: "#ff8a4d" },
+                { name: "Australia/Oceania (Uluru)", emoji: "🇦🇺", lat: -25.3444, lon: 131.0369,  color: "#a8a8ff" },
+                { name: "Antarctica (South Pole)", emoji: "🇦🇶", lat: -90,      lon: 0,         color: "#ffffff" },
+              ];
+              const newPins: Pin[] = continents.map((c, i) => ({
+                id: `pin-cont-${i}-${Date.now()}`,
+                lat: c.lat, lon: c.lon, label: `${c.emoji} ${c.name.split(" (")[0]}`,
+                color: c.color, createdAt: Date.now() + i,
+              }));
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`🌍 Dropped 7 pins — one per continent. View in Pins panel.`);
+            }},
+            // Drop pins at all preset bookmarks — bulk conversion
+            ...(bookmarks.length >= 5 ? [{
+              id: "bookmarksToPins" as const,
+              label: `📍 Convert all ${bookmarks.length} bookmarks to pins`,
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                if (!window.confirm(`Drop ${bookmarks.length} pins (one per bookmark)? This adds to your existing pin list.`)) return;
+                const newPins: Pin[] = bookmarks.map((b, i) => ({
+                  id: `pin-bmk-${i}-${Date.now()}`,
+                  lat: b.lat, lon: b.lon, label: b.name,
+                  color: PIN_COLORS[i % PIN_COLORS.length],
+                  createdAt: Date.now() + i,
+                }));
+                setPins((prev) => [...prev, ...newPins]);
+                showToast(`📍 Created ${newPins.length} pins from bookmarks`);
+              },
+            }] : []),
+            // Drop pin at random unexplored point — > 1500km from any pin
+            ...(pins.length >= 1 ? [{
+              id: "pinUnexplored" as const,
+              label: `🎯 Fly to a random unexplored area (>1500km from any pin)`,
+              group: "Tools" as const,
+              icon: Sparkles,
+              run: () => {
+                // Try up to 50 random points; pick the one furthest from
+                // the nearest pin, with min 1500km threshold.
+                let bestLat = 0, bestLon = 0, bestDist = 0;
+                for (let attempt = 0; attempt < 50; attempt++) {
+                  const u = Math.random() * 2 - 1;
+                  const lat = Math.asin(u) * 180 / Math.PI;
+                  const lon = Math.random() * 360 - 180;
+                  let minDist = Infinity;
+                  for (const p of pins) {
+                    const d = haversineKm(lat, lon, p.lat, p.lon);
+                    if (d < minDist) minDist = d;
+                  }
+                  if (minDist > bestDist) { bestDist = minDist; bestLat = lat; bestLon = lon; }
+                  if (bestDist > 1500) break;
+                }
+                setFlyTo((c) => ({ id: c.id + 1, lat: bestLat, lon: bestLon, altKm: 5000 }));
+                showToast(`🎯 Unexplored: ${formatLat(bestLat)} ${formatLon(bestLon)} · ${formatDistKm(bestDist, unitsImperial)} from nearest pin`);
+              },
+            }] : []),
             // ===== Sun-time countdown commands =====
             // Time until next sunrise / sunset at current view location.
             { id: "factSunCountdown", label: "⏰ Time until next sunrise / sunset at current view", group: "Tools", icon: SunIcon, run: () => {
