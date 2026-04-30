@@ -229,6 +229,103 @@ type PersistedState = {
 // boxes covering the imagery at low altitudes.
 const STORAGE_KEY = "atlas-globe-state-v16";
 const EARTH_RADIUS_KM = 6371;
+
+// ===== Cached fetch helper for reverse-geocode + Wikipedia =====
+// Many features call Nominatim and Wikipedia REST APIs with the same
+// (lat, lon) repeatedly: pin auto-naming, click toasts, "what's here?"
+// commands, weather lookups, etc. Caching cuts redundant network traffic
+// AND speeds up the visible UI (no fetch latency on cache hit).
+//
+// Strategy: localStorage with TTL. Key = `${prefix}:${quantizedLat},${quantizedLon}`
+// — quantized to 0.05° (~5km) so nearby coords share a cache entry. TTL
+// 24h for reverse-geocode (place names rarely change), 7d for Wikipedia
+// (article extracts even less so).
+//
+// Max 200 entries per prefix; on overflow we evict the oldest 40.
+type CacheEntry<T> = { v: T; t: number };
+function cacheKey(prefix: string, lat: number, lon: number, q = 20): string {
+  // q=20 → quantize to 0.05° (~5.5 km at equator)
+  const qlat = Math.round(lat * q) / q;
+  const qlon = Math.round(lon * q) / q;
+  return `atlas-cache:${prefix}:${qlat.toFixed(2)},${qlon.toFixed(2)}`;
+}
+function cacheGet<T>(key: string, ttlMs: number): T | null {
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return null;
+    const entry = JSON.parse(raw) as CacheEntry<T>;
+    if (Date.now() - entry.t > ttlMs) {
+      window.localStorage.removeItem(key);
+      return null;
+    }
+    return entry.v;
+  } catch { return null; }
+}
+function cacheSet<T>(key: string, value: T): void {
+  try {
+    const entry: CacheEntry<T> = { v: value, t: Date.now() };
+    window.localStorage.setItem(key, JSON.stringify(entry));
+  } catch (e) {
+    // QuotaExceeded → evict 40 oldest atlas-cache entries and retry once
+    if ((e as DOMException)?.name === "QuotaExceededError") {
+      const allKeys = Object.keys(window.localStorage).filter(k => k.startsWith("atlas-cache:"));
+      const withTimes = allKeys
+        .map(k => {
+          try { return { k, t: (JSON.parse(window.localStorage.getItem(k)!) as CacheEntry<unknown>).t }; }
+          catch { return { k, t: 0 }; }
+        })
+        .sort((a, b) => a.t - b.t);
+      for (let i = 0; i < Math.min(40, withTimes.length); i++) {
+        try { window.localStorage.removeItem(withTimes[i].k); } catch { /* ignore */ }
+      }
+      try {
+        const entry: CacheEntry<T> = { v: value, t: Date.now() };
+        window.localStorage.setItem(key, JSON.stringify(entry));
+      } catch { /* give up */ }
+    }
+  }
+}
+
+// Cached reverse-geocode. Returns place data from Nominatim, cached 24h
+// at ~5km grid resolution. Drops in for direct nominatim fetch calls.
+type ReverseGeocodeResult = { display_name?: string; address?: Record<string, string> };
+async function cachedReverseGeocode(lat: number, lon: number, zoom = 10): Promise<ReverseGeocodeResult | null> {
+  const key = cacheKey(`rg${zoom}`, lat, lon);
+  const cached = cacheGet<ReverseGeocodeResult>(key, 24 * 60 * 60 * 1000);
+  if (cached) return cached;
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=${zoom}`,
+      { headers: { Accept: "application/json" } }
+    );
+    if (!res.ok) return null;
+    const data = await res.json() as ReverseGeocodeResult;
+    cacheSet(key, data);
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+// Cached Wikipedia summary. Article extracts cached 7 days.
+type WikiSummary = { extract?: string; content_urls?: { desktop?: { page?: string } } };
+async function cachedWikiSummary(title: string): Promise<WikiSummary | null> {
+  const key = `atlas-cache:wiki:${title.toLowerCase().slice(0, 80)}`;
+  const cached = cacheGet<WikiSummary>(key, 7 * 24 * 60 * 60 * 1000);
+  if (cached) return cached;
+  try {
+    const res = await fetch(
+      `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`,
+      { headers: { Accept: "application/json" } }
+    );
+    if (!res.ok) return null;
+    const data = await res.json() as WikiSummary;
+    cacheSet(key, data);
+    return data;
+  } catch {
+    return null;
+  }
+}
 const MIN_DISTANCE = 1.0008;        // ~5 km above surface (texture-pixelated, but real zoom)
 const MAX_DISTANCE = 12;            // far view from space
 const SPACE_DISTANCE = 2.6;          // default starting altitude
@@ -2458,20 +2555,16 @@ function App() {
     if (!wantsPin) {
       // Info-only path. Toast the coords immediately so feedback is fast,
       // then upgrade to a place-name toast when reverse geocode resolves.
+      // Uses cachedReverseGeocode — repeat clicks within ~5km re-use the
+      // 24h-cached result, so place names appear instantly the second time.
       showToast(`${formatLat(lat)} ${formatLon(lon)}`);
       (async () => {
-        try {
-          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10`, {
-            headers: { Accept: "application/json" }
-          });
-          if (!res.ok) return;
-          const data = await res.json() as { display_name?: string; address?: Record<string, string> };
-          if (data?.address) {
-            const a = data.address;
-            const name = a.city || a.town || a.village || a.county || a.state || a.country || data.display_name?.split(",")[0]?.trim();
-            if (name) showToast(`📍 ${name} · ${formatLat(lat)} ${formatLon(lon)}`);
-          }
-        } catch {/* ignore */}
+        const data = await cachedReverseGeocode(lat, lon, 10);
+        if (data?.address) {
+          const a = data.address;
+          const name = a.city || a.town || a.village || a.county || a.state || a.country || data.display_name?.split(",")[0]?.trim();
+          if (name) showToast(`📍 ${name} · ${formatLat(lat)} ${formatLon(lon)}`);
+        }
       })();
       return;
     }
@@ -2490,23 +2583,17 @@ function App() {
     setSelectedPin(id);
     showToast(`Pin dropped at ${formatLat(lat)} ${formatLon(lon)}`);
 
-    // Reverse geocode (best-effort, async) — upgrades the pin label to
-    // the place name once Nominatim responds.
+    // Reverse geocode (best-effort, async, cached 24h) — upgrades the
+    // pin label to the place name once Nominatim responds.
     (async () => {
-      try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10`, {
-          headers: { Accept: "application/json" }
-        });
-        if (!res.ok) return;
-        const data = await res.json() as { display_name?: string; address?: Record<string, string> };
-        if (data?.address) {
-          const a = data.address;
-          const name = a.city || a.town || a.village || a.county || a.state || a.country || data.display_name?.split(",")[0]?.trim();
-          if (name) {
-            setPins((prev) => prev.map((p) => p.id === id ? { ...p, label: name } : p));
-          }
+      const data = await cachedReverseGeocode(lat, lon, 10);
+      if (data?.address) {
+        const a = data.address;
+        const name = a.city || a.town || a.village || a.county || a.state || a.country || data.display_name?.split(",")[0]?.trim();
+        if (name) {
+          setPins((prev) => prev.map((p) => p.id === id ? { ...p, label: name } : p));
         }
-      } catch {/* ignore */}
+      }
     })();
   }, [pins.length, showToast, measureMode, pinTool]);
 
@@ -4129,46 +4216,39 @@ function App() {
             }},
             // Toggle the new at-a-glance Live World Stats widget
             { id: "toggleLiveStats", label: layers.liveStats ? "Hide Live World Stats widget" : "🌐 Show Live World Stats widget", group: "Widgets", icon: Globe2, run: () => toggleLayer("liveStats") },
+            // Performance / debug: drop the local geocode + Wikipedia cache.
+            // Useful if a stale entry needs refreshing or to test fresh fetches.
+            { id: "clearAtlasCache", label: (() => {
+              const n = Object.keys(localStorage).filter(k => k.startsWith("atlas-cache:")).length;
+              return n > 0 ? `🧹 Clear network cache (${n} cached entries)` : "Network cache is empty";
+            })(), group: "Tools", icon: Trash2, run: () => {
+              const keys = Object.keys(localStorage).filter(k => k.startsWith("atlas-cache:"));
+              keys.forEach(k => localStorage.removeItem(k));
+              showToast(`🧹 Cleared ${keys.length} cached network result${keys.length === 1 ? "" : "s"}`);
+            }},
             // 📖 Wikipedia summary for the current camera view location.
             // Two-step fetch: Nominatim reverse-geocode → place name →
-            // Wikipedia REST API summary endpoint. Shows a 4-second toast
-            // with the article extract, plus a "open in browser" command
-            // chained for deeper reading.
+            // Wikipedia REST API summary endpoint. Both calls hit the
+            // localStorage cache (24h reverse-geocode, 7d Wikipedia) so
+            // re-running for the same place is instant.
             { id: "wikiHere", label: "📖 Wikipedia summary for this view", group: "Tools", icon: Search, run: async () => {
               const c = cameraStateRef.current;
               if (!c) { showToast("No camera state"); return; }
               showToast("📖 Looking up this place…");
-              try {
-                // Step 1: reverse geocode to get place name
-                const rev = await fetch(
-                  `https://nominatim.openstreetmap.org/reverse?format=json&lat=${c.lat}&lon=${c.lon}&zoom=10`,
-                  { headers: { Accept: "application/json" } }
-                );
-                if (!rev.ok) { showToast("Couldn't reverse-geocode"); return; }
-                const data = await rev.json() as { display_name?: string; address?: Record<string, string> };
-                const a = data.address || {};
-                const name = a.city || a.town || a.village || a.county || a.state || a.country || data.display_name?.split(",")[0]?.trim();
-                if (!name) { showToast("No place name found"); return; }
-                // Step 2: fetch wikipedia summary
-                const wiki = await fetch(
-                  `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(name)}`,
-                  { headers: { Accept: "application/json" } }
-                );
-                if (!wiki.ok) { showToast(`📖 ${name}: no Wikipedia article`); return; }
-                const wd = await wiki.json() as { extract?: string; content_urls?: { desktop?: { page?: string } } };
-                const extract = (wd.extract || "").slice(0, 220);
-                if (!extract) { showToast(`📖 ${name}: empty Wikipedia summary`); return; }
-                showToast(`📖 ${name}: ${extract}${extract.length === 220 ? "…" : ""}`);
-                // Attach a follow-up toast with the open-in-browser hint
-                // after the main toast displays for a moment.
-                const url = wd.content_urls?.desktop?.page;
-                if (url) {
-                  setTimeout(() => showToast(`🔗 Read full article: ${url} (Cmd+K → 🔗 Open Wikipedia)`), 5000);
-                  // Stash the URL for a follow-up command (used by next entry)
-                  (window as any).__atlasLastWikiUrl = url;
-                }
-              } catch (err) {
-                showToast(`Wikipedia lookup failed: ${(err as Error).message}`);
+              const data = await cachedReverseGeocode(c.lat, c.lon, 10);
+              if (!data) { showToast("Couldn't reverse-geocode"); return; }
+              const a = data.address || {};
+              const name = a.city || a.town || a.village || a.county || a.state || a.country || data.display_name?.split(",")[0]?.trim();
+              if (!name) { showToast("No place name found"); return; }
+              const wd = await cachedWikiSummary(name);
+              if (!wd) { showToast(`📖 ${name}: no Wikipedia article`); return; }
+              const extract = (wd.extract || "").slice(0, 220);
+              if (!extract) { showToast(`📖 ${name}: empty Wikipedia summary`); return; }
+              showToast(`📖 ${name}: ${extract}${extract.length === 220 ? "…" : ""}`);
+              const url = wd.content_urls?.desktop?.page;
+              if (url) {
+                setTimeout(() => showToast(`🔗 Read full article: ${url} (Cmd+K → 🔗 Open Wikipedia)`), 5000);
+                (window as any).__atlasLastWikiUrl = url;
               }
             }},
             // Companion: open the LAST Wikipedia URL we found, if any.
