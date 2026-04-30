@@ -4348,6 +4348,49 @@ function App() {
               const slantKm = Math.sqrt(surfaceKm * surfaceKm + 408 * 408);
               showToast(`🛰 ISS is ${formatDistKm(slantKm, unitsImperial)} away · (${formatDistKm(surfaceKm, unitsImperial)} ground · 408 km altitude)`);
             }},
+            // Live-data exploration: pick interesting subjects from the
+            // current snapshot and fly to them. Each makes the live
+            // aircraft / earthquake / volcano data feel personal.
+            { id: "exploreRandomAircraft", label: "🎲 Fly to a random airborne aircraft RIGHT NOW", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const a = aircraftSnapshot.aircraft[Math.floor(Math.random() * aircraftSnapshot.aircraft.length)];
+              setSelectedAircraftId(a.icao24);
+              setFlyTo((p) => ({ id: p.id + 1, lat: a.lat, lon: a.lon, altKm: 50 }));
+              const altFt = Math.round(a.altitudeM / 0.3048).toLocaleString();
+              showToast(`✈ ${a.callsign?.trim() || a.icao24.toUpperCase()} · ${altFt} ft`);
+            }},
+            { id: "exploreHighestAircraft", label: "✈ Fly to highest-altitude aircraft RIGHT NOW", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              let highest = aircraftSnapshot.aircraft[0];
+              for (const a of aircraftSnapshot.aircraft) if (a.altitudeM > highest.altitudeM) highest = a;
+              setSelectedAircraftId(highest.icao24);
+              setFlyTo((p) => ({ id: p.id + 1, lat: highest.lat, lon: highest.lon, altKm: 60 }));
+              const altFt = Math.round(highest.altitudeM / 0.3048).toLocaleString();
+              showToast(`✈ Highest: ${highest.callsign?.trim() || highest.icao24.toUpperCase()} · ${altFt} ft`);
+            }},
+            { id: "exploreFastestAircraft", label: "✈ Fly to fastest aircraft RIGHT NOW", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              let fastest = aircraftSnapshot.aircraft[0];
+              for (const a of aircraftSnapshot.aircraft) if ((a.velocityMs ?? 0) > (fastest.velocityMs ?? 0)) fastest = a;
+              setSelectedAircraftId(fastest.icao24);
+              setFlyTo((p) => ({ id: p.id + 1, lat: fastest.lat, lon: fastest.lon, altKm: 50 }));
+              const knots = Math.round((fastest.velocityMs ?? 0) * 1.94384);
+              const kmh = Math.round((fastest.velocityMs ?? 0) * 3.6);
+              showToast(`✈ Fastest: ${fastest.callsign?.trim() || fastest.icao24.toUpperCase()} · ${knots} kt (${kmh} km/h)`);
+            }},
+            { id: "exploreRandomQuake", label: earthquakes.length > 0 ? `🎲 Fly to a random recent earthquake (${earthquakes.length} loaded)` : "Fly to random earthquake (no quake data loaded — toggle Earthquakes layer first)", group: "Tools", icon: Sparkles, run: () => {
+              if (earthquakes.length === 0) { showToast("Toggle Earthquakes layer first"); return; }
+              const q = earthquakes[Math.floor(Math.random() * earthquakes.length)];
+              setFlyTo((p) => ({ id: p.id + 1, lat: q.lat, lon: q.lon, altKm: 200 }));
+              showToast(`🌍 M${q.mag.toFixed(1)} · ${q.place}`);
+            }},
+            { id: "exploreStrongestQuake", label: earthquakes.length > 0 ? `🌍 Fly to strongest recent earthquake (top of ${earthquakes.length})` : "Fly to strongest quake (no data — toggle layer first)", group: "Tools", icon: Sparkles, run: () => {
+              if (earthquakes.length === 0) { showToast("Toggle Earthquakes layer first"); return; }
+              let strongest = earthquakes[0];
+              for (const q of earthquakes) if (q.mag > strongest.mag) strongest = q;
+              setFlyTo((p) => ({ id: p.id + 1, lat: strongest.lat, lon: strongest.lon, altKm: 300 }));
+              showToast(`🌍 Strongest: M${strongest.mag.toFixed(1)} · ${strongest.place}`);
+            }},
             { id: "factHorizonDistance", label: "↻ Horizon distance from current altitude", group: "Tools", icon: Compass, run: () => {
               const c = cameraStateRef.current;
               if (!c) return;
