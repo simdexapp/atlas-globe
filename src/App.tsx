@@ -153,6 +153,9 @@ type LayerVisibility = {
   worldClocks: boolean;
   // View history — sidebar widget listing recently-visited views.
   viewHistory: boolean;
+  // Ambient Earth mode — kiosk-style display: hides chrome, auto-orbits,
+  // shows a single comprehensive live-data widget for big-screen displays.
+  ambientEarth: boolean;
 };
 
 type GlobeSettings = {
@@ -293,6 +296,7 @@ const defaultLayers: LayerVisibility = {
   skyTonight: false,
   worldClocks: false,
   viewHistory: false,
+  ambientEarth: false,
   // 3D OSM Buildings tileset is heavy and renders with edge outlines
   // that disable imagery draping underneath, painting the screen with
   // dark olive boxes at low altitudes (the user's tear repro). Off by
@@ -4113,6 +4117,22 @@ function App() {
             { id: "widgetSkyTonight", label: layers.skyTonight ? "Hide tonight-in-the-sky widget" : "Show tonight in the sky (moon, planets, sun, ISS)", group: "Widgets", icon: Telescope, run: () => toggleLayer("skyTonight") },
             { id: "widgetWorldClocks", label: layers.worldClocks ? "Hide world clocks widget" : "Show world clocks (6 financial centers, market status)", group: "Widgets", icon: Compass, run: () => toggleLayer("worldClocks") },
             { id: "widgetViewHistory", label: layers.viewHistory ? "Hide view history widget" : `Show view history (${viewHistory.length} recent views)`, group: "Widgets", icon: RotateCcw, run: () => toggleLayer("viewHistory") },
+            // Ambient Earth — kiosk/big-screen mode. Hides UI chrome,
+            // starts auto-orbit, shows comprehensive live-data overlay.
+            // Made for office TVs, conference displays, screensavers.
+            { id: "ambientEarth", label: layers.ambientEarth ? "🛑 Exit Ambient Earth (kiosk mode)" : "🌍 Enter Ambient Earth (kiosk mode — auto-orbit + live data)", group: "Widgets", icon: Globe2, run: () => {
+              const willActivate = !layers.ambientEarth;
+              toggleLayer("ambientEarth");
+              if (willActivate) {
+                setHideUi(true);
+                setOrbiting(true);
+                showToast("🌍 Ambient Earth — press H to show UI again");
+              } else {
+                setHideUi(false);
+                setOrbiting(false);
+                showToast("🛑 Ambient Earth off");
+              }
+            }},
             { id: "viewHistoryClear", label: viewHistory.length > 0 ? `🗑 Clear view history (${viewHistory.length} entries)` : "View history empty", group: "Widgets", icon: Trash2, run: () => {
               setViewHistory([]);
               try { window.localStorage.removeItem("atlas-view-history"); } catch { /* ignore */ }
@@ -8115,6 +8135,81 @@ ${wpts}
                 </li>
               ))}
             </ul>
+          </div>
+        );
+      })()}
+
+      {/* Ambient Earth — kiosk/big-screen comprehensive live overlay.
+          Renders OUTSIDE the hideUi gate so it shows even when chrome
+          is hidden. Big readable type, designed for 1080p+ displays
+          across the room. */}
+      {layers.ambientEarth && (() => {
+        const aircraftCount = aircraftSnapshot?.aircraft.length ?? 0;
+        const eonetCount = eonetEvents.length;
+        const kp = spaceWeather?.kpLatest;
+        const nextLaunch = launches.find((l) => l.netUnixMs > Date.now());
+        // Big quake in last 24h
+        const bigQuake = earthquakes.length > 0
+          ? earthquakes.reduce((max, q) => q.mag > max.mag ? q : max)
+          : null;
+        const now = new Date();
+        // Sub-solar lat/lon — where the sun is directly overhead RIGHT NOW
+        const utcHours = now.getUTCHours() + now.getUTCMinutes() / 60;
+        const dayOfYear = Math.floor((now.getTime() - Date.UTC(now.getUTCFullYear(), 0, 0)) / 86400000);
+        const subsolarLat = 23.45 * Math.sin((360 / 365) * (dayOfYear - 81) * Math.PI / 180);
+        const subsolarLon = -((utcHours - 12) * 15);
+        return (
+          <div className="atlasAmbientOverlay" role="status" aria-label="Ambient Earth dashboard">
+            <div className="atlasAmbientHeader">
+              <strong>ATLAS · LIVE EARTH</strong>
+              <span>{now.toUTCString().slice(17, 22)} UTC · {now.toUTCString().slice(0, 16)}</span>
+            </div>
+            <div className="atlasAmbientGrid">
+              <div className="atlasAmbientCell">
+                <span>AIRCRAFT TRACKED</span>
+                <strong>{aircraftCount > 0 ? aircraftCount.toLocaleString() : "—"}</strong>
+                <em>live ADS-B feed</em>
+              </div>
+              <div className="atlasAmbientCell">
+                <span>EONET EVENTS</span>
+                <strong>{eonetCount > 0 ? eonetCount : "—"}</strong>
+                <em>open in last 30d</em>
+              </div>
+              <div className="atlasAmbientCell">
+                <span>BIGGEST QUAKE 24H</span>
+                <strong>{bigQuake ? `M${bigQuake.mag.toFixed(1)}` : "—"}</strong>
+                <em>{bigQuake ? bigQuake.place : "—"}</em>
+              </div>
+              <div className="atlasAmbientCell">
+                <span>SOLAR Kp</span>
+                <strong>{kp !== undefined ? kp.toFixed(1) : "—"}</strong>
+                <em>{kp !== undefined ? kpScale(kp).label : "—"}</em>
+              </div>
+              <div className="atlasAmbientCell">
+                <span>SUB-SOLAR POINT</span>
+                <strong>{formatLat(subsolarLat)}</strong>
+                <em>sun overhead at {formatLon(subsolarLon)}</em>
+              </div>
+              {nextLaunch && (
+                <div className="atlasAmbientCell">
+                  <span>NEXT LAUNCH</span>
+                  <strong>{timeUntilLaunch(nextLaunch.netUnixMs)}</strong>
+                  <em>{nextLaunch.name.split("|")[0].trim()}</em>
+                </div>
+              )}
+              {issPosition && (
+                <div className="atlasAmbientCell">
+                  <span>ISS</span>
+                  <strong>{formatLat(issPosition.lat)}</strong>
+                  <em>{formatLon(issPosition.lon)} · ~408km</em>
+                </div>
+              )}
+              <div className="atlasAmbientCell atlasAmbientHelp">
+                <span>EXIT</span>
+                <strong>Press H</strong>
+                <em>to show UI</em>
+              </div>
+            </div>
           </div>
         );
       })()}

@@ -3627,6 +3627,102 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
 @media (max-width: 980px) { .atlasViewHistoryWidget { right: 8px; top: 280px; } }
 @media (max-width: 620px) { .atlasViewHistoryWidget { display: none; } }
 
+/* ============= Ambient Earth — kiosk/big-screen overlay =============
+   Sized for 1080p+ displays. High-contrast text designed to be readable
+   from across the room. Renders OUTSIDE the hideUi gate so it's the only
+   chrome visible in kiosk mode. Bottom-anchored to avoid covering globe. */
+.atlasAmbientOverlay {
+  position: fixed;
+  bottom: 24px;
+  left: 24px;
+  right: 24px;
+  z-index: 50;
+  padding: 18px 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-3);
+  background: var(--surface-elevated);
+  backdrop-filter: blur(20px);
+  box-shadow: var(--shadow-3);
+  color: var(--gray-12);
+  pointer-events: none;
+}
+.atlasAmbientHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.atlasAmbientHeader strong {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  color: var(--gray-12);
+}
+.atlasAmbientHeader span {
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+  color: var(--gray-10);
+  letter-spacing: 0.04em;
+}
+.atlasAmbientGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+.atlasAmbientCell {
+  display: grid;
+  gap: 2px;
+  padding: 12px 14px;
+  border-radius: var(--r-2);
+  background: var(--gray-1);
+  border: 1px solid var(--border-subtle);
+}
+.atlasAmbientCell span {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--gray-9);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.atlasAmbientCell strong {
+  font-family: ui-monospace, monospace;
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--gray-12);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+}
+.atlasAmbientCell em {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--gray-9);
+  font-family: ui-monospace, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.atlasAmbientCell.atlasAmbientHelp {
+  background: color-mix(in srgb, var(--accent), transparent 88%);
+  border-color: var(--border-accent);
+}
+.atlasAmbientCell.atlasAmbientHelp strong {
+  font-size: 16px;
+  color: var(--accent);
+  letter-spacing: 0.02em;
+  font-family: Inter, sans-serif;
+}
+
+@media (max-width: 720px) {
+  .atlasAmbientOverlay { padding: 10px 14px; bottom: 12px; left: 12px; right: 12px; }
+  .atlasAmbientHeader strong { font-size: 13px; }
+  .atlasAmbientGrid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .atlasAmbientCell { padding: 8px 10px; }
+  .atlasAmbientCell strong { font-size: 18px; }
+}
+
 /* ============= Tour player =============
    Caption + progress bar shown while a saved tour is auto-flying. */
 .atlasTourPlayer {
