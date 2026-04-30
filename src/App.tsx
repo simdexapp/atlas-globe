@@ -5528,6 +5528,70 @@ function App() {
                 showToast(`🎯 Midpoint: ${formatLat(lat)} ${formatLon(lon)}`);
               },
             }] : []),
+            // Per-leg statistics — find shortest/longest/mean leg.
+            // Useful for trip pacing or identifying outlier legs.
+            ...(measureMode && measurePoints.length >= 3 ? [{
+              id: "measureLegStats" as const,
+              label: "📏 Per-leg statistics — shortest, longest, mean",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                const legs: number[] = [];
+                for (let i = 1; i < measurePoints.length; i++) {
+                  legs.push(haversineKm(measurePoints[i-1].lat, measurePoints[i-1].lon, measurePoints[i].lat, measurePoints[i].lon));
+                }
+                const min = Math.min(...legs);
+                const max = Math.max(...legs);
+                const mean = legs.reduce((a, b) => a + b, 0) / legs.length;
+                const minIdx = legs.indexOf(min) + 1;
+                const maxIdx = legs.indexOf(max) + 1;
+                showToast(`📏 ${legs.length} legs · shortest leg #${minIdx}: ${formatDistKm(min, unitsImperial)} · longest leg #${maxIdx}: ${formatDistKm(max, unitsImperial)} · mean: ${formatDistKm(mean, unitsImperial)}`);
+              },
+            }] : []),
+            // Bearing distribution — count legs heading roughly N/E/S/W.
+            // Useful for "is my route mostly going east?" pattern detection.
+            ...(measureMode && measurePoints.length >= 3 ? [{
+              id: "measureBearingDist" as const,
+              label: "🧭 Bearing distribution across all legs (N/E/S/W)",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                let n = 0, e = 0, s = 0, w = 0;
+                for (let i = 1; i < measurePoints.length; i++) {
+                  const bearing = bearingDeg(measurePoints[i-1].lat, measurePoints[i-1].lon, measurePoints[i].lat, measurePoints[i].lon);
+                  // Quadrants: 0-45 + 315-360 = N, 45-135 = E, 135-225 = S, 225-315 = W
+                  if (bearing < 45 || bearing >= 315) n++;
+                  else if (bearing < 135) e++;
+                  else if (bearing < 225) s++;
+                  else w++;
+                }
+                const total = measurePoints.length - 1;
+                showToast(`🧭 ${total} legs · N ${n} · E ${e} · S ${s} · W ${w}`);
+              },
+            }] : []),
+            // Average altitude IF the measure path was loaded from saved
+            // data with elevation. Currently measure points are 2D so this
+            // is a placeholder — but useful for "you climbed/descended X
+            // total" if elevation is added later.
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureBoundingBox" as const,
+              label: "📦 Bounding box of measure path (lat/lon span + km dimensions)",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                let minLat = measurePoints[0].lat, maxLat = measurePoints[0].lat;
+                let minLon = measurePoints[0].lon, maxLon = measurePoints[0].lon;
+                for (const p of measurePoints) {
+                  if (p.lat < minLat) minLat = p.lat;
+                  if (p.lat > maxLat) maxLat = p.lat;
+                  if (p.lon < minLon) minLon = p.lon;
+                  if (p.lon > maxLon) maxLon = p.lon;
+                }
+                const widthKm = haversineKm((minLat+maxLat)/2, minLon, (minLat+maxLat)/2, maxLon);
+                const heightKm = haversineKm(minLat, (minLon+maxLon)/2, maxLat, (minLon+maxLon)/2);
+                showToast(`📦 Path bounds: ${(maxLat-minLat).toFixed(1)}° × ${(maxLon-minLon).toFixed(1)}° (${formatDistKm(widthKm, unitsImperial)} W-E × ${formatDistKm(heightKm, unitsImperial)} N-S)`);
+              },
+            }] : []),
             // Reverse the measured path's direction — handy if you built it
             // from B→A but want bearings/directions reported A→B.
             ...(measureMode && measurePoints.length >= 2 ? [{
