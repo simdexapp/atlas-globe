@@ -679,6 +679,26 @@ function App() {
   // and we render the great-circle distance + bearing between them.
   const [measureMode, setMeasureMode] = useState(false);
   const [measurePoints, setMeasurePoints] = useState<Array<{ lat: number; lon: number }>>([]);
+  // Saved measurement paths — let users keep a library of named routes
+  // (commute path, hike route, custom comparison) and recall any of them
+  // back into the active measure tool. Persisted to localStorage.
+  type SavedMeasurement = {
+    id: string;
+    name: string;
+    createdAt: number;
+    points: Array<{ lat: number; lon: number }>;
+    totalKm: number;
+  };
+  const [savedMeasurements, setSavedMeasurements] = useState<SavedMeasurement[]>(() => {
+    try {
+      const raw = window.localStorage.getItem("atlas-saved-measurements");
+      if (raw) return JSON.parse(raw);
+    } catch { /* ignore */ }
+    return [];
+  });
+  const persistMeasurements = useCallback((list: SavedMeasurement[]) => {
+    try { window.localStorage.setItem("atlas-saved-measurements", JSON.stringify(list)); } catch { /* ignore */ }
+  }, []);
   // Imperial toggle — when true, distances are shown in miles, elevations
   // in feet, areas in mi². Persisted in localStorage so it survives reloads.
   const [unitsImperial, setUnitsImperial] = useState(false);
@@ -4168,6 +4188,76 @@ function App() {
                 const detour = path - direct;
                 const pct = direct > 0 ? (path / direct - 1) * 100 : 0;
                 showToast(`🛣 Path: ${formatDistKm(path, unitsImperial)} · Direct: ${formatDistKm(direct, unitsImperial)} · Detour: +${formatDistKm(detour, unitsImperial)} (+${pct.toFixed(0)}%)`);
+              },
+            }] : []),
+            // Reverse the measured path's direction — handy if you built it
+            // from B→A but want bearings/directions reported A→B.
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureReverse" as const,
+              label: `Reverse measure path direction (${measurePoints.length} pts)`,
+              group: "View" as const,
+              icon: RotateCcw,
+              run: () => {
+                setMeasurePoints((pts) => [...pts].reverse());
+                showToast("Path direction reversed");
+              },
+            }] : []),
+            // Save the active measure path with a name so it can be
+            // restored / overlaid / shared later. Library lives in
+            // localStorage so paths survive across sessions.
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureSave" as const,
+              label: `💾 Save this measurement (${measurePoints.length} pts)…`,
+              group: "View" as const,
+              icon: Bookmark,
+              run: () => {
+                const defaultName = `Path ${savedMeasurements.length + 1} · ${measurePoints.length} pts`;
+                const name = window.prompt("Name for this measurement:", defaultName);
+                if (!name) return;
+                let total = 0;
+                for (let i = 1; i < measurePoints.length; i++) {
+                  total += haversineKm(measurePoints[i-1].lat, measurePoints[i-1].lon, measurePoints[i].lat, measurePoints[i].lon);
+                }
+                const entry: SavedMeasurement = {
+                  id: `m_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+                  name: name.slice(0, 60),
+                  createdAt: Date.now(),
+                  points: measurePoints.map(p => ({ lat: p.lat, lon: p.lon })),
+                  totalKm: total,
+                };
+                setSavedMeasurements((prev) => {
+                  const next = [entry, ...prev].slice(0, 30);
+                  persistMeasurements(next);
+                  return next;
+                });
+                showToast(`💾 Saved "${entry.name}" · ${formatDistKm(total, unitsImperial)}`);
+              },
+            }] : []),
+            // Restore a previously saved path — appears for each saved
+            // measurement so users can pick directly from the palette.
+            ...savedMeasurements.map((m) => ({
+              id: `measureLoad_${m.id}` as const,
+              label: `📂 Load saved measurement: ${m.name} (${formatDistKm(m.totalKm, unitsImperial)})`,
+              group: "View" as const,
+              icon: Bookmark,
+              run: () => {
+                setMeasureMode(true);
+                setMeasurePoints(m.points.map(p => ({ lat: p.lat, lon: p.lon })));
+                showToast(`📂 Loaded "${m.name}" · ${m.points.length} pts`);
+              },
+            })),
+            // Delete saved measurements — only surface when there's
+            // something to delete, to avoid palette clutter.
+            ...(savedMeasurements.length > 0 ? [{
+              id: "measureDeleteAll" as const,
+              label: `🗑 Delete all ${savedMeasurements.length} saved measurement${savedMeasurements.length === 1 ? "" : "s"}`,
+              group: "View" as const,
+              icon: Trash2,
+              run: () => {
+                if (!window.confirm(`Delete all ${savedMeasurements.length} saved measurements? This cannot be undone.`)) return;
+                setSavedMeasurements([]);
+                persistMeasurements([]);
+                showToast("All saved measurements cleared");
               },
             }] : []),
             // Global metric/imperial unit toggle. Affects the measure pill,
@@ -9383,6 +9473,24 @@ ${wpts}
               <span><b>{formatDistKm(totalKm, unitsImperial)}</b> total · last leg {formatDistKm(lastKm, unitsImperial)} {compassDir(bearing)} · {measurePoints.length} pts · Z to undo</span>
             );
           })()}
+          {/* Travel-time chips: how long this distance takes at human speeds.
+              Only shown for ≥1km paths (anything shorter the times are noise).
+              Walking 5 km/h, cycling 20 km/h, driving 80 km/h, jet cruise 900 km/h. */}
+          {measurePoints.length >= 2 && (() => {
+            let totalKm = 0;
+            for (let i = 1; i < measurePoints.length; i++) {
+              totalKm += haversineKm(measurePoints[i-1].lat, measurePoints[i-1].lon, measurePoints[i].lat, measurePoints[i].lon);
+            }
+            if (totalKm < 1) return null;
+            return (
+              <span className="atlasMeasureChips" title="Travel-time estimates at typical speeds">
+                <span className="atlasMeasureChip">🚶 {formatDuration(totalKm / 5)}</span>
+                <span className="atlasMeasureChip">🚴 {formatDuration(totalKm / 20)}</span>
+                <span className="atlasMeasureChip">🚗 {formatDuration(totalKm / 80)}</span>
+                <span className="atlasMeasureChip">✈️ {formatDuration(totalKm / 900)}</span>
+              </span>
+            );
+          })()}
           <button type="button" className="atlasIconBtn" onClick={() => { setMeasureMode(false); setMeasurePoints([]); }} aria-label="Exit measure"><X size={11} /></button>
         </div>
       )}
@@ -11328,6 +11436,22 @@ function formatDistKm(km: number, imperial: boolean): string {
   if (km < 1) return `${Math.round(km * 1000)} m`;
   if (km < 10) return `${km.toFixed(1)} km`;
   return `${km.toLocaleString(undefined, { maximumFractionDigits: 0 })} km`;
+}
+
+// Duration formatter — pretty-print a number of hours as "Xh Ym" or
+// "Ym Zs" depending on magnitude. Used by the measure tool's travel-time
+// chips so users can see what their distance feels like at human speeds.
+function formatDuration(hours: number): string {
+  if (!isFinite(hours) || hours < 0) return "—";
+  const totalSec = Math.round(hours * 3600);
+  if (totalSec < 60) return `${totalSec}s`;
+  const days = Math.floor(totalSec / 86400);
+  const remAfterD = totalSec - days * 86400;
+  const hr = Math.floor(remAfterD / 3600);
+  const mn = Math.floor((remAfterD % 3600) / 60);
+  if (days > 0) return hr > 0 ? `${days}d ${hr}h` : `${days}d`;
+  if (hr > 0) return mn > 0 ? `${hr}h ${mn}m` : `${hr}h`;
+  return `${mn}m`;
 }
 
 // Area formatter — km² ↔ mi².

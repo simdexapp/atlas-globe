@@ -4022,6 +4022,31 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
+/* Travel-time chips appended to the measure pill: walk/bike/car/jet
+   estimates for the total path. Compact monospace so the four chips
+   never wrap, even on a long distance value. */
+.atlasMeasureChips {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 6px;
+  padding-left: 8px;
+  border-left: 1px solid color-mix(in srgb, var(--warm), transparent 70%);
+}
+.atlasMeasureChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  font-size: 10.5px;
+  font-family: ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  color: var(--gray-12);
+  background: color-mix(in srgb, var(--warm), transparent 92%);
+  border: 1px solid color-mix(in srgb, var(--warm), transparent 70%);
+  border-radius: 99px;
+  line-height: 1.4;
+}
 
 /* NOAA aurora / space-weather pill */
 .atlasAuroraPill {
