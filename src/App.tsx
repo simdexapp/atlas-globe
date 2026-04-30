@@ -4565,6 +4565,68 @@ function App() {
               };
               tick();
             }},
+            // ===== Time Machine =====
+            // NASA GIBS imagery is date-aware all the way back to ~2000.
+            // These commands snap imagery.date to historical points so
+            // users can see how the world looked then. Only meaningful
+            // when imagery.source is 'live' (NASA GIBS).
+            { id: "timeMachineToday", label: "🕰 Time machine: jump to today's imagery", group: "Tools", icon: SunIcon, run: () => {
+              if (imagery.source !== "live") {
+                showToast("Switch imagery to 'NASA live' first (Imagery panel) to time-travel");
+                return;
+              }
+              setImagery((prev) => ({ ...prev, date: todayUTC() }));
+              showToast("🕰 Now: today's imagery");
+            }},
+            { id: "timeMachine1Year", label: "🕰 Time machine: 1 year ago today", group: "Tools", icon: SunIcon, run: () => {
+              if (imagery.source !== "live") { showToast("Switch imagery to 'NASA live' first"); return; }
+              const d = new Date();
+              d.setUTCFullYear(d.getUTCFullYear() - 1);
+              const iso = d.toISOString().slice(0, 10);
+              setImagery((prev) => ({ ...prev, date: iso }));
+              showToast(`🕰 Time-traveled to ${iso} — ${d.getUTCFullYear()} (1 year ago)`);
+            }},
+            { id: "timeMachine5Year", label: "🕰 Time machine: 5 years ago today", group: "Tools", icon: SunIcon, run: () => {
+              if (imagery.source !== "live") { showToast("Switch imagery to 'NASA live' first"); return; }
+              const d = new Date();
+              d.setUTCFullYear(d.getUTCFullYear() - 5);
+              const iso = d.toISOString().slice(0, 10);
+              setImagery((prev) => ({ ...prev, date: iso }));
+              showToast(`🕰 Time-traveled to ${iso} (5 years ago)`);
+            }},
+            { id: "timeMachine10Year", label: "🕰 Time machine: 10 years ago today", group: "Tools", icon: SunIcon, run: () => {
+              if (imagery.source !== "live") { showToast("Switch imagery to 'NASA live' first"); return; }
+              const d = new Date();
+              d.setUTCFullYear(d.getUTCFullYear() - 10);
+              const iso = d.toISOString().slice(0, 10);
+              setImagery((prev) => ({ ...prev, date: iso }));
+              showToast(`🕰 Time-traveled to ${iso} (10 years ago)`);
+            }},
+            { id: "timeMachineDate", label: "🕰 Time machine: pick a specific date (NASA GIBS)", group: "Tools", icon: SunIcon, run: () => {
+              if (imagery.source !== "live") { showToast("Switch imagery to 'NASA live' first"); return; }
+              const inp = window.prompt("Pick a date for satellite imagery (YYYY-MM-DD, NASA GIBS goes back to ~2000):", imagery.date);
+              if (!inp) return;
+              const trimmed = inp.trim();
+              if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) { showToast("Use YYYY-MM-DD format"); return; }
+              setImagery((prev) => ({ ...prev, date: trimmed }));
+              showToast(`🕰 Time-traveled to ${trimmed}`);
+            }},
+            { id: "timeMachineFamous", label: "🕰 Time machine: famous historical day (Apollo 11, Tunguska, etc)", group: "Tools", icon: SunIcon, run: () => {
+              if (imagery.source !== "live") { showToast("Switch imagery to 'NASA live' first"); return; }
+              const FAMOUS = [
+                { name: "Apollo 11 launch", date: "2001-07-16" },     // GIBS doesn't go back to '69
+                { name: "Mt St Helens eruption (anniversary)", date: "2024-05-18" },
+                { name: "Boxing Day tsunami", date: "2004-12-26" },
+                { name: "Hurricane Katrina", date: "2005-08-29" },
+                { name: "Fukushima earthquake", date: "2011-03-11" },
+                { name: "Iceland volcano", date: "2010-04-14" },
+                { name: "Australia bushfires", date: "2020-01-04" },
+                { name: "Hunga Tonga eruption", date: "2022-01-15" },
+              ];
+              const f = FAMOUS[Math.floor(Math.random() * FAMOUS.length)];
+              setImagery((prev) => ({ ...prev, date: f.date }));
+              showToast(`🕰 ${f.name} (${f.date})`);
+            }},
             // ===== Personal Earth Diary — Year in review =====
             // Like Spotify Wrapped for travel: walks pins by date,
             // computes total distance traveled, countries visited,
