@@ -4803,6 +4803,59 @@ function App() {
               const fractionEarth = horizonKm / (Math.PI * EARTH_RADIUS_KM);
               showToast(`↻ From ${formatDistKm(h, unitsImperial)} altitude, horizon is ${formatDistKm(horizonKm, unitsImperial)} away — ${(fractionEarth * 100).toFixed(1)}% of the way around Earth`);
             }},
+            // ===== Sun-time countdown commands =====
+            // Time until next sunrise / sunset at current view location.
+            { id: "factSunCountdown", label: "⏰ Time until next sunrise / sunset at current view", group: "Tools", icon: SunIcon, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const sun = solarTimes(c.lat, c.lon, new Date());
+              if (sun === "polar-day") { showToast("☀ Polar day — sun never sets at this latitude today"); return; }
+              if (sun === "polar-night") { showToast("🌑 Polar night — sun never rises at this latitude today"); return; }
+              const utcHr = new Date().getUTCHours() + new Date().getUTCMinutes() / 60;
+              // Local solar time at view longitude
+              const localHr = (utcHr + c.lon / 15 + 24) % 24;
+              const sr = sun.sunrise;
+              const ss = sun.sunset;
+              const fmt = (h: number) => {
+                const wh = Math.floor(h);
+                const mm = Math.round((h - wh) * 60);
+                return `${wh}h${mm > 0 ? mm + "m" : ""}`;
+              };
+              let untilRise = (sr - localHr + 24) % 24;
+              let untilSet = (ss - localHr + 24) % 24;
+              const isDay = localHr >= sr && localHr < ss;
+              const next = isDay
+                ? `🌇 sunset in ${fmt(untilSet)}`
+                : `🌅 sunrise in ${fmt(untilRise)}`;
+              showToast(`⏰ At ${formatLat(c.lat)} ${formatLon(c.lon)} (${isDay ? "day" : "night"}) · ${next}`);
+            }},
+            // Day length at current latitude today
+            { id: "factDayLength", label: "🌞 Day length at current view's latitude today", group: "Tools", icon: SunIcon, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const sun = solarTimes(c.lat, c.lon, new Date());
+              if (sun === "polar-day") { showToast(`☀ ${formatLat(c.lat)} · Polar day · 24h of daylight`); return; }
+              if (sun === "polar-night") { showToast(`🌑 ${formatLat(c.lat)} · Polar night · 0h of daylight`); return; }
+              const dayHrs = ((sun.sunset - sun.sunrise) + 24) % 24;
+              const wh = Math.floor(dayHrs);
+              const mm = Math.round((dayHrs - wh) * 60);
+              const nightHrs = 24 - dayHrs;
+              const nh = Math.floor(nightHrs);
+              const nm = Math.round((nightHrs - nh) * 60);
+              showToast(`🌞 At ${formatLat(c.lat)} today: ${wh}h ${mm}m daylight · ${nh}h ${nm}m night`);
+            }},
+            // Subsolar point — where the sun is directly overhead RIGHT NOW.
+            { id: "factSubsolarFly", label: "☀ Fly to the subsolar point (where sun is overhead right now)", group: "Tools", icon: SunIcon, run: () => {
+              // Subsolar lat = solar declination ≈ 23.44° × sin(2π × (n-81)/365)
+              // Subsolar lon = -15° × (UTC hours - 12)
+              const now = new Date();
+              const dayOfYear = Math.floor((now.getTime() - new Date(Date.UTC(now.getUTCFullYear(), 0, 0)).getTime()) / 86400000);
+              const decl = 23.44 * Math.sin((360/365 * (dayOfYear - 81)) * Math.PI / 180);
+              const utcHr = now.getUTCHours() + now.getUTCMinutes() / 60 + now.getUTCSeconds() / 3600;
+              const subLon = -15 * (utcHr - 12);
+              setFlyTo((c) => ({ id: c.id + 1, lat: decl, lon: subLon, altKm: 5000 }));
+              showToast(`☀ Subsolar point: ${formatLat(decl)} ${formatLon(subLon)} (sun directly overhead here)`);
+            }},
             // ===== Country quick-facts =====
             // Look up the country at current view + show capital +
             // currency + calling code in one toast. Uses cached reverse-
