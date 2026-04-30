@@ -571,6 +571,17 @@ function App() {
     };
   }, []);
   const [toast, setToast] = useState<{ id: number; text: string } | null>(null);
+  // Voice narration — when on, toasts are also spoken via the browser's
+  // SpeechSynthesis API. Useful for accessibility, hands-free use,
+  // ambient/screensaver mode. Persisted across reloads.
+  const [voiceNarration, setVoiceNarration] = useState<boolean>(() => {
+    try {
+      const v = window.localStorage.getItem("atlas-voice-narration");
+      return v === "true";
+    } catch { return false; }
+  });
+  const voiceNarrationRef = useRef(voiceNarration);
+  useEffect(() => { voiceNarrationRef.current = voiceNarration; }, [voiceNarration]);
   const [showFps, setShowFps] = useState(false);
   const [paused, setPaused] = useState(false);
   const [orbiting, setOrbiting] = useState(false);
@@ -1737,6 +1748,24 @@ function App() {
 
   useEffect(() => {
     if (!toast) return;
+    // If voice narration is enabled, speak the toast through the
+    // browser's SpeechSynthesis API. We strip leading emojis since
+    // most TTS engines pronounce them as 'face with smiling eyes'
+    // which is irritating. The narrationRef pattern lets us read
+    // the live setting without re-firing the effect on toggle.
+    if (voiceNarrationRef.current && typeof window !== "undefined" && window.speechSynthesis) {
+      const stripped = toast.text
+        .replace(/^[\p{Emoji}\s]+/u, "")
+        .replace(/[·•|]/g, ", ");
+      if (stripped) {
+        const u = new SpeechSynthesisUtterance(stripped);
+        u.rate = 1.05;
+        u.volume = 0.9;
+        // Cancel any in-flight utterance so rapid toasts don't queue up.
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.speak(u);
+      }
+    }
     const handle = window.setTimeout(() => setToast(null), 2400);
     return () => window.clearTimeout(handle);
   }, [toast]);
@@ -4401,6 +4430,20 @@ function App() {
             // 🗺 Wikipedia geo-search — find articles near the current view.
             // Uses Wikipedia's MediaWiki API which has a `geosearch` action
             // returning articles within radius of a point. Free, CORS-friendly.
+            // 🔊 Voice narration toggle — speaks every toast via the
+            // browser's SpeechSynthesis API. Useful for accessibility,
+            // hands-free use, or as ambient narration during the
+            // auto-explore screensaver.
+            { id: "voiceNarration", label: voiceNarration ? "🔇 Disable voice narration of toasts" : "🔊 Enable voice narration (speak every toast)", group: "Tools", icon: Sparkles, run: () => {
+              const newVal = !voiceNarration;
+              setVoiceNarration(newVal);
+              try { window.localStorage.setItem("atlas-voice-narration", String(newVal)); } catch { /* ignore */ }
+              if (newVal && typeof window !== "undefined" && window.speechSynthesis) {
+                const u = new SpeechSynthesisUtterance("Voice narration enabled");
+                window.speechSynthesis.speak(u);
+              }
+              showToast(newVal ? "🔊 Voice narration enabled" : "🔇 Voice narration disabled");
+            }},
             { id: "wikiNearby", label: "🗺 Wikipedia articles near this view (top 8 within 50km)", group: "Tools", icon: Sparkles, run: async () => {
               const c = cameraStateRef.current;
               if (!c) return;
