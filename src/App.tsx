@@ -3292,25 +3292,39 @@ function App() {
     if (recorderTimerRef.current) clearTimeout(recorderTimerRef.current);
   }, []);
 
-  // Share URL with view encoded
-  const copyShareWithView = useCallback(async () => {
+  // Share URL with view encoded — extended in this batch to also
+  // serialize active layers + UI theme. Recipients land on the same
+  // configuration: camera position, the SAME visible overlays you had
+  // on, AND the same color theme. Decoder is below.
+  const copyShareWithView = useCallback(async (richShare = false) => {
     const c = cameraStateRef.current;
     const params = new URLSearchParams({
       lat: c.lat.toFixed(4),
       lon: c.lon.toFixed(4),
       alt: c.altKm.toFixed(0)
     });
+    if (richShare) {
+      // Compact comma-separated list of layer keys that are ON. Skip
+      // pin/compass/miniMap (always on by default) to keep URL short.
+      const skip = new Set(["pins", "compass", "miniMap", "pinPaths"]);
+      const onLayers = (Object.entries(layers) as Array<[string, boolean]>)
+        .filter(([k, v]) => v && !skip.has(k))
+        .map(([k]) => k);
+      if (onLayers.length > 0) params.set("layers", onLayers.join(","));
+      if (uiTheme !== "dark") params.set("theme", uiTheme);
+    }
     const url = `${window.location.origin}${window.location.pathname}#view=${params.toString()}`;
     try {
       await navigator.clipboard.writeText(url);
       window.history.replaceState(null, "", `#view=${params.toString()}`);
-      showToast("View URL copied");
+      showToast(richShare ? "📤 Rich share link copied (camera + layers + theme)" : "View URL copied");
     } catch {
       showToast("Could not copy");
     }
-  }, [showToast]);
+  }, [showToast, layers, uiTheme]);
 
-  // Decode #view= on first load
+  // Decode #view= on first load — handles both basic (lat/lon/alt) and
+  // rich (with layers + theme) share URLs.
   useEffect(() => {
     const hash = window.location.hash;
     if (!hash.startsWith("#view=")) return;
@@ -3322,7 +3336,25 @@ function App() {
       if (Number.isFinite(lat) && Number.isFinite(lon) && Number.isFinite(alt)) {
         setFlyTo((current) => ({ id: current.id + 1, lat, lon, altKm: alt }));
       }
+      // Rich-share: apply layers + theme if encoded
+      const layersParam = params.get("layers");
+      if (layersParam) {
+        const requested = new Set(layersParam.split(",").filter(Boolean));
+        setLayers((prev) => {
+          const next = { ...prev };
+          for (const k of Object.keys(next) as Array<keyof typeof next>) {
+            if (requested.has(k)) next[k] = true;
+          }
+          return next;
+        });
+        showToast(`📥 Loaded shared view · ${requested.size} layers active`);
+      }
+      const themeParam = params.get("theme");
+      if (themeParam && ["dark","light","oled","cyber","solar","mono"].includes(themeParam)) {
+        setUiTheme(themeParam as typeof uiTheme);
+      }
     } catch {/* ignore */}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Home location — saved to localStorage. Lets users set a 'home base'
@@ -4402,6 +4434,9 @@ function App() {
             // Cycle to the next theme (matches the T keyboard shortcut so
             // users discover it from the palette too)
             { id: "cycleTheme", label: "Cycle UI theme (next)", group: "View", icon: SunIcon, hint: "T", run: cycleTheme },
+            // Rich share: encode camera + active layers + theme into URL.
+            // When opened, recipient lands on identical view configuration.
+            { id: "shareViewRich", label: "📤 Copy RICH share link (camera + layers + theme)", group: "Tools", icon: Share2, run: () => copyShareWithView(true) },
             // Quick share: copy link to current view + active layers. Same
             // as Y but discoverable in palette without learning the key.
             { id: "shareView", label: "📋 Copy share link to current view", group: "Tools", icon: Share2, hint: "Y", run: () => {
