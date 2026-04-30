@@ -4711,6 +4711,79 @@ function App() {
               const fractionEarth = horizonKm / (Math.PI * EARTH_RADIUS_KM);
               showToast(`↻ From ${formatDistKm(h, unitsImperial)} altitude, horizon is ${formatDistKm(horizonKm, unitsImperial)} away — ${(fractionEarth * 100).toFixed(1)}% of the way around Earth`);
             }},
+            // ===== Pin trip-planning commands =====
+            // Trip cost estimate — flight cost + accommodation. Crude
+            // heuristic but useful for sanity-checking trip planning.
+            ...(pins.length >= 3 ? [{
+              id: "pinTripCostEstimate" as const,
+              label: `💰 Estimate trip cost for ${pins.length}-pin route (flight + lodging)`,
+              group: "Tools" as const,
+              icon: Compass,
+              run: () => {
+                let totalKm = 0;
+                for (let i = 1; i < pins.length; i++) {
+                  totalKm += haversineKm(pins[i-1].lat, pins[i-1].lon, pins[i].lat, pins[i].lon);
+                }
+                // Crude pricing: $0.12/km commercial economy + $150/night
+                // × (pin count - 1) nights as proxy for trip length.
+                const flightCost = Math.round(totalKm * 0.12);
+                const nights = pins.length - 1;
+                const lodgingCost = nights * 150;
+                const total = flightCost + lodgingCost;
+                showToast(`💰 ~$${flightCost.toLocaleString()} flights (${formatDistKm(totalKm, unitsImperial)}) + ~$${lodgingCost.toLocaleString()} lodging (${nights} nights) = ~$${total.toLocaleString()} total`);
+              },
+            }] : []),
+            // Most exotic pin — the one furthest from the "anchor" cities
+            // (NYC, London, Tokyo, Sydney, Cape Town). Highest min-distance
+            // = "most off the beaten path".
+            ...(pins.length >= 3 ? [{
+              id: "pinMostExotic" as const,
+              label: `🌴 Find your most off-the-beaten-path pin`,
+              group: "Tools" as const,
+              icon: Sparkles,
+              run: () => {
+                const ANCHORS = [
+                  { lat: 40.7128, lon: -74.006 },   // NYC
+                  { lat: 51.5074, lon: -0.1278 },   // London
+                  { lat: 35.6762, lon: 139.6503 },  // Tokyo
+                  { lat: -33.8688, lon: 151.2093 }, // Sydney
+                  { lat: -33.9249, lon: 18.4241 },  // Cape Town
+                ];
+                let best: { pin: typeof pins[0]; minDist: number } | null = null;
+                for (const p of pins) {
+                  let minDist = Infinity;
+                  for (const a of ANCHORS) {
+                    const km = haversineKm(p.lat, p.lon, a.lat, a.lon);
+                    if (km < minDist) minDist = km;
+                  }
+                  if (!best || minDist > best.minDist) best = { pin: p, minDist };
+                }
+                if (!best) return;
+                setSelectedPin(best.pin.id);
+                setFlyTo((c) => ({ id: c.id + 1, lat: best!.pin.lat, lon: best!.pin.lon, altKm: 1000 }));
+                showToast(`🌴 Most exotic: ${best.pin.label} · ${formatDistKm(best.minDist, unitsImperial)} from nearest anchor city`);
+              },
+            }] : []),
+            // Pin altitude stats — mean / max altitude for pins that have
+            // altitudeM set. Useful for pilot/aviation use where altitude
+            // matters more than just lat/lon.
+            ...(pins.filter(p => typeof p.altitudeM === "number").length >= 2 ? [{
+              id: "pinAltitudeStats" as const,
+              label: `🛫 Pin altitude stats (${pins.filter(p => typeof p.altitudeM === "number").length} with altitude data)`,
+              group: "Tools" as const,
+              icon: Compass,
+              run: () => {
+                const withAlt = pins.filter(p => typeof p.altitudeM === "number");
+                let total = 0, max = 0, maxPin = withAlt[0];
+                for (const p of withAlt) {
+                  const h = p.altitudeM!;
+                  total += h;
+                  if (h > max) { max = h; maxPin = p; }
+                }
+                const mean = total / withAlt.length;
+                showToast(`🛫 Mean altitude: ${formatElevM(mean, unitsImperial)} · Highest: "${maxPin.label}" at ${formatElevM(max, unitsImperial)}`);
+              },
+            }] : []),
             // ===== Selected-pin extension commands =====
             // Antipode of selected pin — the diametrically opposite point
             // on Earth. Fly there + toast both lat/lons.
