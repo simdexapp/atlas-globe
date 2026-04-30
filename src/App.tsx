@@ -4728,6 +4728,100 @@ function App() {
               };
               tick();
             }},
+            // ===== AR-lite — Compass mode using device sensors =====
+            // Phone gyroscope-driven compass card. Uses DeviceOrientation
+            // API. Shows: device heading, tilt, distance + bearing to
+            // current view. iOS requires permission via tap.
+            { id: "compassAr", label: "📲 Compass mode (uses phone gyroscope) — AR-lite", group: "Tools", icon: Compass, run: async () => {
+              if (typeof window === "undefined" || !("DeviceOrientationEvent" in window)) {
+                showToast("Device orientation not available — open on a phone");
+                return;
+              }
+              // iOS 13+ requires explicit permission
+              const Cls = (window as any).DeviceOrientationEvent;
+              if (typeof Cls.requestPermission === "function") {
+                try {
+                  const perm = await Cls.requestPermission();
+                  if (perm !== "granted") { showToast("Compass permission denied"); return; }
+                } catch (e) {
+                  showToast(`Permission error: ${(e as Error).message}`);
+                  return;
+                }
+              }
+              // Open a popup with a live compass display
+              const w = window.open("", "_blank", "width=380,height=560");
+              if (!w) { showToast("Popup blocked"); return; }
+              const c = cameraStateRef.current;
+              const targetLat = c?.lat ?? 0;
+              const targetLon = c?.lon ?? 0;
+              w.document.write(`<!doctype html><html><head><title>Atlas Compass</title>
+                <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+                <style>
+                  body{margin:0;padding:24px;background:#0a1120;color:#e8eef5;font:14px Inter,system-ui,sans-serif;display:grid;gap:18px;place-items:center;min-height:100vh;box-sizing:border-box;text-align:center}
+                  h1{font-size:14px;font-weight:800;letter-spacing:0.18em;margin:0}
+                  .compass{position:relative;width:280px;height:280px;border-radius:50%;border:3px solid #5cb5ff;background:radial-gradient(circle,#11192c 0%,#050a14 100%);box-shadow:0 0 40px rgba(92,181,255,0.25)}
+                  .needle{position:absolute;top:50%;left:50%;width:6px;height:120px;margin:-120px 0 0 -3px;background:linear-gradient(to bottom,#ff5a5a 0%,#ff5a5a 50%,#5cb5ff 50%,#5cb5ff 100%);border-radius:3px;transform-origin:50% 100%;transition:transform 80ms linear}
+                  .target{position:absolute;top:50%;left:50%;width:14px;height:14px;margin:-90px 0 0 -7px;background:#ffd66b;border-radius:50%;border:2px solid #11192c;transform-origin:50% 90px;box-shadow:0 0 12px #ffd66b;transition:transform 200ms ease}
+                  .marks{position:absolute;inset:0}
+                  .mark{position:absolute;left:50%;top:8px;width:2px;height:14px;margin-left:-1px;background:#5cb5ff;transform-origin:50% 132px}
+                  .mark.cardinal{height:22px;width:3px;margin-left:-1.5px;background:#fff}
+                  .label{position:absolute;left:50%;top:30px;transform:translateX(-50%);font-weight:800;font-size:14px;color:#fff;font-family:ui-monospace,monospace}
+                  .stats{display:grid;gap:6px;font-family:ui-monospace,monospace;font-size:13px;color:#b8c2d2;text-align:left}
+                  .stats .row{display:flex;justify-content:space-between;gap:24px;border-bottom:1px solid #1a2030;padding:4px 0}
+                  .stats strong{color:#fff;font-weight:700}
+                  small{color:#7a8597;font-size:10.5px}
+                </style>
+              </head><body>
+                <h1>📲 ATLAS COMPASS</h1>
+                <div class="compass">
+                  <div class="marks">
+                    ${[...Array(36)].map((_, i) => {
+                      const isCardinal = i % 9 === 0;
+                      return `<div class="mark${isCardinal ? ' cardinal' : ''}" style="transform:rotate(${i*10}deg)"></div>`;
+                    }).join("")}
+                    <div class="label" style="transform:translateX(-50%);">N</div>
+                    <div class="label" style="transform:translateX(-50%) rotate(90deg);transform-origin:50% 110px">E</div>
+                    <div class="label" style="transform:translateX(-50%) rotate(180deg);transform-origin:50% 110px">S</div>
+                    <div class="label" style="transform:translateX(-50%) rotate(270deg);transform-origin:50% 110px">W</div>
+                  </div>
+                  <div class="needle" id="needle"></div>
+                  <div class="target" id="target"></div>
+                </div>
+                <div class="stats">
+                  <div class="row"><span>Heading</span><strong id="heading">—</strong></div>
+                  <div class="row"><span>Target bearing</span><strong>${(() => {
+                    // We can't compute geo-bearing without user location yet
+                    return "fetching…";
+                  })()}</strong></div>
+                  <div class="row"><span>Atlas view</span><strong>${targetLat.toFixed(2)}, ${targetLon.toFixed(2)}</strong></div>
+                </div>
+                <small>Yellow dot points toward your Atlas view location · Red needle = north</small>
+                <script>
+                  const targetLat = ${targetLat}, targetLon = ${targetLon};
+                  let userLat = null, userLon = null, heading = 0, bearing = 0;
+                  function bearingTo(lat1, lon1, lat2, lon2) {
+                    const toR = d => d * Math.PI / 180;
+                    const y = Math.sin(toR(lon2 - lon1)) * Math.cos(toR(lat2));
+                    const x = Math.cos(toR(lat1)) * Math.sin(toR(lat2)) - Math.sin(toR(lat1)) * Math.cos(toR(lat2)) * Math.cos(toR(lon2 - lon1));
+                    return ((Math.atan2(y, x) * 180 / Math.PI) + 360) % 360;
+                  }
+                  navigator.geolocation && navigator.geolocation.getCurrentPosition(p => {
+                    userLat = p.coords.latitude; userLon = p.coords.longitude;
+                    bearing = bearingTo(userLat, userLon, targetLat, targetLon);
+                  });
+                  window.addEventListener("deviceorientation", e => {
+                    const h = e.alpha != null ? (360 - e.alpha) : 0;  // some browsers invert
+                    heading = h;
+                    document.getElementById("needle").style.transform = "rotate(" + (-heading) + "deg)";
+                    if (userLat != null) {
+                      document.getElementById("target").style.transform = "rotate(" + (bearing - heading) + "deg)";
+                    }
+                    document.getElementById("heading").textContent = heading.toFixed(0) + "°";
+                  });
+                </script>
+              </body></html>`);
+              showToast("📲 Compass mode opened — accept permissions on phone");
+            }},
             // ===== Multi-planet =====
             // Swap the Atlas-mode globe between Earth (default GIBS),
             // Moon (procedural cratered grayscale), Mars (procedural
