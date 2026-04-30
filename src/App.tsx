@@ -409,6 +409,7 @@ const KEYBOARD_HINTS = [
   { keys: "⌘K / Ctrl+K", desc: "Command palette (search every action / layer / setting / city / airport / country)" },
   { keys: "⌘⇧P / Ctrl+Shift+P", desc: "Command palette (VS Code-style alias)" },
   { keys: "⌘/ / Ctrl+/", desc: "Show keyboard shortcuts (this list)" },
+  { keys: "⌘E / Ctrl+E", desc: "🎨 Toggle UI customization mode (drag widgets anywhere)" },
   { keys: "F", desc: "Open place search" },
   // ===== View / mode =====
   { keys: "R", desc: "Reset view" },
@@ -3192,6 +3193,13 @@ function App() {
         setShowShortcuts((v) => !v);
         return;
       }
+      // Cmd/Ctrl+E toggles UI customization mode — quick access since
+      // it's a primary UX feature.
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "e") {
+        event.preventDefault();
+        setCustomizeUiMode((v) => !v);
+        return;
+      }
       if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
       if (event.metaKey || event.ctrlKey) return;
 
@@ -3201,6 +3209,7 @@ function App() {
           if (showSearch) setShowSearch(false);
           if (showShortcuts) setShowShortcuts(false);
           if (uiHiddenRef.current) setHideUi(false);
+          if (customizeUiMode) setCustomizeUiMode(false);
           break;
         case "r":
           event.preventDefault();
@@ -11391,8 +11400,18 @@ function Draggable({
       const rect = ref.current?.getBoundingClientRect();
       const w = rect?.width || 0;
       const h = rect?.height || 0;
-      const clampedX = Math.max(0, Math.min(window.innerWidth - w, newX));
-      const clampedY = Math.max(0, Math.min(window.innerHeight - h, newY));
+      let clampedX = Math.max(0, Math.min(window.innerWidth - w, newX));
+      let clampedY = Math.max(0, Math.min(window.innerHeight - h, newY));
+      // Snap-to-edge: when within 20px of an edge or center, snap to it.
+      // Makes pixel-perfect alignment trivial without precision dragging.
+      const SNAP = 20;
+      if (clampedX < SNAP) clampedX = 0;                                          // left edge
+      if (window.innerWidth - (clampedX + w) < SNAP) clampedX = window.innerWidth - w;  // right edge
+      if (clampedY < SNAP) clampedY = 0;                                          // top edge
+      if (window.innerHeight - (clampedY + h) < SNAP) clampedY = window.innerHeight - h; // bottom edge
+      // Horizontal center
+      const centerX = (window.innerWidth - w) / 2;
+      if (Math.abs(clampedX - centerX) < SNAP) clampedX = centerX;
       onMove(id, { x: clampedX, y: clampedY });
     };
     const onUp = (e: PointerEvent) => {
