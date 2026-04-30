@@ -4368,6 +4368,37 @@ function App() {
             }},
             // Toggle the new at-a-glance Live World Stats widget
             { id: "toggleLiveStats", label: layers.liveStats ? "Hide Live World Stats widget" : "🌐 Show Live World Stats widget", group: "Widgets", icon: Globe2, run: () => toggleLayer("liveStats") },
+            // ===== One-click themed view presets =====
+            // Each preset turns ON a curated set of layers (and turns OFF
+            // unrelated ones) to switch the entire view's vibe instantly.
+            // Useful for context-switching: "show me only what I need
+            // RIGHT NOW for X". Layers not in the preset's affect set are
+            // left alone — only the listed ones are forced.
+            { id: "presetGeography", label: "🌍 Preset: Geography essentials (borders + landmarks + airports)", group: "View", icon: Globe2, run: () => {
+              setLayers((l) => ({ ...l, borders: true, landmarks: true, airports: true, graticule: true, compass: true, aircraft: false, weather: false, eonet: false }));
+              showToast("🌍 Geography preset on");
+            }},
+            { id: "presetAviation", label: "✈ Preset: Aviation mode (aircraft + airports + radar)", group: "View", icon: Plane, run: () => {
+              setLayers((l) => ({ ...l, aircraft: true, airports: true, weather: true, borders: true, eonet: false, landmarks: false, volcanoes: false }));
+              showToast("✈ Aviation preset on");
+            }},
+            { id: "presetEarthScience", label: "🌋 Preset: Earth science (quakes + volcanoes + storms + EONET)", group: "View", icon: Sparkles, run: () => {
+              setLayers((l) => ({ ...l, earthquakes: true, volcanoes: true, storms: true, eonet: true, aircraft: false, airports: false, landmarks: false }));
+              showToast("🌋 Earth science preset on");
+            }},
+            { id: "presetSpace", label: "🚀 Preset: Space mode (ISS + Tiangong + Hubble + aurora + launches)", group: "View", icon: Telescope, run: () => {
+              setLayers((l) => ({ ...l, iss: true, tiangong: true, hubble: true, aurora: true, launches: true, aircraft: false, weather: false, borders: false, landmarks: false }));
+              showToast("🚀 Space preset on");
+            }},
+            { id: "presetCinematic", label: "🎬 Preset: Cinematic (clean globe — no overlays)", group: "View", icon: Film, run: () => {
+              setLayers((l) => ({ ...l, aircraft: false, weather: false, eonet: false, aurora: false, launches: false, borders: false, landmarks: false, airports: false, earthquakes: false, volcanoes: false, storms: false, iss: false, tiangong: false, hubble: false, submarineCables: false, terminator: false, subsolar: false, graticule: false, cardinals: false, timezones: false }));
+              showToast("🎬 Cinematic preset on — clean globe");
+            }},
+            { id: "presetAllOff", label: "⏹ Turn ALL layers off", group: "View", icon: RotateCcw, run: () => {
+              const allOff = Object.fromEntries(Object.keys(layers).map(k => [k, false])) as typeof layers;
+              setLayers((l) => ({ ...l, ...allOff, pins: l.pins, miniMap: l.miniMap, compass: l.compass })); // keep core UI
+              showToast("⏹ All layers off");
+            }},
             // Quick-fact palette commands — read-only computations on
             // current camera state, no network needed.
             { id: "factDistancesNSEQ", label: "📐 Distance to equator + both poles from this view", group: "Tools", icon: Compass, run: () => {
