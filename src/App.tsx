@@ -8667,9 +8667,17 @@ ${wpts}
         />
       )}
 
-      {layers.miniMap && <MiniMap cameraState={cameraState} pins={pins} />}
+      {layers.miniMap && (
+        <Draggable id="miniMap" customizeMode={customizeUiMode} position={widgetPositions.miniMap} onMove={setWidgetPosition}>
+          <MiniMap cameraState={cameraState} pins={pins} />
+        </Draggable>
+      )}
 
-      {layers.compass && <CompassWidget cameraState={cameraState} />}
+      {layers.compass && (
+        <Draggable id="compass" customizeMode={customizeUiMode} position={widgetPositions.compass} onMove={setWidgetPosition}>
+          <CompassWidget cameraState={cameraState} />
+        </Draggable>
+      )}
 
       {recordingState === "recording" && (
         <div className="atlasRecordIndicator" role="status">
