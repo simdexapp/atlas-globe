@@ -117,6 +117,7 @@ export default function Surface({
   measurePoints,
   measureImperial,
   reducedMotion,
+  annotations,
   geoJson,
   followSelectedAircraft,
   aircraftCameraMode,
@@ -179,6 +180,8 @@ export default function Surface({
   measureImperial?: boolean;
   // When true, fly-to camera animations snap instantly (prefers-reduced-motion).
   reducedMotion?: boolean;
+  // User-created text annotations to render as Cesium label entities.
+  annotations?: Array<{ id: string; lat: number; lon: number; text: string }>;
   // GeoJSON FeatureCollection to render as Cesium entities (drag-drop import).
   geoJson?: any;
   // When true and selectedAircraft is set, the camera locks-on to the plane
@@ -1842,6 +1845,48 @@ export default function Surface({
       pinEntitiesRef.current.push(entity);
     }
   }, [pins]);
+
+  // ===== Annotation entities =====
+  // Text labels droppable on the globe via the App's 'Drop annotation here'
+  // command. Visible as Cesium labels with subtle leader lines down to the
+  // ground point. Hidden past 8000km so they don't clutter orbital view.
+  const annotationEntitiesRef = useRef<Cesium.Entity[]>([]);
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    for (const e of annotationEntitiesRef.current) viewer.entities.remove(e);
+    annotationEntitiesRef.current = [];
+    if (!annotations) return;
+    for (const a of annotations) {
+      const entity = viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(a.lon, a.lat),
+        point: {
+          pixelSize: 6,
+          color: Cesium.Color.fromCssColorString("#ffd66b"),
+          outlineColor: Cesium.Color.fromCssColorString("rgba(8,14,26,0.85)"),
+          outlineWidth: 1.5,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+        label: {
+          text: a.text,
+          font: "600 12px Inter, sans-serif",
+          fillColor: Cesium.Color.fromCssColorString("#ffd66b"),
+          outlineColor: Cesium.Color.fromCssColorString("rgba(8,14,26,0.95)"),
+          outlineWidth: 4,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          pixelOffset: new Cesium.Cartesian2(0, -10),
+          showBackground: true,
+          backgroundColor: Cesium.Color.fromCssColorString("rgba(15,22,40,0.85)"),
+          backgroundPadding: new Cesium.Cartesian2(8, 4),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 8_000_000),
+        },
+      });
+      annotationEntitiesRef.current.push(entity);
+    }
+  }, [annotations]);
 
   // ===== EONET event sync =====
   useEffect(() => {

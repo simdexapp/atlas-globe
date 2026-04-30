@@ -850,6 +850,39 @@ function App() {
     current?: { temp: number; code: number; wind: number; windDir: number; humidity: number; feels?: number };
     daily?: Array<{ date: string; code: number; tmax: number; tmin: number; precipProb: number; windMax: number }>;
   }>(null);
+  // ===== Globe Annotations =====
+  // Text labels droppable on the globe. Visible in Surface mode as
+  // Cesium label entities. Persistent in localStorage. Different from
+  // pins (which are colored dots with hover labels) — annotations are
+  // always-visible text on the globe surface itself, useful for
+  // teaching/marking ('Battle of Waterloo here', 'Tornado spawned here').
+  type Annotation = { id: string; lat: number; lon: number; text: string; createdAt: number };
+  const [annotations, setAnnotations] = useState<Annotation[]>(() => {
+    try {
+      const raw = window.localStorage.getItem("atlas-annotations");
+      if (raw) return JSON.parse(raw) as Annotation[];
+    } catch { /* ignore */ }
+    return [];
+  });
+  const persistAnnotations = useCallback((next: Annotation[]) => {
+    setAnnotations(next);
+    try { window.localStorage.setItem("atlas-annotations", JSON.stringify(next)); } catch { /* ignore */ }
+  }, []);
+  const addAnnotation = useCallback(() => {
+    const c = cameraStateRef.current;
+    if (!c) return;
+    const text = window.prompt("Annotation text (visible on globe in Surface mode):", "");
+    if (!text || !text.trim()) return;
+    const a: Annotation = {
+      id: `anno-${Date.now()}`,
+      lat: c.lat, lon: c.lon,
+      text: text.trim().slice(0, 80),  // cap length to avoid screen-spam
+      createdAt: Date.now(),
+    };
+    persistAnnotations([...annotations, a]);
+    showToast(`📝 Added annotation '${a.text}'`);
+  }, [annotations, persistAnnotations]);
+
   // ===== View History =====
   // Tracks the last N fly-to actions so users can step backwards
   // through their exploration. Useful for getting back to a view you
@@ -3333,6 +3366,7 @@ function App() {
               measurePoints={measureMode ? measurePoints : undefined}
               measureImperial={unitsImperial}
               reducedMotion={reducedMotion}
+              annotations={annotations}
               geoJson={geoJsonImport ?? undefined}
               onScreenshot={(blob) => {
                 // Trigger a download
@@ -4473,6 +4507,45 @@ function App() {
               };
               tick();
             }},
+            // ===== Globe Annotations =====
+            { id: "annotateHere", label: "📝 Drop a text annotation at this view (Surface mode)", group: "Tools", icon: BookmarkPlus, run: addAnnotation },
+            ...(annotations.length > 0 ? [{
+              id: "annotateList" as const,
+              label: `📝 List all ${annotations.length} annotation${annotations.length === 1 ? "" : "s"} (console)`,
+              group: "Tools" as const,
+              icon: Compass,
+              run: () => {
+                const list = annotations.map(a => `  '${a.text}' at ${formatLat(a.lat)} ${formatLon(a.lon)} (${new Date(a.createdAt).toLocaleDateString()})`).join("\n");
+                console.log(`📝 ${annotations.length} annotation${annotations.length === 1 ? "" : "s"}:\n${list}`);
+                showToast(`📝 ${annotations.length} annotation${annotations.length === 1 ? "" : "s"} (full list in console)`);
+              },
+            }, {
+              id: "annotateClear" as const,
+              label: `🗑 Clear all ${annotations.length} annotation${annotations.length === 1 ? "" : "s"}`,
+              group: "Tools" as const,
+              icon: Trash2,
+              run: () => {
+                if (window.confirm(`Delete all ${annotations.length} annotation${annotations.length === 1 ? "" : "s"}?`)) {
+                  persistAnnotations([]);
+                  showToast("All annotations cleared");
+                }
+              },
+            }, {
+              id: "annotateExport" as const,
+              label: `💾 Export ${annotations.length} annotations as JSON`,
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const blob = new Blob([JSON.stringify(annotations, null, 2)], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `atlas-annotations-${new Date().toISOString().slice(0, 10)}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+                showToast(`💾 Exported ${annotations.length} annotations`);
+              },
+            }] : []),
             { id: "magneticDeclination", label: "🧭 Estimate magnetic declination at this view", group: "Tools", icon: Compass, run: () => {
               const c = cameraStateRef.current;
               if (!c) return;
