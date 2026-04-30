@@ -6562,6 +6562,46 @@ function App() {
             // Pin batch operations
             { id: "pinExportGeoJson", label: pins.length > 0 ? `Export all ${pins.length} pin${pins.length === 1 ? "" : "s"} as GeoJSON` : "Export pins as GeoJSON (no pins yet)", group: "Tools", icon: BookmarkPlus, run: exportPinsAsGeoJSON },
             { id: "pinExportKml", label: pins.length > 0 ? `Export all ${pins.length} pin${pins.length === 1 ? "" : "s"} as KML (Google Earth)` : "Export pins as KML (no pins yet)", group: "Tools", icon: BookmarkPlus, run: exportPinsAsKML },
+            // CSV — spreadsheet-friendly format (Excel, Google Sheets,
+            // Numbers, etc). Includes all pin metadata.
+            { id: "pinExportCsv", label: pins.length > 0 ? `Export all ${pins.length} pin${pins.length === 1 ? "" : "s"} as CSV (spreadsheet)` : "Export pins as CSV (no pins yet)", group: "Tools", icon: BookmarkPlus, run: () => {
+              if (pins.length === 0) { showToast("No pins to export"); return; }
+              const escape = (s: string) => `"${(s || "").replace(/"/g, '""')}"`;
+              const header = "id,label,lat,lon,altitudeM,color,note,createdAt\n";
+              const rows = pins.map(p => [
+                p.id, p.label, p.lat, p.lon, p.altitudeM ?? "",
+                p.color, p.note ?? "", new Date(p.createdAt).toISOString(),
+              ].map(v => typeof v === "string" ? escape(v) : v).join(",")).join("\n");
+              const csv = header + rows;
+              const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `atlas-pins-${new Date().toISOString().slice(0, 10)}.csv`;
+              a.click();
+              URL.revokeObjectURL(url);
+              showToast(`📊 Exported ${pins.length} pin${pins.length === 1 ? "" : "s"} as CSV`);
+            }},
+            // GPX — for hiking/cycling GPS devices and apps (Garmin, Strava, etc).
+            { id: "pinExportGpx", label: pins.length > 0 ? `Export all ${pins.length} pin${pins.length === 1 ? "" : "s"} as GPX (GPS / hiking apps)` : "Export pins as GPX (no pins yet)", group: "Tools", icon: BookmarkPlus, run: () => {
+              if (pins.length === 0) { showToast("No pins to export"); return; }
+              const wpts = pins.map(p => `  <wpt lat="${p.lat}" lon="${p.lon}">
+    <name>${escapeXml(p.label)}</name>${p.note ? `\n    <desc>${escapeXml(p.note)}</desc>` : ""}${typeof p.altitudeM === "number" ? `\n    <ele>${p.altitudeM}</ele>` : ""}
+    <time>${new Date(p.createdAt).toISOString()}</time>
+  </wpt>`).join("\n");
+              const gpx = `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="Atlas Globe" xmlns="http://www.topografix.com/GPX/1/1">
+${wpts}
+</gpx>`;
+              const blob = new Blob([gpx], { type: "application/gpx+xml" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `atlas-pins-${new Date().toISOString().slice(0, 10)}.gpx`;
+              a.click();
+              URL.revokeObjectURL(url);
+              showToast(`📍 Exported ${pins.length} pin${pins.length === 1 ? "" : "s"} as GPX`);
+            }},
             { id: "pinDeleteAll", label: pins.length > 0 ? `Delete all ${pins.length} pin${pins.length === 1 ? "" : "s"}` : "Delete all pins (none to delete)", group: "Tools", icon: BookmarkPlus, run: deleteAllPins },
             { id: "pinFromClipboard", label: "Drop pin from clipboard coords", group: "Tools", icon: BookmarkPlus, run: pinFromClipboard },
             // Drop a pin from a Google Maps URL — paste, parse, drop. Supports
