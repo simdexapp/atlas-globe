@@ -185,6 +185,9 @@ type LayerVisibility = {
   // Live World Stats widget — aggregator panel showing aircraft / quake
   // / volcano / time at-a-glance for big-picture awareness.
   liveStats: boolean;
+  // Distance-to-anchors widget — live great-circle distances from
+  // current view to 5 famous cities. Educational + travel-planning.
+  distanceAnchors: boolean;
 };
 
 type GlobeSettings = {
@@ -518,6 +521,7 @@ const defaultLayers: LayerVisibility = {
   ambientEarth: false,
   submarineCables: false,
   liveStats: false,
+  distanceAnchors: false,
   // 3D OSM Buildings tileset is heavy and renders with edge outlines
   // that disable imagery draping underneath, painting the screen with
   // dark olive boxes at low altitudes (the user's tear repro). Off by
@@ -4421,6 +4425,8 @@ function App() {
             }},
             // Toggle the new at-a-glance Live World Stats widget
             { id: "toggleLiveStats", label: layers.liveStats ? "Hide Live World Stats widget" : "🌐 Show Live World Stats widget", group: "Widgets", icon: Globe2, run: () => toggleLayer("liveStats") },
+            // Toggle the Distance-to-anchors widget — live distances to 5 cities
+            { id: "toggleDistanceAnchors", label: layers.distanceAnchors ? "Hide Distance to anchor cities widget" : "📐 Show Distance to anchor cities widget (NYC/London/Tokyo/Sydney/Cape Town)", group: "Widgets", icon: Compass, run: () => toggleLayer("distanceAnchors") },
             // Show a random tip from the curated TIPS list — useful when
             // discovering features for the first time, or as a periodic
             // reminder of what's available.
@@ -9626,6 +9632,12 @@ ${wpts}
         </Draggable>
       )}
 
+      {layers.distanceAnchors && (
+        <Draggable id="distanceAnchors" customizeMode={customizeUiMode} position={widgetPositions.distanceAnchors} onMove={setWidgetPosition}>
+          <DistanceAnchorsWidget cameraLat={cameraState.lat} cameraLon={cameraState.lon} unitsImperial={unitsImperial} />
+        </Draggable>
+      )}
+
       {recordingState === "recording" && (
         <div className="atlasRecordIndicator" role="status">
           <span className="atlasRecordDot" /> REC {formatSeconds(recordingSeconds)}
@@ -12536,6 +12548,42 @@ function LiveStatsWidget({
         </div>
       </div>
       <div className="atlasLiveStatsFoot">UTC {utcHM} · {Math.abs(cameraLat).toFixed(1)}°{cameraLat >= 0 ? "N" : "S"} {Math.abs(cameraLon).toFixed(1)}°{cameraLon >= 0 ? "E" : "W"}</div>
+    </div>
+  );
+}
+
+// Distance-to-anchors — small panel showing live great-circle distance
+// from the current camera position to 5 famous reference cities, sorted
+// closest-first. Recomputes on every camera change (cheap math, no
+// network). Useful for travel-planning context-switching.
+const DISTANCE_ANCHORS: Array<{ name: string; emoji: string; lat: number; lon: number }> = [
+  { name: "New York",  emoji: "🗽", lat: 40.7128,  lon: -74.0060 },
+  { name: "London",    emoji: "🇬🇧", lat: 51.5074,  lon: -0.1278  },
+  { name: "Tokyo",     emoji: "🗾", lat: 35.6762,  lon: 139.6503 },
+  { name: "Sydney",    emoji: "🇦🇺", lat: -33.8688, lon: 151.2093 },
+  { name: "Cape Town", emoji: "🇿🇦", lat: -33.9249, lon: 18.4241  },
+];
+function DistanceAnchorsWidget({ cameraLat, cameraLon, unitsImperial }: { cameraLat: number; cameraLon: number; unitsImperial: boolean }) {
+  const ranked = useMemo(() => {
+    return DISTANCE_ANCHORS
+      .map(a => ({ ...a, km: haversineKm(cameraLat, cameraLon, a.lat, a.lon) }))
+      .sort((x, y) => x.km - y.km);
+  }, [cameraLat, cameraLon]);
+  return (
+    <div className="atlasDistanceAnchorsWidget" role="status" aria-label="Distances from current view to 5 famous reference cities, sorted closest first">
+      <div className="atlasDistanceAnchorsHead">
+        <Compass size={11} />
+        <span>Distance from view</span>
+      </div>
+      <div className="atlasDistanceAnchorsList">
+        {ranked.map((a) => (
+          <div key={a.name} className="atlasDistanceAnchorRow">
+            <span className="atlasDistanceAnchorEmoji">{a.emoji}</span>
+            <span className="atlasDistanceAnchorName">{a.name}</span>
+            <span className="atlasDistanceAnchorValue">{formatDistKm(a.km, unitsImperial)}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

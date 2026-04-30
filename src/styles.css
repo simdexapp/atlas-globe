@@ -226,6 +226,64 @@ input:focus-visible,
   50% { opacity: 0.9; }
 }
 
+/* Distance-to-anchors widget — live distances from current view to 5 cities */
+.atlasDistanceAnchorsWidget {
+  position: fixed;
+  top: 88px;
+  right: 620px;
+  z-index: 7;
+  width: 220px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-3);
+  background: var(--surface-elevated);
+  backdrop-filter: blur(14px);
+  box-shadow: var(--shadow-2);
+  color: var(--gray-12);
+  font-family: ui-monospace, monospace;
+}
+.atlasDistanceAnchorsHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--gray-9);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+.atlasDistanceAnchorsHead svg { color: var(--accent); }
+.atlasDistanceAnchorsList {
+  display: grid;
+  gap: 4px;
+}
+.atlasDistanceAnchorRow {
+  display: grid;
+  grid-template-columns: 16px 1fr auto;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: var(--gray-1);
+  font-size: 11px;
+}
+.atlasDistanceAnchorEmoji { font-size: 11px; }
+.atlasDistanceAnchorName {
+  color: var(--gray-12);
+  font-weight: 600;
+  font-size: 11px;
+}
+.atlasDistanceAnchorValue {
+  color: var(--accent);
+  font-weight: 800;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 980px) { .atlasDistanceAnchorsWidget { display: none; } }
+
 /* Live World Stats widget — at-a-glance dashboard of live counts. */
 .atlasLiveStatsWidget {
   position: fixed;
