@@ -309,6 +309,51 @@ input:focus-visible,
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+  /* Disable the customize-mode pulsing outline that's purely decorative */
+  .atlas[data-customize-active] .globeLayer::after {
+    animation: none !important;
+  }
+  /* Disable the drag-scale-up that runs on pointer-down */
+  [data-draggable-id][data-dragging] {
+    transform: none !important;
+  }
+}
+
+/* Visually-hidden but screen-reader-accessible utility. Used for the
+   announcement region — invisible to sighted users, audible to SR. */
+.atlasSrAnnounce {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Universal focus-visible ring — high-contrast 2px outline that only
+   appears when the user is navigating with the keyboard (not on click).
+   Buttons, inputs, links, anything tabbable gets this for free. The
+   accent color is themed so it adapts to the light/dark/sepia themes.
+   Important for accessibility — sighted keyboard users were getting
+   only the browser's default outline (often invisible on dark UI). */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+/* Buttons inside floating dark UI panels need a slightly thicker ring
+   to overcome backdrop blur visual noise. */
+.atlas button:focus-visible,
+.atlas input:focus-visible,
+.atlas select:focus-visible,
+.atlas textarea:focus-visible,
+.atlas [role="button"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent), transparent 75%);
 }
 
 * { box-sizing: border-box; }

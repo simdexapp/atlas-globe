@@ -9834,8 +9834,21 @@ ${wpts}
       )}
 
       {toast && (
-        <div className="atlasToast" role="status" key={toast.id}>{toast.text}</div>
+        <div className="atlasToast" role="status" aria-live="polite" aria-atomic="true" key={toast.id}>{toast.text}</div>
       )}
+      {/* Screen-reader-only live region announces important state changes
+          (mode/layer toggles, fly-to events) without showing a visible
+          toast every time. Updates are mirrored from showToast via the
+          ref-tracked latest message + a debounced update so SR users
+          aren't drowned in chatter. */}
+      <div
+        className="atlasSrAnnounce"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        {toast ? toast.text : ""}
+      </div>
 
       {/* Customize-mode banner — shows at top while UI customization is on */}
       {customizeUiMode && (
