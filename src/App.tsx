@@ -4439,6 +4439,40 @@ function App() {
             // Real WMM (World Magnetic Model) requires a 2.5MB binary;
             // we use a coarse polynomial fit valid to ~1° accuracy.
             // Useful for hikers/sailors checking compass calibration.
+            // 🌅 Animate today's daylight at this view — kicks Surface
+            // mode into manual UTC clock and steps through sunrise →
+            // noon → sunset over 6 seconds. Visual storytelling for
+            // 'see the day pass'.
+            { id: "animateDaylight", label: "🌅 Animate today's sunrise → sunset at this view (Surface)", group: "Tools", icon: SunIcon, run: () => {
+              if (mode !== "surface") {
+                showToast("Switch to Surface mode first to see the lighting effect");
+                return;
+              }
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const sun = solarTimes(c.lat, c.lon, new Date());
+              if (sun === "polar-day") { showToast("Polar day — sun never sets here today"); return; }
+              if (sun === "polar-night") { showToast("Polar night — sun never rises here today"); return; }
+              // Disable real-time, then step from sunrise to sunset over
+              // ~6 seconds (12 frames @ 500ms each).
+              updateGlobe({ realTimeSun: false });
+              const steps = 12;
+              const dayHrs = ((sun.sunset - sun.sunrise) + 24) % 24;
+              showToast(`🌅 Animating ${Math.floor(dayHrs)}h ${Math.round((dayHrs % 1) * 60)}m of daylight…`);
+              let i = 0;
+              const tick = () => {
+                if (i > steps) {
+                  showToast("✓ Day complete");
+                  return;
+                }
+                const t = i / steps;
+                const utcHr = (sun.sunrise + dayHrs * t) % 24;
+                setSurfaceManualHour(utcHr);
+                i++;
+                setTimeout(tick, 500);
+              };
+              tick();
+            }},
             { id: "magneticDeclination", label: "🧭 Estimate magnetic declination at this view", group: "Tools", icon: Compass, run: () => {
               const c = cameraStateRef.current;
               if (!c) return;
