@@ -3796,7 +3796,13 @@ function App() {
       >
         Skip to command palette
       </a>
-      <div className="globeLayer" aria-label="3D viewport" id="atlasMain">
+      <div
+        className="globeLayer"
+        aria-label="3D viewport — drag to orbit, scroll to zoom"
+        aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight + - r m p / k"
+        role="application"
+        id="atlasMain"
+      >
         {/* Each mode has its OWN error boundary so a Cesium teardown
             error during mode switch can't poison the new mode's
             boundary. The conditional ensures the unmounted mode's
@@ -10502,9 +10508,11 @@ ${wpts}
         {toast ? toast.text : ""}
       </div>
 
-      {/* Customize-mode banner — shows at top while UI customization is on */}
+      {/* Customize-mode banner — shows at top while UI customization is on.
+          aria-live polite + role=status so screen readers announce when
+          the mode toggles on (without interrupting current speech). */}
       {customizeUiMode && (
-        <div className="atlasCustomizeBanner" role="status">
+        <div className="atlasCustomizeBanner" role="status" aria-live="polite" aria-atomic="true">
           <strong>🎨 Customize mode</strong>
           <span>Drag any dashed widget to rearrange · Position auto-saves</span>
           <button type="button" className="atlasPrimaryBtn small" onClick={() => setCustomizeUiMode(false)}>
@@ -12002,7 +12010,11 @@ function LiveStatsWidget({
   // for atmospheric refraction or twilight)
   const isDay = lhh >= 6 && lhh < 18;
   return (
-    <div className="atlasLiveStatsWidget" role="status" aria-label="Live world stats">
+    <div
+      className="atlasLiveStatsWidget"
+      role="status"
+      aria-label="Live world stats — aircraft, earthquakes, volcanoes, storms, launches counts and local time at view"
+    >
       <div className="atlasLiveStatsHead">
         <Globe2 size={11} />
         <span>Live world stats</span>
@@ -12050,7 +12062,7 @@ function CompassWidget({ cameraState }: { cameraState: CameraState }) {
   // and north is at lat=90. Compute screen rotation from camera pos.
   const rotDeg = -cameraState.lon; // rough heading indicator (longitude shift)
   return (
-    <div className="atlasCompass" aria-label="Compass">
+    <div className="atlasCompass" aria-label="Compass — needle points north relative to camera">
       <div className="atlasCompassRose" style={{ transform: `rotate(${rotDeg}deg)` }}>
         <span className="n">N</span>
         <span className="e">E</span>
@@ -12535,6 +12547,14 @@ function Draggable({
       data-draggable-id={id}
       data-customize={customizeMode ? "" : undefined}
       data-dragging={dragging ? "" : undefined}
+      // Screen-reader hint: announce that this widget is repositionable
+      // ONLY when customize mode is on (otherwise the announcement would
+      // be noise for the 99% case). aria-roledescription gives an SR-
+      // friendly name that makes more sense than "div".
+      {...(customizeMode ? {
+        "aria-roledescription": "draggable widget",
+        "aria-label": `${id} widget — drag to reposition`,
+      } : {})}
     >
       {children}
     </div>
