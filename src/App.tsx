@@ -4705,6 +4705,57 @@ function App() {
               const fractionEarth = horizonKm / (Math.PI * EARTH_RADIUS_KM);
               showToast(`↻ From ${formatDistKm(h, unitsImperial)} altitude, horizon is ${formatDistKm(horizonKm, unitsImperial)} away — ${(fractionEarth * 100).toFixed(1)}% of the way around Earth`);
             }},
+            // ===== Selected-pin extension commands =====
+            // Antipode of selected pin — the diametrically opposite point
+            // on Earth. Fly there + toast both lat/lons.
+            ...(selectedPin ? (() => {
+              const p = pins.find(x => x.id === selectedPin);
+              if (!p) return [];
+              return [{
+                id: "pinAntipode" as const,
+                label: `🌐 Fly to antipode of "${p.label}"`,
+                group: "Tools" as const,
+                icon: Globe2,
+                run: () => {
+                  // Antipode: negate lat, lon ± 180
+                  const aLat = -p.lat;
+                  const aLon = p.lon > 0 ? p.lon - 180 : p.lon + 180;
+                  setFlyTo((c) => ({ id: c.id + 1, lat: aLat, lon: aLon, altKm: 5000 }));
+                  showToast(`🌐 Antipode of ${p.label}: ${formatLat(aLat)} ${formatLon(aLon)}`);
+                },
+              }];
+            })() : []),
+            // Selected pin — show comprehensive snapshot in one toast
+            ...(selectedPin ? (() => {
+              const p = pins.find(x => x.id === selectedPin);
+              if (!p) return [];
+              return [{
+                id: "pinSnapshot" as const,
+                label: `📋 Selected pin snapshot: ${p.label}`,
+                group: "Tools" as const,
+                icon: Bookmark,
+                run: () => {
+                  const c = cameraStateRef.current;
+                  const km = c ? haversineKm(c.lat, c.lon, p.lat, p.lon) : 0;
+                  const ageDays = (Date.now() - p.createdAt) / 86400000;
+                  // Mean solar time at pin lon
+                  const utcHr = new Date().getUTCHours() + new Date().getUTCMinutes() / 60;
+                  const localHr = ((utcHr + p.lon / 15 + 24) % 24);
+                  const lh = Math.floor(localHr);
+                  const lm = Math.round((localHr - lh) * 60);
+                  showToast(`📋 ${p.label} · ${formatLat(p.lat)} ${formatLon(p.lon)} · ${formatDistKm(km, unitsImperial)} from view · ${ageDays.toFixed(0)}d old · local solar ${String(lh).padStart(2,"0")}:${String(lm).padStart(2,"0")}${p.note ? ` · 📝 has note` : ""}${p.photo ? " · 📷 has photo" : ""}`);
+                },
+              }];
+            })() : []),
+            // ===== Antipode of current view (already exists in some form) =====
+            { id: "antipodeView", label: "🌐 Fly to antipode of current view", group: "Tools", icon: Globe2, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const aLat = -c.lat;
+              const aLon = c.lon > 0 ? c.lon - 180 : c.lon + 180;
+              setFlyTo((p) => ({ id: p.id + 1, lat: aLat, lon: aLon, altKm: c.altKm }));
+              showToast(`🌐 Antipode: ${formatLat(aLat)} ${formatLon(aLon)} (${haversineKm(c.lat, c.lon, aLat, aLon).toFixed(0)} km diametrically opposite)`);
+            }},
             // ===== Comparison commands =====
             // Find places (bookmarks + pins) within a given range of
             // current view. 1000km is a "reasonable drive/short-flight"
