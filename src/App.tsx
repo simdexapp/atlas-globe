@@ -3813,6 +3813,18 @@ function App() {
         <RailButton icon={Film} label="Time-lapse" active={timelapseOpen} onClick={() => setTimelapseOpen(true)} />
         <RailButton icon={Telescope} label="Show FPS" active={showFps} onClick={() => setShowFps((v) => !v)} />
         <RailButton icon={Maximize2} label="Hide UI (H)" active={hideUi} onClick={() => setHideUi((v) => !v)} />
+        {/* Customize-UI mode: drag widgets anywhere. Visible toolbar
+            button so users discover the feature without knowing Cmd+E.
+            Active state pulses the button while customize mode is on. */}
+        <RailButton
+          icon={MousePointer2}
+          label={customizeUiMode ? "✓ Exit customize mode (drag widgets)" : "🎨 Customize UI — drag widgets anywhere (Cmd+E)"}
+          active={customizeUiMode}
+          onClick={() => {
+            setCustomizeUiMode((v) => !v);
+            showToast(customizeUiMode ? "UI customization off" : "🎨 Drag any dashed widget · ESC or click again to exit");
+          }}
+        />
       </aside>
 
       <div className="viewportStatus" aria-label="Viewport status">
@@ -4110,6 +4122,54 @@ function App() {
             { id: "layerSummary", label: "📊 Show summary of active layers", group: "Tools", icon: Layers, run: () => {
               const on = Object.entries(layers).filter(([_, v]) => v).map(([k]) => k);
               showToast(on.length === 0 ? "No layers active" : `Active layers (${on.length}): ${on.join(", ")}`);
+            }},
+            // 📖 Wikipedia summary for the current camera view location.
+            // Two-step fetch: Nominatim reverse-geocode → place name →
+            // Wikipedia REST API summary endpoint. Shows a 4-second toast
+            // with the article extract, plus a "open in browser" command
+            // chained for deeper reading.
+            { id: "wikiHere", label: "📖 Wikipedia summary for this view", group: "Tools", icon: Search, run: async () => {
+              const c = cameraStateRef.current;
+              if (!c) { showToast("No camera state"); return; }
+              showToast("📖 Looking up this place…");
+              try {
+                // Step 1: reverse geocode to get place name
+                const rev = await fetch(
+                  `https://nominatim.openstreetmap.org/reverse?format=json&lat=${c.lat}&lon=${c.lon}&zoom=10`,
+                  { headers: { Accept: "application/json" } }
+                );
+                if (!rev.ok) { showToast("Couldn't reverse-geocode"); return; }
+                const data = await rev.json() as { display_name?: string; address?: Record<string, string> };
+                const a = data.address || {};
+                const name = a.city || a.town || a.village || a.county || a.state || a.country || data.display_name?.split(",")[0]?.trim();
+                if (!name) { showToast("No place name found"); return; }
+                // Step 2: fetch wikipedia summary
+                const wiki = await fetch(
+                  `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(name)}`,
+                  { headers: { Accept: "application/json" } }
+                );
+                if (!wiki.ok) { showToast(`📖 ${name}: no Wikipedia article`); return; }
+                const wd = await wiki.json() as { extract?: string; content_urls?: { desktop?: { page?: string } } };
+                const extract = (wd.extract || "").slice(0, 220);
+                if (!extract) { showToast(`📖 ${name}: empty Wikipedia summary`); return; }
+                showToast(`📖 ${name}: ${extract}${extract.length === 220 ? "…" : ""}`);
+                // Attach a follow-up toast with the open-in-browser hint
+                // after the main toast displays for a moment.
+                const url = wd.content_urls?.desktop?.page;
+                if (url) {
+                  setTimeout(() => showToast(`🔗 Read full article: ${url} (Cmd+K → 🔗 Open Wikipedia)`), 5000);
+                  // Stash the URL for a follow-up command (used by next entry)
+                  (window as any).__atlasLastWikiUrl = url;
+                }
+              } catch (err) {
+                showToast(`Wikipedia lookup failed: ${(err as Error).message}`);
+              }
+            }},
+            // Companion: open the LAST Wikipedia URL we found, if any.
+            { id: "wikiOpen", label: "🔗 Open last Wikipedia article in new tab", group: "Tools", icon: Search, run: () => {
+              const url = (window as any).__atlasLastWikiUrl;
+              if (!url) { showToast("Run 'Wikipedia summary for this view' first"); return; }
+              window.open(url, "_blank");
             }},
             { id: "togglePin", label: pinTool ? "Exit pin tool" : "Pin tool", group: "View", icon: BookmarkPlus, run: () => setPinTool((v) => !v) },
             { id: "toggleMeasure", label: measureMode ? "Exit measure tool" : "Measure distance (multi-segment path)", group: "View", icon: Compass, run: () => { setMeasureMode((v) => !v); setMeasurePoints([]); } },
@@ -11608,8 +11668,19 @@ function PinsMiniList({ pins, selectedId, onSelect, onFly, onDelete, viewLat, vi
           // sorts the chronological "from prev" doesn't match the
           // displayed order, so we suppress it.
           const showSegMeta = sortMode === "recent" && !query;
-          const next = showSegMeta ? visiblePins.slice(0, 6)[i + 1] : null;
+          const visibleSlice = visiblePins.slice(0, 6);
+          const next = showSegMeta ? visibleSlice[i + 1] : null;
           const seg = next ? { dist: haversineKm(next.lat, next.lon, p.lat, p.lon), bearing: bearingDeg(next.lat, next.lon, p.lat, p.lon) } : null;
+          // Cumulative distance from the FIRST visible pin to this one
+          // — shows progression for trips. Only meaningful when sort is
+          // "recent" (chronological) AND no query active.
+          const cumulative = showSegMeta && i > 0 ? (() => {
+            let total = 0;
+            for (let j = 0; j < i; j++) {
+              total += haversineKm(visibleSlice[j].lat, visibleSlice[j].lon, visibleSlice[j+1].lat, visibleSlice[j+1].lon);
+            }
+            return total;
+          })() : null;
           // Distance from current view (when sort=distance, this is the
           // sort key, so exposing it makes the order self-evident)
           const distFromView = sortMode === "distance" && typeof viewLat === "number" && typeof viewLon === "number"
@@ -11620,6 +11691,9 @@ function PinsMiniList({ pins, selectedId, onSelect, onFly, onDelete, viewLat, vi
               <button type="button" className="atlasPinsMiniLabel" onClick={() => onSelect(p.id)}>
                 {p.label}
                 {seg && <span className="atlasPinSegMeta"> · {Math.round(seg.dist).toLocaleString()} km from prev</span>}
+                {cumulative !== null && cumulative > 0 && (
+                  <span className="atlasPinSegMeta"> · ⤳ {Math.round(cumulative).toLocaleString()} km cumulative</span>
+                )}
                 {distFromView !== null && <span className="atlasPinSegMeta"> · {Math.round(distFromView).toLocaleString()} km from view</span>}
               </button>
               <button type="button" className="atlasIconBtn" onClick={() => onFly(p)} title="Fly to" aria-label="Fly to"><Navigation size={11} /></button>
