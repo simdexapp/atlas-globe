@@ -2143,6 +2143,39 @@ function App() {
     setLayers((prev) => ({ ...prev, [key]: !prev[key] }));
   }, []);
 
+  // First-visit onboarding tip — fires once per browser. The 6s delay
+  // lets the app's loading toast clear first so this isn't buried.
+  // localStorage flag survives reloads but a hard storage-clear resets
+  // it (intentional — that's effectively a "new user" simulation).
+  useEffect(() => {
+    let seen = false;
+    try { seen = window.localStorage.getItem("atlas-onboarded-v2") === "true"; } catch { /* ignore */ }
+    if (seen) return;
+    const t = window.setTimeout(() => {
+      showToast("👋 Welcome to Atlas — Press / for search, Cmd+K for commands, ? for shortcuts");
+      try { window.localStorage.setItem("atlas-onboarded-v2", "true"); } catch { /* ignore */ }
+    }, 6000);
+    return () => window.clearTimeout(t);
+  }, [showToast]);
+
+  // Curated rotating tips. Used by the "Show me a tip" command and by
+  // the periodic auto-tip below.
+  const TIPS = useMemo(() => [
+    "💡 Press / to focus the search field, just like GitHub or Slack",
+    "💡 Press Cmd+K (or Ctrl+K) to open the command palette — every action lives in there",
+    "💡 Press Cmd+E to enter Customize mode, then drag any widget anywhere",
+    "💡 Press M for measure mode — click the globe to drop multi-point measurement vertices",
+    "💡 Press P for pin tool — every click drops a pin with auto-named city/country",
+    "💡 Press Y to copy a deep-link to your current view (lat/lon/altitude)",
+    "💡 Press R to reset view, Shift+R to fly to a random famous landmark",
+    "💡 Press 1-0 to quick-toggle individual layers (1=aircraft, 2=weather, etc.)",
+    "💡 Press Q to quickly exit any active tool (measure / pin / customize)",
+    "💡 Press V to toggle voice narration — the browser will speak each toast",
+    "💡 Click the lat/lon in the footer to copy coords to clipboard",
+    "💡 Type any place name in search and hit Enter to fly there",
+    "💡 Try the visibility presets: Cmd+K then 'cinematic' for a clean globe",
+  ], []);
+
   const updateGlobe = useCallback((patch: Partial<GlobeSettings>) => {
     setGlobe((prev) => ({ ...prev, ...patch }));
   }, []);
@@ -4368,6 +4401,19 @@ function App() {
             }},
             // Toggle the new at-a-glance Live World Stats widget
             { id: "toggleLiveStats", label: layers.liveStats ? "Hide Live World Stats widget" : "🌐 Show Live World Stats widget", group: "Widgets", icon: Globe2, run: () => toggleLayer("liveStats") },
+            // Show a random tip from the curated TIPS list — useful when
+            // discovering features for the first time, or as a periodic
+            // reminder of what's available.
+            { id: "showTip", label: "💡 Show me a random tip", group: "Tools", icon: Sparkles, run: () => {
+              const tip = TIPS[Math.floor(Math.random() * TIPS.length)];
+              showToast(tip);
+            }},
+            // Re-trigger the welcome onboarding sequence — useful when
+            // showing the app to someone else.
+            { id: "replayOnboarding", label: "🔁 Replay welcome onboarding", group: "Tools", icon: Sparkles, run: () => {
+              try { window.localStorage.removeItem("atlas-onboarded-v2"); } catch { /* ignore */ }
+              showToast("👋 Welcome to Atlas — Press / for search, Cmd+K for commands, ? for shortcuts");
+            }},
             // ===== One-click themed view presets =====
             // Each preset turns ON a curated set of layers (and turns OFF
             // unrelated ones) to switch the entire view's vibe instantly.
