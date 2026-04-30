@@ -4631,6 +4631,50 @@ function App() {
             // Like Spotify Wrapped for travel: walks pins by date,
             // computes total distance traveled, countries visited,
             // furthest point, etc. Animated console output.
+            // 📸 Photo gallery — opens a popup with all pins-with-photos
+            // as a grid. Click thumbnail to fly to the pin. Personal
+            // travel scrapbook view.
+            ...(pins.filter(p => p.photo).length > 0 ? [{
+              id: "photoGallery" as const,
+              label: `📸 Open photo gallery (${pins.filter(p => p.photo).length} pin${pins.filter(p => p.photo).length === 1 ? "" : "s"} with photos)`,
+              group: "Tools" as const,
+              icon: Camera,
+              run: () => {
+                const withPhotos = pins.filter(p => p.photo);
+                const gallery = window.open("", "_blank", "width=900,height=700");
+                if (!gallery) { showToast("Popup blocked"); return; }
+                const cards = withPhotos.map(p => `
+                  <div class="card">
+                    <img src="${p.photo}" alt="${p.label.replace(/"/g, "&quot;")}" />
+                    <div class="meta">
+                      <strong>${p.label.replace(/</g, "&lt;")}</strong>
+                      <span>${p.date || new Date(p.createdAt).toISOString().slice(0, 10)}</span>
+                      <em>${p.lat.toFixed(2)}, ${p.lon.toFixed(2)}</em>
+                    </div>
+                  </div>`).join("");
+                gallery.document.write(`<!doctype html><html><head><title>Atlas Photo Gallery — ${withPhotos.length} photos</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;padding:24px;background:#0a1120;color:#e8eef5;font:14px Inter,system-ui,sans-serif}h1{margin:0 0 24px;font-size:18px;letter-spacing:0.04em}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}.card{background:#11192c;border:1px solid #1f2c44;border-radius:8px;overflow:hidden}.card img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover}.meta{padding:10px 12px;display:grid;gap:2px}.meta strong{font-size:13px}.meta span{font-size:11px;color:#7a8597;font-family:ui-monospace,monospace}.meta em{font-size:10px;font-style:normal;color:#5c6679;font-family:ui-monospace,monospace}</style></head><body><h1>📸 Atlas Photo Gallery — ${withPhotos.length} photo${withPhotos.length === 1 ? "" : "s"}</h1><div class="grid">${cards}</div></body></html>`);
+                showToast(`📸 Gallery opened in new window`);
+              },
+            }] : []),
+            // 🎯 Distance estimator game — pick two random cities, ask
+            // user to estimate distance, score on accuracy.
+            { id: "distanceGame", label: "🎯 Distance estimator game — guess the km between two cities", group: "Tools", icon: Sparkles, run: () => {
+              const a = MAJOR_CITIES[Math.floor(Math.random() * MAJOR_CITIES.length)];
+              let b = a;
+              while (b === a) b = MAJOR_CITIES[Math.floor(Math.random() * MAJOR_CITIES.length)];
+              const realKm = haversineKm(a.lat, a.lon, b.lat, b.lon);
+              const guess = window.prompt(`🎯 Estimate the distance between:\n\n  ${a.name} (${a.country})\n  ${b.name} (${b.country})\n\nIn km (no units, just a number):`);
+              if (guess === null) return;
+              const guessKm = parseFloat(guess);
+              if (!Number.isFinite(guessKm)) { showToast("Couldn't parse that as a number"); return; }
+              const errorPct = Math.abs(guessKm - realKm) / realKm * 100;
+              const grade = errorPct < 5 ? "🌟 Bullseye!" :
+                            errorPct < 15 ? "✓ Excellent" :
+                            errorPct < 30 ? "👍 Good" :
+                            errorPct < 60 ? "🤔 Off but close enough" :
+                            "❌ Way off";
+              showToast(`${grade} Actual: ${formatDistKm(realKm, unitsImperial)}, you guessed ${formatDistKm(guessKm, unitsImperial)} — ${errorPct.toFixed(0)}% error`);
+            }},
             { id: "yearInReview", label: "📊 Year in review — your travels this year (story report)", group: "Tools", icon: Sparkles, run: () => {
               const year = new Date().getUTCFullYear();
               const yearStart = Date.UTC(year, 0, 1);
