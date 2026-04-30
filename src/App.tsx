@@ -4705,6 +4705,77 @@ function App() {
               const fractionEarth = horizonKm / (Math.PI * EARTH_RADIUS_KM);
               showToast(`↻ From ${formatDistKm(h, unitsImperial)} altitude, horizon is ${formatDistKm(horizonKm, unitsImperial)} away — ${(fractionEarth * 100).toFixed(1)}% of the way around Earth`);
             }},
+            // ===== Bookmark power-user commands =====
+            // Fly to the bookmark closest to current view (skips current).
+            ...(bookmarks.length >= 2 ? [{
+              id: "bmkNearest" as const,
+              label: `📍 Fly to nearest bookmark (${bookmarks.length} saved)`,
+              group: "Tools" as const,
+              icon: Bookmark,
+              run: () => {
+                const c = cameraStateRef.current;
+                if (!c) return;
+                let best: typeof bookmarks[0] | null = null;
+                let bestKm = Infinity;
+                for (const b of bookmarks) {
+                  const km = haversineKm(c.lat, c.lon, b.lat, b.lon);
+                  if (km > 50 && km < bestKm) { bestKm = km; best = b; }
+                }
+                if (!best) { showToast("No bookmark > 50km away (current view too close)"); return; }
+                setFlyTo((p) => ({ id: p.id + 1, lat: best.lat, lon: best.lon, altKm: best.altKm }));
+                showToast(`📍 ${best.name} · ${formatDistKm(bestKm, unitsImperial)}`);
+              },
+            }] : []),
+            // Bookmark stats — count, oldest/newest, hemisphere split,
+            // total distance if visited in date order.
+            ...(bookmarks.length >= 3 ? [{
+              id: "bmkStats" as const,
+              label: `📊 Bookmark stats (${bookmarks.length} saved)`,
+              group: "Tools" as const,
+              icon: Bookmark,
+              run: () => {
+                const userBmks = bookmarks.filter(b => b.savedAt > 0);
+                if (userBmks.length === 0) {
+                  showToast(`📊 ${bookmarks.length} preset bookmarks · 0 user-saved`);
+                  return;
+                }
+                let oldest = userBmks[0], newest = userBmks[0];
+                for (const b of userBmks) {
+                  if (b.savedAt < oldest.savedAt) oldest = b;
+                  if (b.savedAt > newest.savedAt) newest = b;
+                }
+                const ageDays = (Date.now() - oldest.savedAt) / 86400000;
+                showToast(`📊 ${userBmks.length} user bookmarks · oldest "${oldest.name}" (${ageDays.toFixed(0)}d ago) · newest "${newest.name}"`);
+              },
+            }] : []),
+            // Bookmark hemisphere distribution
+            ...(bookmarks.length >= 5 ? [{
+              id: "bmkHemispheres" as const,
+              label: `🌐 Bookmark distribution by hemisphere`,
+              group: "Tools" as const,
+              icon: Globe2,
+              run: () => {
+                let north = 0, south = 0, east = 0, west = 0;
+                for (const b of bookmarks) {
+                  if (b.lat >= 0) north++; else south++;
+                  if (b.lon >= 0) east++; else west++;
+                }
+                const total = bookmarks.length;
+                showToast(`🌐 ${total} bookmarks · N ${north} (${Math.round(north/total*100)}%) · S ${south} · E ${east} · W ${west}`);
+              },
+            }] : []),
+            // Random bookmark fly-to
+            ...(bookmarks.length >= 2 ? [{
+              id: "bmkRandom" as const,
+              label: `🎲 Fly to a random bookmark (${bookmarks.length} saved)`,
+              group: "Tools" as const,
+              icon: Bookmark,
+              run: () => {
+                const b = bookmarks[Math.floor(Math.random() * bookmarks.length)];
+                setFlyTo((p) => ({ id: p.id + 1, lat: b.lat, lon: b.lon, altKm: b.altKm }));
+                showToast(`🎲 ${b.name}`);
+              },
+            }] : []),
             // ===== Pin power-user commands =====
             // Fly to the geographic centroid of all pins (mean lat/lon).
             // Useful for "where's the center of gravity of my travel".
