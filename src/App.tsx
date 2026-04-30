@@ -9374,6 +9374,9 @@ ${wpts}
                   <span className="atlasFlightTotal"> / {aircraftSnapshot.aircraft.length.toLocaleString()}</span>
                 )}
                 <span className="atlasFlightMeta"> · {Math.round((Date.now() - aircraftSnapshot.fetchedAt) / 1000)}s · {aircraftSnapshot.source}</span>
+                {!selectedAircraftId && filteredAircraft.length > 0 && (
+                  <span className="atlasFlightHint"> · click a plane to inspect</span>
+                )}
               </span>
             ) : (
               <span>{aircraftLoading ? "Polling…" : "Flights idle"}</span>
