@@ -550,6 +550,36 @@ function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = uiTheme;
   }, [uiTheme]);
+  // ===== URL query-param overrides (for embed/iframe usage) =====
+  // ?theme=dark|light|oled|cyber|solar|mono — force a theme
+  // ?layers=aircraft,storms,iss — comma-separated layer keys to enable
+  // ?hideUi=1 — auto-hide chrome (kiosk-style embed)
+  // ?orbit=1 — start in auto-orbit mode
+  // Parsed once on mount so embedders can pass a fixed configuration.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const themeParam = params.get("theme");
+    if (themeParam && ["dark", "light", "oled", "cyber", "solar", "mono"].includes(themeParam)) {
+      setUiTheme(themeParam as typeof uiTheme);
+    }
+    const layersParam = params.get("layers");
+    if (layersParam) {
+      const wantOn = new Set(layersParam.split(",").map(s => s.trim()).filter(Boolean));
+      setLayers((prev) => {
+        const next = { ...prev };
+        for (const k of Object.keys(next) as Array<keyof LayerVisibility>) {
+          // For embedded views, force ONLY the requested layers on,
+          // turn the rest off so the embedder gets a deterministic look.
+          (next as any)[k] = wantOn.has(String(k));
+        }
+        return next;
+      });
+    }
+    if (params.get("hideUi") === "1") setHideUi(true);
+    if (params.get("orbit") === "1") setOrbiting(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [cameraState, setCameraState] = useState<CameraState>({ lat: 25, lon: 0, altKm: distanceToAltKm(SPACE_DISTANCE) });
   // Initial flyTo: if the URL hash contains an `@lat,lon,altKm` token,
   // fly there on mount. Format: `#@29.9,-90.07,8.5km`. Same convention
@@ -9856,8 +9886,24 @@ function TimelapseModal({
 }
 
 function EmbedModal({ onClose }: { onClose: () => void }) {
-  const url = window.location.origin + window.location.pathname + window.location.hash;
-  const html = `<iframe src="${url}" width="800" height="600" style="border:0;border-radius:12px" allow="autoplay; fullscreen; geolocation" title="Atlas Globe"></iframe>`;
+  const baseUrl = window.location.origin + window.location.pathname;
+  const hash = window.location.hash;
+  // Configurable options
+  const [width, setWidth] = useState(800);
+  const [height, setHeight] = useState(600);
+  const [embedTheme, setEmbedTheme] = useState<"" | "dark" | "light" | "oled" | "cyber" | "solar" | "mono">("");
+  const [embedLayers, setEmbedLayers] = useState("");  // comma-separated
+  const [hideUi, setHideUi] = useState(true);
+  const [orbit, setOrbit] = useState(true);
+  // Build URL with query params + camera hash
+  const params = new URLSearchParams();
+  if (embedTheme) params.set("theme", embedTheme);
+  if (embedLayers.trim()) params.set("layers", embedLayers.trim());
+  if (hideUi) params.set("hideUi", "1");
+  if (orbit) params.set("orbit", "1");
+  const queryString = params.toString();
+  const url = baseUrl + (queryString ? `?${queryString}` : "") + hash;
+  const html = `<iframe src="${url}" width="${width}" height="${height}" style="border:0;border-radius:12px" allow="autoplay; fullscreen; geolocation" title="Atlas Globe"></iframe>`;
   const [copied, setCopied] = useState<"url" | "html" | null>(null);
   const copy = async (text: string, kind: "url" | "html") => {
     try {
@@ -9868,17 +9914,57 @@ function EmbedModal({ onClose }: { onClose: () => void }) {
   };
   return (
     <div className="atlasModalShade" onClick={onClose} role="dialog" aria-modal="true">
-      <div className="atlasShortcutsModal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 540 }}>
+      <div className="atlasShortcutsModal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 600 }}>
         <div className="atlasModalHead">
           <strong>Embed snippet</strong>
           <button type="button" className="atlasIconBtn" onClick={onClose} aria-label="Close"><X size={14} /></button>
         </div>
-        <p className="atlasHint" style={{ marginBottom: 8 }}>Direct URL — opens this exact view in any browser.</p>
-        <textarea readOnly value={url} className="atlasPinNote" style={{ fontFamily: "ui-monospace, monospace", fontSize: 11, minHeight: 40 }} />
+        <p className="atlasHint" style={{ marginBottom: 8 }}>Customise the embed. Camera position is locked to the current view (in URL hash).</p>
+
+        {/* Customization grid */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+          <label style={{ display: "grid", gap: 4, fontSize: 11, color: "var(--gray-10)" }}>
+            <span>Width (px)</span>
+            <input type="number" value={width} onChange={(e) => setWidth(Math.max(200, parseInt(e.target.value) || 800))} className="atlasPinNote" style={{ minHeight: 0, height: 28 }} />
+          </label>
+          <label style={{ display: "grid", gap: 4, fontSize: 11, color: "var(--gray-10)" }}>
+            <span>Height (px)</span>
+            <input type="number" value={height} onChange={(e) => setHeight(Math.max(200, parseInt(e.target.value) || 600))} className="atlasPinNote" style={{ minHeight: 0, height: 28 }} />
+          </label>
+          <label style={{ display: "grid", gap: 4, fontSize: 11, color: "var(--gray-10)" }}>
+            <span>Theme override</span>
+            <select value={embedTheme} onChange={(e) => setEmbedTheme(e.target.value as typeof embedTheme)} className="atlasSelect">
+              <option value="">(viewer's preference)</option>
+              <option value="dark">Dark</option>
+              <option value="light">Light</option>
+              <option value="oled">OLED</option>
+              <option value="cyber">Cyber</option>
+              <option value="solar">Solar</option>
+              <option value="mono">Mono</option>
+            </select>
+          </label>
+          <label style={{ display: "grid", gap: 4, fontSize: 11, color: "var(--gray-10)" }}>
+            <span>Layers (comma-sep)</span>
+            <input type="text" value={embedLayers} onChange={(e) => setEmbedLayers(e.target.value)} placeholder="e.g. aircraft,storms,iss" className="atlasPinNote" style={{ minHeight: 0, height: 28 }} />
+          </label>
+        </div>
+        <div style={{ display: "flex", gap: 16, marginBottom: 12, fontSize: 12, color: "var(--gray-11)" }}>
+          <label style={{ display: "flex", gap: 6, alignItems: "center", cursor: "pointer" }}>
+            <input type="checkbox" checked={hideUi} onChange={(e) => setHideUi(e.target.checked)} />
+            Hide UI chrome
+          </label>
+          <label style={{ display: "flex", gap: 6, alignItems: "center", cursor: "pointer" }}>
+            <input type="checkbox" checked={orbit} onChange={(e) => setOrbit(e.target.checked)} />
+            Auto-orbit
+          </label>
+        </div>
+
+        <p className="atlasHint" style={{ marginBottom: 8 }}>Direct URL</p>
+        <textarea readOnly value={url} className="atlasPinNote" style={{ fontFamily: "ui-monospace, monospace", fontSize: 11, minHeight: 60 }} />
         <button type="button" className="atlasPrimaryBtn small" style={{ marginTop: 6 }} onClick={() => copy(url, "url")}>
           {copied === "url" ? "Copied!" : "Copy URL"}
         </button>
-        <p className="atlasHint" style={{ marginTop: 14, marginBottom: 8 }}>HTML embed snippet — paste into any page.</p>
+        <p className="atlasHint" style={{ marginTop: 14, marginBottom: 8 }}>HTML embed snippet</p>
         <textarea readOnly value={html} className="atlasPinNote" style={{ fontFamily: "ui-monospace, monospace", fontSize: 11, minHeight: 80 }} />
         <button type="button" className="atlasPrimaryBtn small" style={{ marginTop: 6 }} onClick={() => copy(html, "html")}>
           {copied === "html" ? "Copied!" : "Copy embed HTML"}
