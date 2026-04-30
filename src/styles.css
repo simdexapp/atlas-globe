@@ -1195,6 +1195,27 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 2px s
   font-family: ui-monospace, monospace;
 }
 
+/* Coords are now a <button> for clickable-to-copy. Reset button styling
+   so it looks identical to the original <div> but gets click handling
+   + a hover hint that it's interactive. */
+.footerCoordsButton {
+  border: 0;
+  background: transparent;
+  padding: 4px 8px;
+  margin: -4px -4px -4px -8px;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 120ms;
+}
+.footerCoordsButton:hover {
+  background: color-mix(in srgb, var(--accent), transparent 88%);
+}
+.footerCoordsButton:active {
+  background: color-mix(in srgb, var(--accent), transparent 75%);
+}
+
 .footerCoords span { color: var(--gray-10); }
 .footerCoords span:nth-child(2),
 .footerCoords span:nth-child(3) { color: var(--gray-12); }

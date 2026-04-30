@@ -421,6 +421,7 @@ const KEYBOARD_HINTS = [
   { keys: "H", desc: "Hide / show all UI (presentation mode)" },
   { keys: "S", desc: "Switch between Atlas / Surface mode" },
   { keys: "?", desc: "Show shortcuts" },
+  { keys: "/", desc: "Focus search (web-standard convention)" },
   // ===== Tool toggles =====
   { keys: "M", desc: "Toggle Measure tool" },
   { keys: "P", desc: "Toggle Pin tool" },
@@ -3428,9 +3429,15 @@ function App() {
           break;
         case "?":
         case "/":
+          // Shift+/ (or `?`) opens the shortcuts cheat sheet. Plain `/`
+          // opens the search input — the universal web convention used
+          // by GitHub, GitLab, Slack, Gmail, Twitter, etc.
           if (event.shiftKey || event.key === "?") {
             event.preventDefault();
             setShowShortcuts((v) => !v);
+          } else if (event.key === "/") {
+            event.preventDefault();
+            setShowSearch(true);
           }
           break;
         case "z":
@@ -3886,13 +3893,25 @@ function App() {
       </aside>
 
       <footer className="atlasFooter" aria-label="Status bar">
-        <div className="footerCoords">
+        <button
+          type="button"
+          className="footerCoords footerCoordsButton"
+          title="Click to copy these coordinates to clipboard (also: C key)"
+          aria-label="Copy current coordinates to clipboard"
+          onClick={() => {
+            const text = `${cameraState.lat.toFixed(5)}, ${cameraState.lon.toFixed(5)} (${cameraState.altKm.toFixed(1)} km altitude)`;
+            navigator.clipboard?.writeText(text).then(
+              () => showToast(`📋 Copied: ${text}`),
+              () => showToast(`📋 Coords: ${text}`)
+            );
+          }}
+        >
           <Compass size={12} />
           <span>{coordFormat === "dms" ? formatLatDms(cameraState.lat) : formatLat(cameraState.lat)}</span>
           <span>{coordFormat === "dms" ? formatLonDms(cameraState.lon) : formatLon(cameraState.lon)}</span>
           <span>·</span>
           <span>Alt {formatAlt(cameraState.altKm)}</span>
-        </div>
+        </button>
         <ScaleBar altKm={cameraState.altKm} />
         <div className="footerExtra">
           {/* Earth's geometric horizon distance: sqrt(2Rh + h²) at altitude h.
