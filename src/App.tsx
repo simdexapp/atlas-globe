@@ -4676,6 +4676,54 @@ function App() {
               const summary = top.map(([sq, n]) => `${sq}: ${n} (${(n/total*100).toFixed(1)}%)`).join(" · ");
               showToast(`📡 Top squawks: ${summary}`);
             }},
+            // Top airlines in current snapshot — bucket aircraft by
+            // 3-letter callsign prefix. Shows the busiest airlines RIGHT
+            // NOW, with optional "this is what % of all flights they run".
+            { id: "aircraftTopAirlines", label: "📊 Top airlines in current snapshot (top 10 by count)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const counts: Record<string, number> = {};
+              for (const a of aircraftSnapshot.aircraft) {
+                const prefix = (a.callsign || "").trim().slice(0, 3).toUpperCase();
+                if (!prefix || prefix.length < 3) continue;
+                counts[prefix] = (counts[prefix] || 0) + 1;
+              }
+              const top10 = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 10);
+              const total = aircraftSnapshot.aircraft.length;
+              const summary = top10.map(([p, n]) => `${p}: ${n} (${(n/total*100).toFixed(1)}%)`).join(" · ");
+              showToast(`📊 ${summary}`);
+            }},
+            // Random sample of 5 aircraft — gives a flavor of the snapshot
+            // without needing to drill into each one.
+            { id: "aircraftSampleFive", label: "🎲 Sample 5 random aircraft (quick taste of the snapshot)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const list = aircraftSnapshot.aircraft;
+              const indices = new Set<number>();
+              while (indices.size < Math.min(5, list.length)) {
+                indices.add(Math.floor(Math.random() * list.length));
+              }
+              const samples = [...indices].map(i => {
+                const a = list[i];
+                const altFt = Math.round(a.altitudeM / 0.3048).toLocaleString();
+                return `${(a.callsign || a.icao24).trim()} ${altFt}ft`;
+              });
+              showToast(`🎲 Random 5: ${samples.join(" · ")}`);
+            }},
+            // Vertical-rate distribution — climbing / cruising / descending
+            // counts give a sense of how "settled" the air traffic is.
+            { id: "aircraftVerticalRate", label: "🛫🛬 Climbing / cruising / descending breakdown", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              let climbing = 0, cruising = 0, descending = 0, ground = 0;
+              for (const a of aircraftSnapshot.aircraft) {
+                if (a.altitudeM < 100) { ground++; continue; }
+                const vrate = a.verticalRateMs ?? 0;
+                if (vrate > 1.5) climbing++;
+                else if (vrate < -1.5) descending++;
+                else cruising++;
+              }
+              const total = aircraftSnapshot.aircraft.length;
+              const pct = (n: number) => `${(n/total*100).toFixed(1)}%`;
+              showToast(`🛫 ${climbing} climbing (${pct(climbing)}) · ✈ ${cruising} cruising (${pct(cruising)}) · 🛬 ${descending} descending (${pct(descending)}) · 🛩 ${ground} on ground`);
+            }},
             // Long-haul filter: cruising commercial jets. >= 35000 ft
             // altitude AND >= 200 m/s ground speed (~720 km/h, typical
             // Mach 0.8 cruise).
