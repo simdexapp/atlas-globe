@@ -8071,6 +8071,71 @@ function App() {
               const mm = Math.floor((localMs % 3600_000) / 60_000);
               showToast(`Mean solar time at ${formatLat(c.lat)} ${formatLon(c.lon)}: ${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`);
             }},
+            // Find / fly to the pin nearest the current view — very useful
+            // when you have many pins and want to navigate to the closest
+            // one without scrolling the list.
+            ...(pins.length > 0 ? [{
+              id: "pinFlyNearest" as const,
+              label: `Fly to nearest pin (${pins.length} pin${pins.length === 1 ? "" : "s"} total)`,
+              group: "Tools" as const,
+              icon: Navigation,
+              run: () => {
+                const c = cameraStateRef.current;
+                if (!c) return;
+                let bestPin: Pin | null = null;
+                let bestKm = Infinity;
+                for (const p of pins) {
+                  const km = haversineKm(c.lat, c.lon, p.lat, p.lon);
+                  if (km < bestKm) { bestKm = km; bestPin = p; }
+                }
+                if (!bestPin) return;
+                setSelectedPin(bestPin.id);
+                flyToPin(bestPin);
+                showToast(`📍 ${bestPin.label} · ${formatDistKm(bestKm, unitsImperial)} away`);
+              },
+            }] : []),
+            // Quick-rename selected pin without opening the inspector.
+            ...(selectedPin ? [{
+              id: "pinRenameSelected" as const,
+              label: `Rename selected pin: "${pins.find(p => p.id === selectedPin)?.label || ""}"…`,
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const cur = pins.find(p => p.id === selectedPin);
+                if (!cur) return;
+                const name = window.prompt("New name for this pin:", cur.label);
+                if (!name || name === cur.label) return;
+                updatePin(cur.id, { label: name.slice(0, 80) });
+                showToast(`Renamed to "${name.slice(0, 40)}"`);
+              },
+            }] : []),
+            // Distance-from-view sort surfaced as a one-shot palette command —
+            // the widget's dropdown does the same thing, but power users
+            // often live in the palette and want the action by name.
+            ...(pins.length > 1 ? [{
+              id: "pinSortByDistance" as const,
+              label: `Sort pins-list by distance from current view`,
+              group: "Tools" as const,
+              icon: Compass,
+              run: () => {
+                try { window.localStorage.setItem("atlas-pins-sort", "distance"); } catch { /* ignore */ }
+                showToast("Pin sort: distance from view (reload widget to see)");
+              },
+            }] : []),
+            // Bulk delete pins by color — quick way to clear out a category
+            // when you've used color-coding (e.g. red = visited, blue = wishlist).
+            ...(pins.length > 1 ? PIN_COLORS.filter(c => pins.some(p => p.color === c)).map(c => ({
+              id: `pinDeleteColor_${c}` as const,
+              label: `🗑 Delete all ${pins.filter(p => p.color === c).length} ${c}-colored pin${pins.filter(p => p.color === c).length === 1 ? "" : "s"}`,
+              group: "Tools" as const,
+              icon: Trash2,
+              run: () => {
+                const matching = pins.filter(p => p.color === c);
+                if (!window.confirm(`Delete all ${matching.length} pin${matching.length === 1 ? "" : "s"} with color ${c}?`)) return;
+                setPins((prev) => prev.filter(p => p.color !== c));
+                showToast(`🗑 Deleted ${matching.length} pin${matching.length === 1 ? "" : "s"}`);
+              },
+            })) : []),
             // Pin batch operations
             { id: "pinExportGeoJson", label: pins.length > 0 ? `Export all ${pins.length} pin${pins.length === 1 ? "" : "s"} as GeoJSON` : "Export pins as GeoJSON (no pins yet)", group: "Tools", icon: BookmarkPlus, run: exportPinsAsGeoJSON },
             { id: "pinExportKml", label: pins.length > 0 ? `Export all ${pins.length} pin${pins.length === 1 ? "" : "s"} as KML (Google Earth)` : "Export pins as KML (no pins yet)", group: "Tools", icon: BookmarkPlus, run: exportPinsAsKML },
@@ -9757,7 +9822,7 @@ ${wpts}
 
       {pins.length > 0 && layers.pins && (
         <Draggable id="pinsMini" customizeMode={customizeUiMode} position={widgetPositions.pinsMini} onMove={setWidgetPosition}>
-          <PinsMiniList pins={pins} selectedId={selectedPin} onSelect={(id) => setSelectedPin(id)} onFly={flyToPin} onDelete={deletePin} />
+          <PinsMiniList pins={pins} selectedId={selectedPin} onSelect={(id) => setSelectedPin(id)} onFly={flyToPin} onDelete={deletePin} viewLat={cameraState.lat} viewLon={cameraState.lon} />
         </Draggable>
       )}
 
@@ -11312,7 +11377,24 @@ function drawOverlay(ctx: CanvasRenderingContext2D, w: number, h: number, cam: C
   ctx.setLineDash([]);
 }
 
-function PinsMiniList({ pins, selectedId, onSelect, onFly, onDelete }: { pins: Pin[]; selectedId: string | null; onSelect: (id: string) => void; onFly: (p: Pin) => void; onDelete: (id: string) => void }) {
+type PinSortMode = "recent" | "oldest" | "name" | "distance";
+
+function PinsMiniList({ pins, selectedId, onSelect, onFly, onDelete, viewLat, viewLon }: { pins: Pin[]; selectedId: string | null; onSelect: (id: string) => void; onFly: (p: Pin) => void; onDelete: (id: string) => void; viewLat?: number; viewLon?: number }) {
+  // Per-session search query — filters by label substring, case-insensitive.
+  const [query, setQuery] = useState("");
+  // Sort mode persists in localStorage so users keep their preferred view.
+  const [sortMode, setSortMode] = useState<PinSortMode>(() => {
+    try {
+      const s = window.localStorage.getItem("atlas-pins-sort");
+      if (s === "oldest" || s === "name" || s === "distance" || s === "recent") return s;
+    } catch { /* ignore */ }
+    return "recent";
+  });
+  const updateSortMode = useCallback((m: PinSortMode) => {
+    setSortMode(m);
+    try { window.localStorage.setItem("atlas-pins-sort", m); } catch { /* ignore */ }
+  }, []);
+
   // Trip total: walk every consecutive pin pair via great-circle distance.
   const trip = useMemo(() => {
     if (pins.length < 2) return null;
@@ -11330,35 +11412,84 @@ function PinsMiniList({ pins, selectedId, onSelect, onFly, onDelete }: { pins: P
     return { total, segments, flightHrs };
   }, [pins]);
 
+  // Apply search + sort. Distance sort needs a current view location;
+  // when none is provided we silently fall back to created-desc.
+  const visiblePins = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    let filtered = q
+      ? pins.filter(p => p.label.toLowerCase().includes(q) || (p.note || "").toLowerCase().includes(q))
+      : pins.slice();
+    if (sortMode === "oldest") filtered.sort((a, b) => a.createdAt - b.createdAt);
+    else if (sortMode === "name") filtered.sort((a, b) => a.label.localeCompare(b.label));
+    else if (sortMode === "distance" && typeof viewLat === "number" && typeof viewLon === "number") {
+      filtered.sort((a, b) => haversineKm(viewLat, viewLon, a.lat, a.lon) - haversineKm(viewLat, viewLon, b.lat, b.lon));
+    }
+    else filtered.sort((a, b) => b.createdAt - a.createdAt); // recent first (default)
+    return filtered;
+  }, [pins, query, sortMode, viewLat, viewLon]);
+
   return (
     <div className="atlasPinsMini" role="region" aria-label="Pins list">
       <div className="atlasPinsMiniHead">
-        <span>Pins ({pins.length})</span>
-        {trip && (
+        <span>Pins ({pins.length}{query ? ` · ${visiblePins.length} match` : ""})</span>
+        {trip && !query && (
           <span className="atlasPinsMeasurement" title={`Estimated commercial flight time: ${Math.round(trip.flightHrs)}h`}>
             {trip.total.toLocaleString(undefined, { maximumFractionDigits: 0 })} km · ~{Math.round(trip.flightHrs)}h flight
           </span>
         )}
       </div>
+      {pins.length > 3 && (
+        <div className="atlasPinsMiniControls">
+          <input
+            type="text"
+            className="atlasPinsMiniSearch"
+            placeholder="Search pins…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            aria-label="Search pins"
+          />
+          <select
+            className="atlasPinsMiniSort"
+            value={sortMode}
+            onChange={(e) => updateSortMode(e.target.value as PinSortMode)}
+            aria-label="Sort pins"
+            title="Sort order"
+          >
+            <option value="recent">Recent</option>
+            <option value="oldest">Oldest</option>
+            <option value="name">Name A-Z</option>
+            <option value="distance" disabled={typeof viewLat !== "number"}>Nearest view</option>
+          </select>
+        </div>
+      )}
       <div className="atlasPinsMiniList">
-        {pins.slice(-6).reverse().map((p, i) => {
-          // Show segment distance+bearing for non-last items (i.e. there's
-          // a "next" pin in the visual list)
-          const reversed = pins.slice(-6).reverse();
-          const next = reversed[i + 1];
+        {visiblePins.slice(0, 6).map((p, i) => {
+          // For "recent" sort we also show segment distances. For other
+          // sorts the chronological "from prev" doesn't match the
+          // displayed order, so we suppress it.
+          const showSegMeta = sortMode === "recent" && !query;
+          const next = showSegMeta ? visiblePins.slice(0, 6)[i + 1] : null;
           const seg = next ? { dist: haversineKm(next.lat, next.lon, p.lat, p.lon), bearing: bearingDeg(next.lat, next.lon, p.lat, p.lon) } : null;
+          // Distance from current view (when sort=distance, this is the
+          // sort key, so exposing it makes the order self-evident)
+          const distFromView = sortMode === "distance" && typeof viewLat === "number" && typeof viewLon === "number"
+            ? haversineKm(viewLat, viewLon, p.lat, p.lon) : null;
           return (
             <div key={p.id} className={`atlasPinsMiniRow${p.id === selectedId ? " selected" : ""}`}>
               <span className="atlasPinDot" style={{ background: p.color }} />
               <button type="button" className="atlasPinsMiniLabel" onClick={() => onSelect(p.id)}>
                 {p.label}
                 {seg && <span className="atlasPinSegMeta"> · {Math.round(seg.dist).toLocaleString()} km from prev</span>}
+                {distFromView !== null && <span className="atlasPinSegMeta"> · {Math.round(distFromView).toLocaleString()} km from view</span>}
               </button>
               <button type="button" className="atlasIconBtn" onClick={() => onFly(p)} title="Fly to" aria-label="Fly to"><Navigation size={11} /></button>
               <button type="button" className="atlasIconBtn" onClick={() => onDelete(p.id)} title="Delete" aria-label="Delete"><Trash2 size={11} /></button>
             </div>
           );
         })}
+        {visiblePins.length === 0 && query && (
+          <div className="atlasPinsMiniEmpty">No pins match "{query}"</div>
+        )}
       </div>
     </div>
   );

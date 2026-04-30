@@ -1721,6 +1721,47 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 2px s
   letter-spacing: 0;
 }
 
+.atlasPinsMiniControls {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.atlasPinsMiniSearch {
+  width: 100%;
+  padding: 4px 8px;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  background: var(--gray-1);
+  color: var(--gray-12);
+  border-radius: 6px;
+  outline: none;
+  transition: border-color 120ms;
+}
+.atlasPinsMiniSearch:focus {
+  border-color: var(--accent);
+}
+.atlasPinsMiniSearch::placeholder {
+  color: var(--gray-9);
+}
+.atlasPinsMiniSort {
+  padding: 4px 6px;
+  font-size: 10.5px;
+  border: 1px solid var(--border);
+  background: var(--gray-1);
+  color: var(--gray-12);
+  border-radius: 6px;
+  cursor: pointer;
+  outline: none;
+}
+.atlasPinsMiniEmpty {
+  padding: 12px 8px;
+  font-size: 11px;
+  color: var(--gray-9);
+  text-align: center;
+  font-style: italic;
+}
+
 .atlasPinsMiniList {
   display: grid;
   gap: 3px;
