@@ -4401,6 +4401,104 @@ function App() {
               const fractionEarth = horizonKm / (Math.PI * EARTH_RADIUS_KM);
               showToast(`↻ From ${formatDistKm(h, unitsImperial)} altitude, horizon is ${formatDistKm(horizonKm, unitsImperial)} away — ${(fractionEarth * 100).toFixed(1)}% of the way around Earth`);
             }},
+            // ===== Pin power-user commands =====
+            // Fly to the geographic centroid of all pins (mean lat/lon).
+            // Useful for "where's the center of gravity of my travel".
+            ...(pins.length >= 2 ? [{
+              id: "pinsCentroid" as const,
+              label: `🎯 Fly to geographic centroid of ${pins.length} pins`,
+              group: "Tools" as const,
+              icon: Crosshair,
+              run: () => {
+                // Spherical average via 3D unit vectors → atan2 back to lat/lon
+                let x = 0, y = 0, z = 0;
+                for (const p of pins) {
+                  const phi = p.lat * Math.PI / 180;
+                  const lam = p.lon * Math.PI / 180;
+                  x += Math.cos(phi) * Math.cos(lam);
+                  y += Math.cos(phi) * Math.sin(lam);
+                  z += Math.sin(phi);
+                }
+                x /= pins.length; y /= pins.length; z /= pins.length;
+                const lat = Math.atan2(z, Math.sqrt(x*x + y*y)) * 180 / Math.PI;
+                const lon = Math.atan2(y, x) * 180 / Math.PI;
+                setFlyTo((c) => ({ id: c.id + 1, lat, lon, altKm: 5000 }));
+                showToast(`🎯 Pin centroid: ${formatLat(lat)} ${formatLon(lon)}`);
+              },
+            }] : []),
+            // Round-trip distance — visit all pins in current order, return
+            // to the start. Compares to one-way trip distance.
+            ...(pins.length >= 3 ? [{
+              id: "pinsRoundTrip" as const,
+              label: `🔁 Total round-trip distance through all ${pins.length} pins`,
+              group: "Tools" as const,
+              icon: Compass,
+              run: () => {
+                let oneWay = 0;
+                for (let i = 1; i < pins.length; i++) {
+                  oneWay += haversineKm(pins[i-1].lat, pins[i-1].lon, pins[i].lat, pins[i].lon);
+                }
+                const returnLeg = haversineKm(pins[pins.length - 1].lat, pins[pins.length - 1].lon, pins[0].lat, pins[0].lon);
+                const roundTrip = oneWay + returnLeg;
+                showToast(`🔁 One-way ${formatDistKm(oneWay, unitsImperial)} · return ${formatDistKm(returnLeg, unitsImperial)} · total ${formatDistKm(roundTrip, unitsImperial)}`);
+              },
+            }] : []),
+            // Renumber pins as Pin 1, Pin 2, ... in date-created order.
+            // Useful after manual editing/reordering to clean up labels.
+            ...(pins.length >= 2 ? [{
+              id: "pinsRenumber" as const,
+              label: `🔢 Renumber pins (Pin 1, 2, …) in date-created order`,
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                if (!window.confirm(`Replace labels of ${pins.length} pins with "Pin 1, Pin 2, ..." in date-created order?`)) return;
+                setPins((prev) => {
+                  const sorted = [...prev].sort((a, b) => a.createdAt - b.createdAt);
+                  const renamed = sorted.map((p, i) => ({ ...p, label: `Pin ${i + 1}` }));
+                  // Preserve original order in the array so indices don't shift in UI
+                  return prev.map(p => renamed.find(r => r.id === p.id) || p);
+                });
+                showToast(`🔢 Renumbered ${pins.length} pins`);
+              },
+            }] : []),
+            // Bounding-box stats: min/max lat+lon of all pins, total area
+            // covered. Tells you how spread-out your pins are.
+            ...(pins.length >= 2 ? [{
+              id: "pinsBoundingBox" as const,
+              label: `📦 Show bounding box stats for ${pins.length} pins`,
+              group: "Tools" as const,
+              icon: Compass,
+              run: () => {
+                let minLat = pins[0].lat, maxLat = pins[0].lat, minLon = pins[0].lon, maxLon = pins[0].lon;
+                for (const p of pins) {
+                  if (p.lat < minLat) minLat = p.lat;
+                  if (p.lat > maxLat) maxLat = p.lat;
+                  if (p.lon < minLon) minLon = p.lon;
+                  if (p.lon > maxLon) maxLon = p.lon;
+                }
+                const latSpan = maxLat - minLat;
+                const lonSpan = maxLon - minLon;
+                const widthKm = haversineKm((minLat+maxLat)/2, minLon, (minLat+maxLat)/2, maxLon);
+                const heightKm = haversineKm(minLat, (minLon+maxLon)/2, maxLat, (minLon+maxLon)/2);
+                showToast(`📦 ${latSpan.toFixed(1)}° lat × ${lonSpan.toFixed(1)}° lon (${formatDistKm(widthKm, unitsImperial)} wide × ${formatDistKm(heightKm, unitsImperial)} tall)`);
+              },
+            }] : []),
+            // Pin clusters by hemisphere — quick demographic-style stats.
+            ...(pins.length >= 5 ? [{
+              id: "pinsHemispheres" as const,
+              label: `🌐 Pin distribution by hemisphere`,
+              group: "Tools" as const,
+              icon: Globe2,
+              run: () => {
+                let north = 0, south = 0, east = 0, west = 0;
+                for (const p of pins) {
+                  if (p.lat >= 0) north++; else south++;
+                  if (p.lon >= 0) east++; else west++;
+                }
+                const total = pins.length;
+                showToast(`🌐 ${total} pins · N ${north} (${Math.round(north/total*100)}%) · S ${south} · E ${east} · W ${west}`);
+              },
+            }] : []),
             // Performance / debug: drop the local geocode + Wikipedia cache.
             // Useful if a stale entry needs refreshing or to test fresh fetches.
             { id: "clearAtlasCache", label: (() => {
