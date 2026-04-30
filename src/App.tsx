@@ -4254,6 +4254,49 @@ function App() {
             // location once, then queries: closest active aircraft,
             // current weather, recent earthquakes, ISS distance, time
             // until next dawn. One Cmd+K → comprehensive 'what's near me'.
+            // Comprehensive nearby-things lookup — combines all the static
+            // datasets (cities, landmarks, airports, countries) and ranks
+            // by distance from the current view. Single command, full report.
+            { id: "nearbyEverything", label: "🧭 What's around this view? (top 3 of each: cities, landmarks, airports)", group: "Tools", icon: Compass, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const allCities = [...MAJOR_CITIES, ...REGIONAL_CITIES];
+              const nearestCities = allCities.map(x => ({ x, km: haversineKm(c.lat, c.lon, x.lat, x.lon) }))
+                .sort((a, b) => a.km - b.km).slice(0, 3);
+              const nearestLandmarks = LANDMARKS.map(x => ({ x, km: haversineKm(c.lat, c.lon, x.lat, x.lon) }))
+                .sort((a, b) => a.km - b.km).slice(0, 3);
+              const nearestAirports = AIRPORTS.map(x => ({ x, km: haversineKm(c.lat, c.lon, x.lat, x.lon) }))
+                .sort((a, b) => a.km - b.km).slice(0, 3);
+              const cityList = nearestCities.map(({ x, km }) => `${x.name} (${formatDistKm(km, unitsImperial)})`).join(", ");
+              const landmarkList = nearestLandmarks.map(({ x, km }) => `${x.emoji} ${x.name} (${formatDistKm(km, unitsImperial)})`).join(", ");
+              const airportList = nearestAirports.map(({ x, km }) => `${x.iata} (${formatDistKm(km, unitsImperial)})`).join(", ");
+              const report = `🧭 Around ${formatLat(c.lat)} ${formatLon(c.lon)}:\n\n` +
+                `  Closest cities:    ${cityList}\n` +
+                `  Closest landmarks: ${landmarkList}\n` +
+                `  Closest airports:  ${airportList}`;
+              console.log(report);
+              showToast(`🧭 ${nearestCities[0].x.name} (${formatDistKm(nearestCities[0].km, unitsImperial)}) · ${nearestLandmarks[0].x.name} (${formatDistKm(nearestLandmarks[0].km, unitsImperial)}) · ${nearestAirports[0].x.iata} (${formatDistKm(nearestAirports[0].km, unitsImperial)}) — full list in console`);
+            }},
+            // Day length comparison — show how this view's day length
+            // compares to a reference (London/Equator). Useful for
+            // travelers chasing summer/winter daylight.
+            { id: "compareDaylight", label: "☀ Compare daylight: this view vs equator + London", group: "Tools", icon: SunIcon, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const today = new Date();
+              const here = solarTimes(c.lat, c.lon, today);
+              const equator = solarTimes(0, 0, today);
+              const london = solarTimes(51.5074, -0.1278, today);
+              const dayHrs = (s: typeof here) =>
+                s === "polar-day" ? 24 :
+                s === "polar-night" ? 0 :
+                ((s.sunset - s.sunrise) + 24) % 24;
+              const hereH = dayHrs(here);
+              const eqH = dayHrs(equator);
+              const lonH = dayHrs(london);
+              const diff = hereH - lonH;
+              showToast(`☀ Daylight today: here ${hereH.toFixed(1)}h · London ${lonH.toFixed(1)}h (${diff > 0 ? "+" : ""}${diff.toFixed(1)}h) · equator ${eqH.toFixed(1)}h`);
+            }},
             { id: "liveNearMe", label: "📍 Live near me — aircraft + weather + quakes + ISS (uses geolocation)", group: "Tools", icon: Navigation, run: () => {
               if (!navigator.geolocation) { showToast("Geolocation not available"); return; }
               showToast("📍 Locating you, then fetching live data…");
