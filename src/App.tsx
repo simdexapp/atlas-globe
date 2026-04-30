@@ -3781,8 +3781,13 @@ function App() {
         Skip to command palette
       </a>
       <div className="globeLayer" aria-label="3D viewport" id="atlasMain">
-        <RenderModeErrorBoundary label={mode} resetKey={mode}>
+        {/* Each mode has its OWN error boundary so a Cesium teardown
+            error during mode switch can't poison the new mode's
+            boundary. The conditional ensures the unmounted mode's
+            boundary fully unmounts (cleaning up its caught error
+            state) instead of being reused. */}
         {mode === "atlas" ? (
+        <RenderModeErrorBoundary label="atlas" resetKey="atlas">
           <GlobeCanvas
             globe={globe}
             layers={layers}
@@ -3823,7 +3828,9 @@ function App() {
             onGlobeClick={onGlobeClick}
             onCameraChange={onCameraChange}
           />
+        </RenderModeErrorBoundary>
         ) : (
+        <RenderModeErrorBoundary label="surface" resetKey="surface">
           <Suspense fallback={<div className="surfaceLoading">Loading Surface mode (Cesium)…</div>}>
             <SurfaceMode
               token={cesiumToken}
@@ -3903,8 +3910,8 @@ function App() {
               submarineCables={layers.submarineCables ? SUBMARINE_CABLES : undefined}
             />
           </Suspense>
-        )}
         </RenderModeErrorBoundary>
+        )}
       </div>
 
       {showFps && <FpsOverlay />}
