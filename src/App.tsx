@@ -4087,6 +4087,30 @@ function App() {
             { id: "themeSolar", label: "Theme: Solar (warm orange)", group: "View", icon: SunIcon, run: () => setUiTheme("solar") },
             { id: "themeMono",  label: "Theme: Mono (grayscale)",   group: "View", icon: SunIcon, run: () => setUiTheme("mono") },
             { id: "toggleFps", label: showFps ? "Hide FPS overlay" : "Show FPS overlay", group: "View", icon: Telescope, run: () => setShowFps((v) => !v) },
+            // Cycle to the next theme (matches the T keyboard shortcut so
+            // users discover it from the palette too)
+            { id: "cycleTheme", label: "Cycle UI theme (next)", group: "View", icon: SunIcon, hint: "T", run: cycleTheme },
+            // Quick share: copy link to current view + active layers. Same
+            // as Y but discoverable in palette without learning the key.
+            { id: "shareView", label: "📋 Copy share link to current view", group: "Tools", icon: Share2, hint: "Y", run: () => {
+              if (!cameraStateRef.current) return;
+              const c = cameraStateRef.current;
+              const url = new URL(window.location.href);
+              url.hash = `#@${c.lat.toFixed(4)},${c.lon.toFixed(4)},${c.altKm.toFixed(1)}km`;
+              const link = url.toString();
+              navigator.clipboard?.writeText(link).then(
+                () => showToast(`🔗 Share link copied`),
+                () => showToast(`🔗 ${link}`)
+              );
+            }},
+            // Toggle hide-UI / presentation mode (same as H key)
+            { id: "presentMode", label: hideUi ? "Show UI (exit presentation mode)" : "🎬 Presentation mode (hide all UI)", group: "View", icon: Eye, hint: "H", run: () => setHideUi((v) => !v) },
+            // Print summary of CURRENTLY-ON layers — useful when you want
+            // to remember/share what overlays are active.
+            { id: "layerSummary", label: "📊 Show summary of active layers", group: "Tools", icon: Layers, run: () => {
+              const on = Object.entries(layers).filter(([_, v]) => v).map(([k]) => k);
+              showToast(on.length === 0 ? "No layers active" : `Active layers (${on.length}): ${on.join(", ")}`);
+            }},
             { id: "togglePin", label: pinTool ? "Exit pin tool" : "Pin tool", group: "View", icon: BookmarkPlus, run: () => setPinTool((v) => !v) },
             { id: "toggleMeasure", label: measureMode ? "Exit measure tool" : "Measure distance (multi-segment path)", group: "View", icon: Compass, run: () => { setMeasureMode((v) => !v); setMeasurePoints([]); } },
             // Clear path while staying in measure mode (drop the
