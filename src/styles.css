@@ -2589,6 +2589,68 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
 .atlasFlightAltRow input[type="range"] { height: 18px; }
 .atlasFlightAltRow input[type="range"]::-webkit-slider-thumb { width: 12px; height: 12px; margin-top: -4px; }
 
+/* Alliance chips — same row look as category chips, smaller text */
+.atlasFlightAllianceChips button {
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+}
+
+/* Altitude preset chips — small auxiliary buttons under the slider */
+.atlasFlightAltPresets {
+  font-size: 10px;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  gap: 4px;
+}
+.atlasFlightAltPresets button {
+  height: 22px;
+  padding: 0 6px;
+  font-size: 10px;
+  font-family: ui-monospace, monospace;
+  background: var(--gray-2);
+  border: 1px solid var(--border-subtle);
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+.atlasFlightAltPresets button:hover {
+  border-color: var(--accent);
+}
+
+/* Live category breakdown — clickable per-category counts. Compact 2x2
+   grid so it fits the widget without exploding height. */
+.atlasFlightStats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  font-size: 10px;
+  font-family: ui-monospace, monospace;
+}
+.atlasFlightStats button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--gray-1);
+  color: var(--gray-10);
+  font-size: 10px;
+  cursor: pointer;
+  transition: all 120ms;
+  text-align: left;
+  font-family: ui-monospace, monospace;
+}
+.atlasFlightStats button:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent), transparent 92%);
+}
+.atlasFlightStats button b {
+  color: var(--gray-12);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
 .atlasFlightAirline {
   display: grid;
   gap: var(--s-1);

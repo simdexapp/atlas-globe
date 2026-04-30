@@ -673,6 +673,11 @@ function App() {
   // Optional callsign-prefix filter on top of category. e.g. 'UAL' = United,
   // 'AAL' = American, 'DAL' = Delta. Empty = all airlines.
   const [aircraftAirlinePrefix, setAircraftAirlinePrefix] = useState("");
+  // Airline alliance preset — when set to anything other than 'all', only
+  // aircraft whose callsign starts with one of the alliance member's
+  // ICAO codes pass the filter. Stacks ON TOP of the manual prefix
+  // (so you can drill into a single alliance member with both filters).
+  const [aircraftAlliance, setAircraftAlliance] = useState<"all" | "star" | "skyteam" | "oneworld">("all");
   const [hoveredAircraftId, setHoveredAircraftId] = useState<string | null>(null);
   const [hoverPos, setHoverPos] = useState<{ x: number; y: number } | null>(null);
 
@@ -836,10 +841,24 @@ function App() {
     const minM = aircraftMinAltFt * 0.3048;
     const maxM = aircraftMaxAltFt * 0.3048;
     const prefix = aircraftAirlinePrefix.trim().toUpperCase();
+    // Airline alliance member ICAO codes (curated list — covers the most
+    // common members, not exhaustive). Used to filter "show me only
+    // Star Alliance flights" without the user typing 26 prefixes.
+    const allianceList = (
+      aircraftAlliance === "star" ? ["UAL","ACA","DLH","SWR","SAS","THA","SIA","ANA","EVA","TAP","AVA","AUA","AAR","CCA","BEL","EGY","ETH","TUR","SVA","SKW","ASH","CMP","NCA","JZA"] :
+      aircraftAlliance === "skyteam" ? ["DAL","AFR","KLM","CSA","KAL","AMX","MEA","AEA","ITY","CES","CSN","GIA","KQA","ROT","SVA","ARG","XLA","TAR"] :
+      aircraftAlliance === "oneworld" ? ["AAL","BAW","IBE","JAL","QFA","QTR","CPA","MAS","LAN","RJA","ALK","FIN","RAM","SVA","SBI"] :
+      []
+    );
     const passed = list.filter((a) => {
       if (a.altitudeM < minM || a.altitudeM > maxM) return false;
       // Airline filter is independent of category — applies on top.
       if (prefix && !(a.callsign || "").toUpperCase().startsWith(prefix)) return false;
+      // Alliance filter — also stacks on top.
+      if (allianceList.length > 0) {
+        const cs = (a.callsign || "").toUpperCase();
+        if (!allianceList.some(p => cs.startsWith(p))) return false;
+      }
       if (aircraftCategory === "all") return true;
       // ADS-B category codes:
       //   A1-A3 = light/medium/heavy commercial fixed-wing
@@ -870,7 +889,26 @@ function App() {
       return [...passed].sort((a, b) => b.altitudeM - a.altitudeM).slice(0, MOBILE_AIRCRAFT_CAP);
     }
     return passed;
-  }, [aircraftSnapshot, aircraftMinAltFt, aircraftMaxAltFt, aircraftCategory, aircraftAirlinePrefix]);
+  }, [aircraftSnapshot, aircraftMinAltFt, aircraftMaxAltFt, aircraftCategory, aircraftAirlinePrefix, aircraftAlliance]);
+
+  // Live category breakdown — counts of commercial / private / military /
+  // helicopter in the CURRENT snapshot (pre-filter). Useful for understanding
+  // what's airborne globally even when you've drilled into a single subset.
+  const aircraftStats = useMemo(() => {
+    const list = aircraftSnapshot?.aircraft ?? [];
+    if (list.length === 0) return null;
+    const stats = { commercial: 0, private: 0, military: 0, heli: 0 };
+    const milPrefixes = ["RCH","PAT","REA","SAM","ARMY","NAVY","USAF","MAGMA","VENOM","DUKE","EAGL"];
+    for (const a of list) {
+      const cat = a.category || "";
+      const cs = (a.callsign || "").slice(0, 4).toUpperCase();
+      if (milPrefixes.some(p => cs.startsWith(p.slice(0, 3)))) stats.military++;
+      else if (cat === "A7") stats.heli++;
+      else if (/^A[1-5]/.test(cat)) stats.commercial++;
+      else stats.private++;
+    }
+    return stats;
+  }, [aircraftSnapshot]);
   const [selectedAircraftId, setSelectedAircraftId] = useState<string | null>(null);
   const [timelapseOpen, setTimelapseOpen] = useState(false);
   const [timelapseFrames, setTimelapseFrames] = useState<TimelapseFrame[]>([]);
@@ -9756,6 +9794,23 @@ ${wpts}
                 >{c}</button>
               ))}
             </div>
+            {/* Alliance preset — clicking a chip restricts to that alliance's
+                member airlines. Stacks on top of category + altitude filters. */}
+            <div className="atlasFlightChips atlasFlightAllianceChips" title="Filter by airline alliance">
+              {([
+                { id: "all", label: "all alliances" },
+                { id: "star", label: "★ Star" },
+                { id: "skyteam", label: "◆ SkyTeam" },
+                { id: "oneworld", label: "● Oneworld" },
+              ] as const).map(({ id, label }) => (
+                <button
+                  key={id}
+                  type="button"
+                  className={aircraftAlliance === id ? "active" : ""}
+                  onClick={() => setAircraftAlliance(id)}
+                >{label}</button>
+              ))}
+            </div>
             <label className="atlasFlightAlt">
               <span>Alt {aircraftMinAltFt.toLocaleString()}–{aircraftMaxAltFt.toLocaleString()} ft</span>
               <div className="atlasFlightAltRow">
@@ -9779,6 +9834,16 @@ ${wpts}
                 />
               </div>
             </label>
+            {/* Quick altitude preset chips — one click sets the slider range
+                to a meaningful flight phase (approach, cruise, etc) so users
+                don't have to fiddle with both sliders. */}
+            <div className="atlasFlightChips atlasFlightAltPresets" title="Quick altitude presets">
+              <button type="button" onClick={() => { setAircraftMinAltFt(0); setAircraftMaxAltFt(5000); }}>↧ &lt;5k ft</button>
+              <button type="button" onClick={() => { setAircraftMinAltFt(0); setAircraftMaxAltFt(10000); }}>low &lt;10k</button>
+              <button type="button" onClick={() => { setAircraftMinAltFt(30000); setAircraftMaxAltFt(40000); }}>cruise 30–40k</button>
+              <button type="button" onClick={() => { setAircraftMinAltFt(35000); setAircraftMaxAltFt(50000); }}>↥ &gt;35k</button>
+              <button type="button" onClick={() => { setAircraftMinAltFt(0); setAircraftMaxAltFt(50000); }}>any alt</button>
+            </div>
             <label className="atlasFlightAirline">
               <span>Airline (callsign prefix)</span>
               <input
@@ -9790,6 +9855,25 @@ ${wpts}
                 maxLength={6}
               />
             </label>
+            {/* Live snapshot category breakdown — gives a quick view of the
+                global air-traffic mix without changing any filter. Click a
+                category to filter to it. */}
+            {aircraftStats && (
+              <div className="atlasFlightStats" title="Live snapshot breakdown — click to filter">
+                <button type="button" onClick={() => setAircraftCategory("commercial")}>
+                  ✈ <b>{aircraftStats.commercial.toLocaleString()}</b> commercial
+                </button>
+                <button type="button" onClick={() => setAircraftCategory("private")}>
+                  🛩 <b>{aircraftStats.private.toLocaleString()}</b> private
+                </button>
+                <button type="button" onClick={() => setAircraftCategory("heli")}>
+                  🚁 <b>{aircraftStats.heli.toLocaleString()}</b> heli
+                </button>
+                <button type="button" onClick={() => setAircraftCategory("military")}>
+                  ⚓ <b>{aircraftStats.military.toLocaleString()}</b> military
+                </button>
+              </div>
+            )}
           </div>
         </div>
         </Draggable>
