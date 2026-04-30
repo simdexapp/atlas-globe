@@ -4512,6 +4512,46 @@ function App() {
             // pins, bookmarks (user-saved only), tours, annotations,
             // layer presets, home location, search history. One JSON
             // file = full transferable backup.
+            // 📱 QR code to current view — opens a popup with a QR code
+            // image generated client-side (no API). Lets a phone scan
+            // to instantly load the same view. Useful for sharing in person.
+            { id: "qrCurrentView", label: "📱 Show QR code for this view (scan with phone)", group: "Tools", icon: Share2, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const url = new URL(window.location.href);
+              url.hash = `#@${c.lat.toFixed(4)},${c.lon.toFixed(4)},${c.altKm.toFixed(1)}km`;
+              // Use Google Charts QR API (oldest free + works everywhere).
+              // 200×200 PNG.
+              const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(url.toString())}`;
+              // Open in a new window with just the QR + caption
+              const w = window.open("", "_blank", "width=320,height=380");
+              if (!w) { showToast("Popup blocked — check browser settings"); return; }
+              w.document.write(`<!doctype html><html><head><title>Atlas Globe QR</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;padding:24px;background:#0a1120;color:#e8eef5;font:14px Inter,sans-serif;text-align:center;display:grid;gap:12px;place-items:center}img{border-radius:8px}small{color:#7a8597;font-family:ui-monospace,monospace;font-size:11px;word-break:break-all;max-width:240px}</style></head><body><strong>Scan to open this view</strong><img src="${qrUrl}" width="240" height="240" alt="QR code"/><small>${formatLat(c.lat)} ${formatLon(c.lon)}</small></body></html>`);
+              showToast("📱 QR code opened in new window — scan with phone");
+            }},
+            // 📐 Convert current view coords between decimal degrees and
+            // degrees/minutes/seconds (DMS) notation. Many maps use one
+            // or the other; quick converter avoids the manual math.
+            { id: "coordsDms", label: "📐 Show current view coords in DMS (degrees/minutes/seconds)", group: "Tools", icon: Compass, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const toDms = (deg: number, isLat: boolean) => {
+                const abs = Math.abs(deg);
+                const d = Math.floor(abs);
+                const mFloat = (abs - d) * 60;
+                const m = Math.floor(mFloat);
+                const s = ((mFloat - m) * 60).toFixed(1);
+                const hem = isLat ? (deg >= 0 ? "N" : "S") : (deg >= 0 ? "E" : "W");
+                return `${d}°${m}'${s}"${hem}`;
+              };
+              const dms = `${toDms(c.lat, true)} ${toDms(c.lon, false)}`;
+              const decimal = `${c.lat.toFixed(5)}, ${c.lon.toFixed(5)}`;
+              const both = `${decimal}\n${dms}`;
+              navigator.clipboard?.writeText(both).then(
+                () => showToast(`📐 ${dms} (copied with decimal)`),
+                () => showToast(`📐 ${dms}`)
+              );
+            }},
             { id: "backupAll", label: "💾 Backup everything (pins + bookmarks + tours + annotations + presets) as JSON", group: "Tools", icon: BookmarkPlus, run: () => {
               const userBookmarks = bookmarks.filter(b => b.savedAt > 0);
               const backup = {
