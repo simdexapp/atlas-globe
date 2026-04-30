@@ -262,6 +262,13 @@ export default function Surface({
   // entire effect to re-run when the OS preference changes.
   const reducedMotionRef = useRef(reducedMotion ?? false);
   useEffect(() => { reducedMotionRef.current = reducedMotion ?? false; }, [reducedMotion]);
+  // Mirror onSelectAircraft as a ref so the consolidated click handler
+  // (registered once at mount with deps [tokenToUse]) can call the latest
+  // callback without needing to re-register on every aircraft prop change.
+  // Without this ref, the click handler would close over a stale callback
+  // from the first render.
+  const onSelectAircraftRef = useRef(onSelectAircraft);
+  useEffect(() => { onSelectAircraftRef.current = onSelectAircraft; }, [onSelectAircraft]);
   // icao24 → Billboard for incremental updates (avoid full BillboardCollection rebuild every snapshot).
   const aircraftBillboardByIcaoRef = useRef<Map<string, Cesium.Billboard>>(new Map());
   // Map icao24 → vertical polyline entity from sea-level to billboard.
@@ -733,8 +740,74 @@ export default function Surface({
 
     const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
     handler.setInputAction((click: Cesium.ScreenSpaceEventHandler.PositionedEvent) => {
-      // Pick on the actual terrain surface, not the ellipsoid — gives the
-      // correct point under the cursor even when zoomed into mountains.
+      // CONSOLIDATED click handler — was previously split across TWO separate
+      // ScreenSpaceEventHandler instances on the same canvas, which created
+      // race conditions / overrides depending on Cesium's internal handling
+      // of multiple LEFT_CLICK actions. Now: ONE handler, ONE LEFT_CLICK
+      // action, with priority order:
+      //   1) Aircraft billboard (drillPick the stack, prefer registered icao24)
+      //   2) Country / landmark / airport entity label → flyTo
+      //   3) Fallback: terrain pick → onPickLocation (info toast / pin drop)
+
+      // ---- 1) Aircraft drillPick ----
+      // drillPick walks every primitive under the click point, sorted by
+      // depth. With 6000+ planes on screen, depth-sort + 24 candidate cap
+      // ensures the underlying billboard is reachable even when overlay
+      // decor (selection ring, callsign label, 3D model boxes) covers it.
+      const drillPickCandidates = viewer.scene.drillPick(click.position, 24);
+      for (const cand of drillPickCandidates) {
+        if (cand?.primitive instanceof Cesium.Billboard) {
+          const icao = aircraftBillboardIndexRef.current.get(cand.primitive);
+          if (icao && onSelectAircraftRef.current) {
+            onSelectAircraftRef.current(icao);
+            return;
+          }
+        }
+      }
+
+      // ---- 2) Country / landmark / airport entity ----
+      for (const cand of drillPickCandidates) {
+        const id = cand?.id;
+        if (!(id instanceof Cesium.Entity)) continue;
+        if (id.properties?.isCountry?.getValue()) {
+          viewer.camera.flyTo({
+            destination: Cesium.Cartesian3.fromDegrees(
+              id.properties.countryLon.getValue(),
+              id.properties.countryLat.getValue(),
+              1_500_000,
+            ),
+            orientation: { heading: 0, pitch: -Cesium.Math.PI_OVER_TWO, roll: 0 },
+            duration: reducedMotionRef.current ? 0 : 1.6,
+          });
+          return;
+        }
+        if (id.properties?.isLandmark?.getValue()) {
+          viewer.camera.flyTo({
+            destination: Cesium.Cartesian3.fromDegrees(
+              id.properties.landmarkLon.getValue(),
+              id.properties.landmarkLat.getValue(),
+              id.properties.landmarkZoom.getValue() * 1000,
+            ),
+            orientation: { heading: 0, pitch: -Cesium.Math.PI_OVER_TWO, roll: 0 },
+            duration: reducedMotionRef.current ? 0 : 1.4,
+          });
+          return;
+        }
+        if (id.properties?.isAirport?.getValue()) {
+          viewer.camera.flyTo({
+            destination: Cesium.Cartesian3.fromDegrees(
+              id.properties.airportLon.getValue(),
+              id.properties.airportLat.getValue(),
+              3000,
+            ),
+            orientation: { heading: 0, pitch: -Cesium.Math.PI_OVER_TWO, roll: 0 },
+            duration: reducedMotionRef.current ? 0 : 1.4,
+          });
+          return;
+        }
+      }
+
+      // ---- 3) Fallback terrain pick → onPickLocation ----
       const ray = viewer.camera.getPickRay(click.position);
       let cartesian: Cesium.Cartesian3 | undefined;
       if (ray) cartesian = viewer.scene.globe.pick(ray, viewer.scene) ?? undefined;
@@ -1622,7 +1695,13 @@ export default function Surface({
     });
   }, [selectedAircraft]);
 
-  // ===== Aircraft click → select + hover tooltip =====
+  // ===== Aircraft hover tooltip ONLY =====
+  // Note: the LEFT_CLICK action that used to live here was MOVED into the
+  // primary handler higher up (the same one that does onPickLocation), to
+  // eliminate a race condition between two ScreenSpaceEventHandler
+  // instances both registering LEFT_CLICK on the same canvas. Symptom of
+  // the bug: aircraft clicks AND globe-pick clicks both stopped working.
+  // This effect now only owns the MOUSE_MOVE → hover tooltip behaviour.
   useEffect(() => {
     const viewer = viewerRef.current;
     if (!viewer) return;
@@ -1635,75 +1714,6 @@ export default function Surface({
     tooltip.className = "cesiumAircraftTooltip";
     tooltip.style.cssText = "position:absolute;pointer-events:none;padding:6px 10px;border-radius:8px;border:1px solid #2a3349;background:rgba(8,14,26,.95);backdrop-filter:blur(6px);color:#f1f4f8;font:600 11px Inter,sans-serif;box-shadow:0 4px 12px rgba(0,0,0,.35);z-index:99;display:none;white-space:nowrap;letter-spacing:.04em;";
     viewer.container.appendChild(tooltip);
-
-    handler.setInputAction((click: Cesium.ScreenSpaceEventHandler.PositionedEvent) => {
-      // drillPick walks every primitive under the click point, sorted by
-      // depth. We need this because the selected aircraft has overlapping
-      // decor (3D model boxes, pulse ring, callsign label) — a plain
-      // scene.pick() returns whichever of those happens to be frontmost
-      // and the underlying billboard never gets considered. By walking
-      // the full stack we can prefer a Billboard with a registered
-      // icao24, which gives consistent click-to-select behavior even on
-      // the currently-selected plane.
-      // Bumped from 8 → 24 because at low zooms the imagery + country
-      // labels + cities + EONET events stack up before reaching the
-      // aircraft billboard at click point. With 6000+ planes on screen
-      // and any other active layer, 8 wasn't enough.
-      const candidates = viewer.scene.drillPick(click.position, 24);
-
-      // First pass: prefer an aircraft billboard.
-      for (const cand of candidates) {
-        if (cand?.primitive instanceof Cesium.Billboard) {
-          const icao = aircraftBillboardIndexRef.current.get(cand.primitive);
-          if (icao && onSelectAircraft) {
-            onSelectAircraft(icao);
-            return;
-          }
-        }
-      }
-
-      // Second pass: country / landmark / airport label entities.
-      for (const cand of candidates) {
-        const id = cand?.id;
-        if (!(id instanceof Cesium.Entity)) continue;
-        if (id.properties?.isCountry?.getValue()) {
-          viewer.camera.flyTo({
-            destination: Cesium.Cartesian3.fromDegrees(
-              id.properties.countryLon.getValue(),
-              id.properties.countryLat.getValue(),
-              1_500_000,
-            ),
-            orientation: { heading: 0, pitch: -Cesium.Math.PI_OVER_TWO, roll: 0 },
-            duration: reducedMotionRef.current ? 0 : 1.6,
-          });
-          return;
-        }
-        if (id.properties?.isLandmark?.getValue()) {
-          viewer.camera.flyTo({
-            destination: Cesium.Cartesian3.fromDegrees(
-              id.properties.landmarkLon.getValue(),
-              id.properties.landmarkLat.getValue(),
-              id.properties.landmarkZoom.getValue() * 1000,
-            ),
-            orientation: { heading: 0, pitch: -Cesium.Math.PI_OVER_TWO, roll: 0 },
-            duration: reducedMotionRef.current ? 0 : 1.4,
-          });
-          return;
-        }
-        if (id.properties?.isAirport?.getValue()) {
-          viewer.camera.flyTo({
-            destination: Cesium.Cartesian3.fromDegrees(
-              id.properties.airportLon.getValue(),
-              id.properties.airportLat.getValue(),
-              3000,
-            ),
-            orientation: { heading: 0, pitch: -Cesium.Math.PI_OVER_TWO, roll: 0 },
-            duration: reducedMotionRef.current ? 0 : 1.4,
-          });
-          return;
-        }
-      }
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
     handler.setInputAction((move: Cesium.ScreenSpaceEventHandler.MotionEvent) => {
       // drillPick so hovering the selected aircraft still resolves to its
