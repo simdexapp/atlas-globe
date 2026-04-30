@@ -4280,6 +4280,66 @@ function App() {
             // Day length comparison — show how this view's day length
             // compares to a reference (London/Equator). Useful for
             // travelers chasing summer/winter daylight.
+            // ===== Atlas Trivia / Geographic-fact commands =====
+            // Quick-hit facts about the current view, all client-side.
+            { id: "distanceToPoles", label: "📐 Distance from this view to N/S poles + equator + meridian", group: "Tools", icon: Compass, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const toNorth = haversineKm(c.lat, c.lon, 89.99, c.lon);
+              const toSouth = haversineKm(c.lat, c.lon, -89.99, c.lon);
+              const toEquator = haversineKm(c.lat, c.lon, 0, c.lon);
+              const toMeridian = haversineKm(c.lat, c.lon, c.lat, 0);
+              const toDateLine = Math.min(
+                haversineKm(c.lat, c.lon, c.lat, 180),
+                haversineKm(c.lat, c.lon, c.lat, -180)
+              );
+              showToast(`📐 N pole ${formatDistKm(toNorth, unitsImperial)} · S pole ${formatDistKm(toSouth, unitsImperial)} · equator ${formatDistKm(toEquator, unitsImperial)} · prime meridian ${formatDistKm(toMeridian, unitsImperial)} · date line ${formatDistKm(toDateLine, unitsImperial)}`);
+            }},
+            // Time-zone wedge — what time-zone hour offset is this view in?
+            // Exact tz requires a tz database; we use the simple lon/15 mean.
+            { id: "tzAtView", label: "🕐 Approximate time-zone offset at this view", group: "Tools", icon: Compass, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const offsetH = c.lon / 15;
+              const sign = offsetH >= 0 ? "+" : "−";
+              const offHr = Math.floor(Math.abs(offsetH));
+              const offMin = Math.round((Math.abs(offsetH) - offHr) * 60);
+              const standard = offsetH >= 0 ? `UTC+${offHr}` : `UTC-${offHr}`;
+              showToast(`🕐 Mean solar time UTC${sign}${offHr.toString().padStart(2, "0")}:${offMin.toString().padStart(2, "0")} (lon ${c.lon.toFixed(2)}°). Closest standard: ${standard}`);
+            }},
+            // Compass rose — the bearing arrow to true north / cardinals.
+            { id: "compassRose", label: "🧭 Compass directions to nearest landmark in each cardinal", group: "Tools", icon: Compass, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const buckets: Record<string, { name: string; km: number; bearing: number }> = {};
+              for (const l of LANDMARKS) {
+                const km = haversineKm(c.lat, c.lon, l.lat, l.lon);
+                const b = bearingDeg(c.lat, c.lon, l.lat, l.lon);
+                const dir = compassDir(b);
+                if (!buckets[dir] || km < buckets[dir].km) {
+                  buckets[dir] = { name: l.name, km, bearing: b };
+                }
+              }
+              const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+              const list = dirs.filter(d => buckets[d]).map(d => `${d}: ${buckets[d].name} (${formatDistKm(buckets[d].km, unitsImperial)})`).join("\n");
+              const summary = dirs.filter(d => buckets[d]).slice(0, 4).map(d => `${d}: ${buckets[d].name}`).join(" · ");
+              console.log(`🧭 Nearest landmarks by direction from ${formatLat(c.lat)} ${formatLon(c.lon)}:\n${list}`);
+              showToast(`🧭 ${summary} — full compass in console`);
+            }},
+            // Geographic bucket — what hemisphere/quadrant am I in?
+            { id: "myQuadrant", label: "🌐 What hemisphere/quadrant is this view in?", group: "Tools", icon: Globe2, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const ns = c.lat >= 0 ? "Northern" : "Southern";
+              const ew = c.lon >= 0 ? "Eastern" : "Western";
+              const climate = Math.abs(c.lat) < 23.5 ? "tropics (within Tropic of Cancer/Capricorn)" :
+                              Math.abs(c.lat) < 66.5 ? "temperate zone" :
+                              "polar circle";
+              const quadrant = c.lat >= 0
+                ? (c.lon >= 0 ? "NE quadrant (Eurasia, North Africa, India)" : "NW quadrant (Americas)")
+                : (c.lon >= 0 ? "SE quadrant (Australia, southern Africa)" : "SW quadrant (South America, Antarctica)");
+              showToast(`🌐 ${ns} hemisphere · ${ew} hemisphere · ${climate} · ${quadrant}`);
+            }},
             { id: "compareDaylight", label: "☀ Compare daylight: this view vs equator + London", group: "Tools", icon: SunIcon, run: () => {
               const c = cameraStateRef.current;
               if (!c) return;
