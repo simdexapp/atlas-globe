@@ -4327,6 +4327,42 @@ function App() {
               showToast(`🧭 ${summary} — full compass in console`);
             }},
             // Geographic bucket — what hemisphere/quadrant am I in?
+            // Social sharing — pre-filled tweet/Bluesky/Mastodon links
+            // with a deep-link to the current view + theme + layers.
+            { id: "shareTwitter", label: "🐦 Tweet this view (current camera + url)", group: "Tools", icon: Share2, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const url = new URL(window.location.href);
+              url.hash = `#@${c.lat.toFixed(4)},${c.lon.toFixed(4)},${c.altKm.toFixed(1)}km`;
+              const text = `Looking at ${formatLat(c.lat)} ${formatLon(c.lon)} on Atlas Globe`;
+              const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url.toString())}`;
+              window.open(tweetUrl, "_blank", "noopener,noreferrer");
+            }},
+            { id: "shareBluesky", label: "🦋 Share to Bluesky", group: "Tools", icon: Share2, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const url = new URL(window.location.href);
+              url.hash = `#@${c.lat.toFixed(4)},${c.lon.toFixed(4)},${c.altKm.toFixed(1)}km`;
+              const text = `Looking at ${formatLat(c.lat)} ${formatLon(c.lon)} on Atlas Globe ${url.toString()}`;
+              window.open(`https://bsky.app/intent/compose?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
+            }},
+            { id: "shareReddit", label: "📮 Share to Reddit (r/MapPorn)", group: "Tools", icon: Share2, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const url = new URL(window.location.href);
+              url.hash = `#@${c.lat.toFixed(4)},${c.lon.toFixed(4)},${c.altKm.toFixed(1)}km`;
+              const title = `${formatLat(c.lat)} ${formatLon(c.lon)} — Atlas Globe`;
+              window.open(`https://www.reddit.com/r/MapPorn/submit?url=${encodeURIComponent(url.toString())}&title=${encodeURIComponent(title)}`, "_blank", "noopener,noreferrer");
+            }},
+            { id: "shareEmail", label: "✉ Email this view (mailto:)", group: "Tools", icon: Share2, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const url = new URL(window.location.href);
+              url.hash = `#@${c.lat.toFixed(4)},${c.lon.toFixed(4)},${c.altKm.toFixed(1)}km`;
+              const subj = `Atlas Globe — ${formatLat(c.lat)} ${formatLon(c.lon)}`;
+              const body = `Check out this view on Atlas Globe:\n\n${url.toString()}`;
+              window.location.href = `mailto:?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`;
+            }},
             { id: "myQuadrant", label: "🌐 What hemisphere/quadrant is this view in?", group: "Tools", icon: Globe2, run: () => {
               const c = cameraStateRef.current;
               if (!c) return;
