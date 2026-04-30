@@ -4700,6 +4700,80 @@ function App() {
                 showToast(`🛣 Path: ${formatDistKm(path, unitsImperial)} · Direct: ${formatDistKm(direct, unitsImperial)} · Detour: +${formatDistKm(detour, unitsImperial)} (+${pct.toFixed(0)}%)`);
               },
             }] : []),
+            // CO2 emissions estimate for the measured path at jet speeds.
+            // Using ~115g CO2 per passenger-km (commercial economy avg).
+            // For a private jet ~3.6× higher. Toast both for context.
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureCO2" as const,
+              label: "🌱 CO₂ emissions for this route (commercial vs private jet)",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                let total = 0;
+                for (let i = 1; i < measurePoints.length; i++) {
+                  total += haversineKm(measurePoints[i-1].lat, measurePoints[i-1].lon, measurePoints[i].lat, measurePoints[i].lon);
+                }
+                const commercialKg = (total * 0.115).toFixed(0);
+                const privateKg = (total * 0.115 * 3.6).toFixed(0);
+                showToast(`🌱 ${formatDistKm(total, unitsImperial)} → commercial economy ~${commercialKg} kg CO₂/passenger · private jet ~${privateKg} kg`);
+              },
+            }] : []),
+            // Distance comparison toast — what % of Earth's circumference,
+            // and what familiar reference distance is comparable.
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureCompare" as const,
+              label: "📏 Compare path to Earth-scale references",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                let total = 0;
+                for (let i = 1; i < measurePoints.length; i++) {
+                  total += haversineKm(measurePoints[i-1].lat, measurePoints[i-1].lon, measurePoints[i].lat, measurePoints[i].lon);
+                }
+                // 40,075 km = Earth's equatorial circumference
+                const pctCirc = (total / 40075 * 100).toFixed(1);
+                // Some familiar references (km)
+                const refs: Array<[string, number]> = [
+                  ["NYC↔LA", 3935],
+                  ["London↔Sydney", 17000],
+                  ["Earth↔Moon", 384400],
+                  ["Earth's diameter", 12742],
+                  ["LA↔Tokyo", 8800],
+                ];
+                // Find the reference closest in magnitude
+                let closest = refs[0];
+                let closestRatio = Math.abs(Math.log10(total / closest[1]));
+                for (const r of refs) {
+                  const rat = Math.abs(Math.log10(total / r[1]));
+                  if (rat < closestRatio) { closestRatio = rat; closest = r; }
+                }
+                const xRef = (total / closest[1]).toFixed(2);
+                showToast(`📏 ${formatDistKm(total, unitsImperial)} = ${pctCirc}% of Earth's equator · ≈ ${xRef}× ${closest[0]} (${closest[1].toLocaleString()} km)`);
+              },
+            }] : []),
+            // Fly to the geographic midpoint of the measured path.
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureMidpoint" as const,
+              label: "🎯 Fly to midpoint of measure path",
+              group: "View" as const,
+              icon: Crosshair,
+              run: () => {
+                // Spherical midpoint via 3D vector average
+                let x = 0, y = 0, z = 0;
+                for (const p of measurePoints) {
+                  const phi = p.lat * Math.PI / 180;
+                  const lam = p.lon * Math.PI / 180;
+                  x += Math.cos(phi) * Math.cos(lam);
+                  y += Math.cos(phi) * Math.sin(lam);
+                  z += Math.sin(phi);
+                }
+                x /= measurePoints.length; y /= measurePoints.length; z /= measurePoints.length;
+                const lat = Math.atan2(z, Math.sqrt(x*x + y*y)) * 180 / Math.PI;
+                const lon = Math.atan2(y, x) * 180 / Math.PI;
+                setFlyTo((c) => ({ id: c.id + 1, lat, lon, altKm: 3000 }));
+                showToast(`🎯 Midpoint: ${formatLat(lat)} ${formatLon(lon)}`);
+              },
+            }] : []),
             // Reverse the measured path's direction — handy if you built it
             // from B→A but want bearings/directions reported A→B.
             ...(measureMode && measurePoints.length >= 2 ? [{
