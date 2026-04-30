@@ -3566,13 +3566,19 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
    6 financial centers at a glance with market-open status badge. */
 .atlasWorldClocksWidget {
   position: fixed;
-  /* Anchored to the BOTTOM-LEFT (above the pin-mini list) so it never
-     collides with the aircraft flight controls panel that occupies
-     top-left when the aircraft layer is on. */
-  bottom: 60px;
+  /* Anchored to the LEFT column, in the gap between the flight-controls
+     panel (top:84, h~188 → bottom 272 when aircraft layer is on) and
+     the altitude scale (top:530). The 258px gap easily fits this
+     widget's ~201px height. Below it sits the altitude scale, then the
+     pinsMini list — no overlap, all four widgets stack cleanly. */
+  top: 300px;
   left: 64px;
   z-index: 6;
   width: 240px;
+  /* Cap height + scroll if content overflows so we never push past the
+     altitude scale below. */
+  max-height: 220px;
+  overflow-y: auto;
   padding: var(--s-2) var(--s-3);
   border: 1px solid var(--border);
   border-radius: var(--r-3);
