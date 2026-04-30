@@ -12663,79 +12663,20 @@ function AircraftLayer({
     halo.instanceMatrix.needsUpdate = true;
   }, [selectedAircraft, scratch]);
 
-  // ===== SCREEN-SPACE PICKER (the actual click handler) =====
-  // The default R3F raycaster doesn't work for our aircraft because the
-  // shader does its own scaling (vec3 scaled = position * uPxScale * d) —
-  // the geometry sent to the raycaster is the unscaled 1×1 plane, not the
-  // ~12px visual quad. Result: the raycaster's hit area is microscopic
-  // and the user almost never lands a click on it.
-  //
-  // Fix: install our own canvas-level pointerdown listener. For each
-  // aircraft, project (lat, lon, alt) → screen XY using the same Three.js
-  // camera that's rendering them. Pick the closest aircraft within a
-  // generous pixel radius (16px).
-  const { camera, gl } = useThree();
-  useEffect(() => {
-    const canvas = gl.domElement;
-    if (!canvas) return;
-    const PICK_RADIUS_PX = 16;
-    const onPointerDown = (e: PointerEvent) => {
-      // Only respond to left-button mouse / touch / pen primary clicks.
-      if (e.button !== 0) return;
-      // Check the click target is the canvas (not a UI overlay above it).
-      if (e.target !== canvas) return;
-      const rect = canvas.getBoundingClientRect();
-      const cx = e.clientX - rect.left;
-      const cy = e.clientY - rect.top;
-      const w = rect.width;
-      const h = rect.height;
-      // Project each aircraft to screen space, keep the closest within radius.
-      const v = new THREE.Vector3();
-      let bestI = -1;
-      let bestDist = Infinity;
-      for (let i = 0; i < aircraft.length; i++) {
-        const a = aircraft[i];
-        const altKm = Math.max(0, a.altitudeM / 1000);
-        const radius = 1 + altKm / EARTH_RADIUS_KM + 0.005;
-        const phi = (90 - a.lat) * Math.PI / 180;
-        const theta = -a.lon * Math.PI / 180;
-        v.set(
-          radius * Math.sin(phi) * Math.cos(theta),
-          radius * Math.cos(phi),
-          radius * Math.sin(phi) * Math.sin(theta),
-        );
-        // Behind camera? skip.
-        const camToPoint = v.clone().sub(camera.position);
-        const camForward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-        if (camToPoint.dot(camForward) <= 0) continue;
-        v.project(camera);
-        if (v.z < -1 || v.z > 1) continue;       // outside view frustum
-        const sx = (v.x * 0.5 + 0.5) * w;
-        const sy = (1 - (v.y * 0.5 + 0.5)) * h;
-        const dx = sx - cx;
-        const dy = sy - cy;
-        const d = Math.sqrt(dx*dx + dy*dy);
-        if (d < bestDist && d <= PICK_RADIUS_PX) {
-          bestDist = d;
-          bestI = i;
-        }
-      }
-      if (bestI >= 0) {
-        e.stopPropagation();
-        onSelect(aircraft[bestI].icao24);
-      }
-    };
-    // Use capture so we run BEFORE R3F's scene-level pointer chain — that
-    // way globe-pick (in the scene) only fires on a true miss.
-    canvas.addEventListener("pointerdown", onPointerDown, true);
-    return () => canvas.removeEventListener("pointerdown", onPointerDown, true);
-  }, [aircraft, camera, gl, onSelect]);
+  // Click → pick instance
+  const handleClick = useCallback((e: any) => {
+    if (typeof e.instanceId !== "number") return;
+    e.stopPropagation();
+    const a = aircraft[e.instanceId];
+    if (a) onSelect(a.icao24);
+  }, [aircraft, onSelect]);
 
   return (
     <>
       <instancedMesh
         ref={meshRef}
         args={[triGeometry, triMaterial, Math.max(1, aircraft.length)]}
+        onPointerDown={handleClick}
         onPointerMove={(e: any) => {
           if (typeof e.instanceId !== "number") return;
           const a = aircraft[e.instanceId];
