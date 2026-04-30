@@ -5187,6 +5187,68 @@ function App() {
                 },
               }];
             })() : []),
+            // ===== Selected-pin power commands =====
+            // Set selected pin as home location — one-click "this is home"
+            ...(selectedPin ? (() => {
+              const p = pins.find(x => x.id === selectedPin);
+              if (!p) return [];
+              return [{
+                id: "pinSetAsHome" as const,
+                label: `🏠 Set "${p.label}" as my home location`,
+                group: "Tools" as const,
+                icon: Bookmark,
+                run: () => {
+                  const home = { lat: p.lat, lon: p.lon, altKm: 5, name: p.label };
+                  setHomeLocation(home);
+                  try { window.localStorage.setItem("atlas-home-location", JSON.stringify(home)); } catch { /* ignore */ }
+                  showToast(`🏠 Home set to "${p.label}" · ${formatLat(p.lat)} ${formatLon(p.lon)}`);
+                },
+              }];
+            })() : []),
+            // Compare selected pin → home
+            ...(selectedPin && homeLocation ? (() => {
+              const p = pins.find(x => x.id === selectedPin);
+              if (!p) return [];
+              return [{
+                id: "pinCompareHome" as const,
+                label: `📐 Compare "${p.label}" to home (${homeLocation.name})`,
+                group: "Tools" as const,
+                icon: Compass,
+                run: () => {
+                  const km = haversineKm(p.lat, p.lon, homeLocation.lat, homeLocation.lon);
+                  const bearing = bearingDeg(homeLocation.lat, homeLocation.lon, p.lat, p.lon);
+                  const lonDiff = p.lon - homeLocation.lon;
+                  let normDiff = lonDiff;
+                  while (normDiff > 180) normDiff -= 360;
+                  while (normDiff < -180) normDiff += 360;
+                  const hourDiff = normDiff / 15;
+                  const sign = hourDiff >= 0 ? "+" : "-";
+                  const absH = Math.abs(hourDiff);
+                  const wholeH = Math.floor(absH);
+                  const mm = Math.round((absH - wholeH) * 60);
+                  showToast(`📐 ${p.label} is ${formatDistKm(km, unitsImperial)} ${compassDir(bearing)} of home · ${sign}${wholeH}h${mm > 0 ? mm + "m" : ""}`);
+                },
+              }];
+            })() : []),
+            // Find the 3 closest pins to the selected pin
+            ...(selectedPin && pins.length >= 4 ? (() => {
+              const p = pins.find(x => x.id === selectedPin);
+              if (!p) return [];
+              return [{
+                id: "pinFindNeighbors" as const,
+                label: `🎯 Show 3 pins closest to "${p.label}"`,
+                group: "Tools" as const,
+                icon: Compass,
+                run: () => {
+                  const others = pins.filter(x => x.id !== p.id)
+                    .map(x => ({ x, km: haversineKm(p.lat, p.lon, x.lat, x.lon) }))
+                    .sort((a, b) => a.km - b.km)
+                    .slice(0, 3);
+                  const list = others.map(({ x, km }) => `${x.label} (${formatDistKm(km, unitsImperial)})`).join(", ");
+                  showToast(`🎯 Closest to ${p.label}: ${list}`);
+                },
+              }];
+            })() : []),
             // ===== Antipode of current view (already exists in some form) =====
             { id: "antipodeView", label: "🌐 Fly to antipode of current view", group: "Tools", icon: Globe2, run: () => {
               const c = cameraStateRef.current;
