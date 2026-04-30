@@ -142,6 +142,8 @@ type LayerVisibility = {
   skyTonight: boolean;
   // World clocks — local time at 6 financial-centers + market open status.
   worldClocks: boolean;
+  // View history — sidebar widget listing recently-visited views.
+  viewHistory: boolean;
 };
 
 type GlobeSettings = {
@@ -281,6 +283,7 @@ const defaultLayers: LayerVisibility = {
   aircraftRadar: false,
   skyTonight: false,
   worldClocks: false,
+  viewHistory: false,
   // 3D OSM Buildings tileset is heavy and renders with edge outlines
   // that disable imagery draping underneath, painting the screen with
   // dark olive boxes at low altitudes (the user's tear repro). Off by
@@ -836,6 +839,32 @@ function App() {
     current?: { temp: number; code: number; wind: number; windDir: number; humidity: number; feels?: number };
     daily?: Array<{ date: string; code: number; tmax: number; tmin: number; precipProb: number; windMax: number }>;
   }>(null);
+  // ===== View History =====
+  // Tracks the last N fly-to actions so users can step backwards
+  // through their exploration. Useful for getting back to a view you
+  // didn't bookmark. Persisted across reloads (localStorage, last 50).
+  type ViewHistoryEntry = { id: string; lat: number; lon: number; altKm: number; label: string; ts: number };
+  const [viewHistory, setViewHistory] = useState<ViewHistoryEntry[]>(() => {
+    try {
+      const raw = window.localStorage.getItem("atlas-view-history");
+      if (raw) return (JSON.parse(raw) as ViewHistoryEntry[]).slice(0, 50);
+    } catch { /* ignore */ }
+    return [];
+  });
+  const pushViewHistory = useCallback((entry: Omit<ViewHistoryEntry, "id" | "ts">) => {
+    setViewHistory((prev) => {
+      // Skip duplicates of the most recent entry (prevents spam from
+      // repeated identical fly-tos)
+      if (prev.length > 0) {
+        const last = prev[0];
+        if (Math.abs(last.lat - entry.lat) < 0.01 && Math.abs(last.lon - entry.lon) < 0.01) return prev;
+      }
+      const next = [{ ...entry, id: `vh-${Date.now()}`, ts: Date.now() }, ...prev].slice(0, 50);
+      try { window.localStorage.setItem("atlas-view-history", JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
+
   // ===== Layer Presets =====
   // Save the current set of enabled layers as a named preset, then
   // restore later. Useful for switching between use-cases (travel mode
@@ -1755,6 +1784,12 @@ function App() {
     setFlyTo((current) => ({ id: current.id + 1, lat: b.lat, lon: b.lon, altKm: b.altKm }));
     showToast(`Flying to ${b.name}`);
     recordSearch(b.name);
+    // Track in view history for the recent-views widget. Skip if this
+    // is a system-generated coord-only bookmark from coord paste — those
+    // would clutter the history. Only meaningful named bookmarks.
+    if (!b.id.startsWith("coord-")) {
+      pushViewHistory({ lat: b.lat, lon: b.lon, altKm: b.altKm, label: b.name });
+    }
     // Address-search hits get a pin dropped automatically — that's
     // the whole point of typing an address: see it land, see the
     // marker, click around. Saved bookmarks just fly without pinning.
@@ -3956,6 +3991,12 @@ function App() {
             { id: "widgetAircraftRadar", label: layers.aircraftRadar ? "Hide aircraft radar widget" : "Show aircraft radar (closest 5 to view, live)", group: "Widgets", icon: Plane, run: () => toggleLayer("aircraftRadar") },
             { id: "widgetSkyTonight", label: layers.skyTonight ? "Hide tonight-in-the-sky widget" : "Show tonight in the sky (moon, planets, sun, ISS)", group: "Widgets", icon: Telescope, run: () => toggleLayer("skyTonight") },
             { id: "widgetWorldClocks", label: layers.worldClocks ? "Hide world clocks widget" : "Show world clocks (6 financial centers, market status)", group: "Widgets", icon: Compass, run: () => toggleLayer("worldClocks") },
+            { id: "widgetViewHistory", label: layers.viewHistory ? "Hide view history widget" : `Show view history (${viewHistory.length} recent views)`, group: "Widgets", icon: RotateCcw, run: () => toggleLayer("viewHistory") },
+            { id: "viewHistoryClear", label: viewHistory.length > 0 ? `🗑 Clear view history (${viewHistory.length} entries)` : "View history empty", group: "Widgets", icon: Trash2, run: () => {
+              setViewHistory([]);
+              try { window.localStorage.removeItem("atlas-view-history"); } catch { /* ignore */ }
+              showToast("View history cleared");
+            }},
             { id: "layerClouds", label: layers.clouds ? "Hide clouds" : "Show clouds", group: "Layers", icon: Cloud, run: () => toggleLayer("clouds") },
             { id: "layerNight", label: layers.nightLights ? "Hide city lights" : "Show city lights", group: "Layers", icon: SunIcon, run: () => toggleLayer("nightLights") },
             { id: "layerAtm", label: layers.atmosphere ? "Hide atmosphere" : "Show atmosphere", group: "Layers", icon: Sparkles, run: () => toggleLayer("atmosphere") },
@@ -7411,6 +7452,36 @@ ${wpts}
           </div>
         );
       })()}
+
+      {/* View History widget — recently-visited views, click to revisit. */}
+      {layers.viewHistory && viewHistory.length > 0 && (
+        <div className="atlasViewHistoryWidget" role="status" aria-label="Recent views">
+          <div className="atlasViewHistoryHead">
+            <RotateCcw size={12} />
+            <strong>Recent views</strong>
+            <span>{viewHistory.length}</span>
+          </div>
+          <ul className="atlasViewHistoryList">
+            {viewHistory.slice(0, 8).map((v) => {
+              const dt = Date.now() - v.ts;
+              const ago = dt < 60_000 ? "just now" :
+                          dt < 3600_000 ? `${Math.floor(dt / 60_000)}m ago` :
+                          dt < 86_400_000 ? `${Math.floor(dt / 3600_000)}h ago` :
+                          `${Math.floor(dt / 86_400_000)}d ago`;
+              return (
+                <li key={v.id}>
+                  <button type="button" className="atlasViewHistoryRow" onClick={() => {
+                    setFlyTo((p) => ({ id: p.id + 1, lat: v.lat, lon: v.lon, altKm: v.altKm }));
+                  }}>
+                    <strong>{v.label}</strong>
+                    <em>{ago}</em>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
 
       {/* World clocks — financial-centers local time + market-open badge. */}
       {layers.worldClocks && (() => {
