@@ -4711,6 +4711,55 @@ function App() {
               const fractionEarth = horizonKm / (Math.PI * EARTH_RADIUS_KM);
               showToast(`↻ From ${formatDistKm(h, unitsImperial)} altitude, horizon is ${formatDistKm(horizonKm, unitsImperial)} away — ${(fractionEarth * 100).toFixed(1)}% of the way around Earth`);
             }},
+            // ===== Navigation utilities =====
+            { id: "navEquator", label: "🎯 Fly to equator at current longitude", group: "View", icon: Compass, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              setFlyTo((p) => ({ id: p.id + 1, lat: 0, lon: c.lon, altKm: c.altKm }));
+              showToast(`🎯 At 0° N, ${formatLon(c.lon)} — same longitude, on the equator`);
+            }},
+            { id: "navPrimeMeridian", label: "🎯 Fly to prime meridian at current latitude", group: "View", icon: Compass, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              setFlyTo((p) => ({ id: p.id + 1, lat: c.lat, lon: 0, altKm: c.altKm }));
+              showToast(`🎯 At ${formatLat(c.lat)}, 0° E — same latitude, on the prime meridian`);
+            }},
+            { id: "navDateLine", label: "🌐 Fly to international date line at current latitude", group: "View", icon: Compass, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              setFlyTo((p) => ({ id: p.id + 1, lat: c.lat, lon: 180, altKm: c.altKm }));
+              showToast(`🌐 At ${formatLat(c.lat)}, 180° E — international date line at same latitude`);
+            }},
+            { id: "navRandomLatBand", label: "🎲 Random latitude band (across globe)", group: "View", icon: Sparkles, run: () => {
+              // Pick a random latitude (uniform) — useful for "what's at this latitude?"
+              const lat = (Math.random() - 0.5) * 180;
+              setFlyTo((p) => ({ id: p.id + 1, lat, lon: 0, altKm: 8000 }));
+              showToast(`🎲 ${formatLat(lat)} — exploring this latitude band`);
+            }},
+            { id: "navTropics", label: "♋ Cycle through tropic / arctic circle latitudes", group: "View", icon: Compass, run: () => {
+              const lines: Array<{ name: string; lat: number }> = [
+                { name: "Arctic Circle", lat: 66.5635 },
+                { name: "Tropic of Cancer", lat: 23.4365 },
+                { name: "Equator", lat: 0 },
+                { name: "Tropic of Capricorn", lat: -23.4365 },
+                { name: "Antarctic Circle", lat: -66.5635 },
+              ];
+              // Pick the next one we haven't been to recently — use the
+              // current camera lat to find our position in the cycle.
+              const c = cameraStateRef.current;
+              if (!c) return;
+              let nextIdx = 0;
+              let bestDist = Infinity;
+              for (let i = 0; i < lines.length; i++) {
+                const d = Math.abs(c.lat - lines[i].lat);
+                if (d < bestDist) { bestDist = d; nextIdx = i; }
+              }
+              // Move to the NEXT line in the cycle (wraps around)
+              nextIdx = (nextIdx + 1) % lines.length;
+              const target = lines[nextIdx];
+              setFlyTo((p) => ({ id: p.id + 1, lat: target.lat, lon: c.lon, altKm: c.altKm }));
+              showToast(`♋ ${target.name} (${formatLat(target.lat)})`);
+            }},
             // ===== Pin trip-planning commands =====
             // Trip cost estimate — flight cost + accommodation. Crude
             // heuristic but useful for sanity-checking trip planning.
