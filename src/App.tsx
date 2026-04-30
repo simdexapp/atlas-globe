@@ -4395,6 +4395,83 @@ function App() {
               const title = `${formatLat(c.lat)} ${formatLon(c.lon)} — Atlas Globe`;
               window.open(`https://www.reddit.com/r/MapPorn/submit?url=${encodeURIComponent(url.toString())}&title=${encodeURIComponent(title)}`, "_blank", "noopener,noreferrer");
             }},
+            // 📝 Copy current view as a markdown snippet — handy for
+            // blog posts, daily notes, journal entries, study notes.
+            // Async because it embeds Open-Meteo current weather.
+            // 🗺 Wikipedia geo-search — find articles near the current view.
+            // Uses Wikipedia's MediaWiki API which has a `geosearch` action
+            // returning articles within radius of a point. Free, CORS-friendly.
+            { id: "wikiNearby", label: "🗺 Wikipedia articles near this view (top 8 within 50km)", group: "Tools", icon: Sparkles, run: async () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              showToast("Fetching nearby Wikipedia articles…");
+              try {
+                const url = `https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${c.lat}|${c.lon}&gsradius=10000&gslimit=20&format=json&origin=*`;
+                const r = await fetch(url);
+                if (!r.ok) { showToast(`Wikipedia HTTP ${r.status}`); return; }
+                const j = await r.json();
+                const places = (j?.query?.geosearch ?? []) as Array<{ title: string; lat: number; lon: number; dist: number }>;
+                if (places.length === 0) { showToast("No Wikipedia articles within 10km of this view"); return; }
+                const top = places.slice(0, 8);
+                const list = top.map(p => `${p.title} (${(p.dist / 1000).toFixed(1)}km)`).join(" · ");
+                console.log(`🗺 Wikipedia articles near ${formatLat(c.lat)} ${formatLon(c.lon)}:`);
+                top.forEach(p => console.log(`  ${p.title} — ${(p.dist / 1000).toFixed(2)}km · https://en.wikipedia.org/wiki/${encodeURIComponent(p.title)}`));
+                showToast(`🗺 ${places.length} articles · top: ${list}`);
+              } catch (e) {
+                showToast(`Wiki fetch failed: ${(e as Error).message}`);
+              }
+            }},
+            { id: "copyMarkdown", label: "📝 Copy current view as markdown (location + weather + sun)", group: "Tools", icon: Share2, run: async () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              showToast("Building markdown snippet…");
+              // Try to get place name from reverse geocode
+              let placeName = "";
+              try {
+                const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${c.lat}&lon=${c.lon}&zoom=10`, { headers: { Accept: "application/json" } });
+                if (r.ok) {
+                  const j = await r.json();
+                  const a = j?.address || {};
+                  const name = a.city || a.town || a.village || a.county || a.state || a.country;
+                  if (name) placeName = ` (${name})`;
+                }
+              } catch { /* ignore */ }
+              // Try to get current weather
+              let weatherLine = "";
+              try {
+                const wr = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${c.lat}&longitude=${c.lon}&current=temperature_2m,weather_code,relative_humidity_2m,wind_speed_10m`, { cache: "no-store" });
+                if (wr.ok) {
+                  const wj = await wr.json();
+                  const cur = wj?.current;
+                  if (cur) {
+                    const w = wmoLabel(cur.weather_code);
+                    weatherLine = `\n- **Weather**: ${w.emoji} ${cur.temperature_2m}°C, ${w.label}, ${cur.relative_humidity_2m}% RH, wind ${cur.wind_speed_10m} kph`;
+                  }
+                }
+              } catch { /* ignore */ }
+              // Sun info
+              const sunTimes = solarTimes(c.lat, c.lon, new Date());
+              let sunLine = "";
+              if (sunTimes !== "polar-day" && sunTimes !== "polar-night") {
+                const fmt = (h: number) => `${Math.floor(h).toString().padStart(2, "0")}:${Math.round((h - Math.floor(h)) * 60).toString().padStart(2, "0")}`;
+                sunLine = `\n- **Sun**: ↑ ${fmt(sunTimes.sunrise)} ↓ ${fmt(sunTimes.sunset)} UTC`;
+              } else if (sunTimes === "polar-day") {
+                sunLine = "\n- **Sun**: Polar day — never sets";
+              } else {
+                sunLine = "\n- **Sun**: Polar night — never rises";
+              }
+              const url = new URL(window.location.href);
+              url.hash = `#@${c.lat.toFixed(4)},${c.lon.toFixed(4)},${c.altKm.toFixed(1)}km`;
+              const md = `## ${formatLat(c.lat)} ${formatLon(c.lon)}${placeName}\n\n` +
+                `- **Coordinates**: ${c.lat.toFixed(5)}, ${c.lon.toFixed(5)}\n` +
+                `- **Camera altitude**: ${formatDistKm(c.altKm, unitsImperial)}` +
+                weatherLine + sunLine + `\n` +
+                `- [Open in Atlas Globe](${url.toString()})\n`;
+              navigator.clipboard?.writeText(md).then(
+                () => { showToast(`📝 Copied markdown snippet (${md.length} chars)`); console.log(md); },
+                () => { showToast("Couldn't copy — markdown logged to console"); console.log(md); }
+              );
+            }},
             { id: "shareEmail", label: "✉ Email this view (mailto:)", group: "Tools", icon: Share2, run: () => {
               const c = cameraStateRef.current;
               if (!c) return;
