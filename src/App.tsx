@@ -8394,6 +8394,7 @@ ${wpts}
       })()}
 
       {layers.neoWatch && (
+        <Draggable id="neoWatch" customizeMode={customizeUiMode} position={widgetPositions.neoWatch} onMove={setWidgetPosition}>
         <div className="atlasNeoWidget" role="status">
           <div className="atlasNeoWidgetHead">
             <Telescope size={12} />
@@ -8415,9 +8416,12 @@ ${wpts}
             </ul>
           )}
         </div>
+        </Draggable>
       )}
 
-      {layers.dayInfo && (() => {
+      {layers.dayInfo && (
+        <Draggable id="dayInfo" customizeMode={customizeUiMode} position={widgetPositions.dayInfo} onMove={setWidgetPosition}>
+          {(() => {
         const times = solarTimes(cameraState.lat, cameraState.lon, new Date());
         if (times === "polar-day") {
           return (
@@ -8453,13 +8457,17 @@ ${wpts}
           </div>
         );
       })()}
+        </Draggable>
+      )}
 
       {/* Antipode widget — shows what's on the diametrically-opposite
           side of Earth from the current view. Fun fact + fly-to button.
           Most antipodes are ocean (~71% of the globe is water and the
           land/water antipode probability biases toward water-on-water),
           so we surface that explicitly when applicable. */}
-      {layers.antipode && (() => {
+      {layers.antipode && (
+        <Draggable id="antipode" customizeMode={customizeUiMode} position={widgetPositions.antipode} onMove={setWidgetPosition}>
+          {(() => {
         // Antipode of (lat, lon) is (-lat, lon ± 180).
         const aLat = -cameraState.lat;
         const aLon = cameraState.lon > 0 ? cameraState.lon - 180 : cameraState.lon + 180;
@@ -8497,12 +8505,13 @@ ${wpts}
           </div>
         );
       })()}
+        </Draggable>
+      )}
 
-      {/* Local-time widget — solar local time at the current view's
-          longitude. Differs from atlasClockWidget which is UTC. We compute
-          mean local solar time (UTC + lon/15) — close enough for human
-          reading, no DST/timezone-database needed. */}
-      {layers.localTime && (() => {
+      {/* Local-time widget */}
+      {layers.localTime && (
+        <Draggable id="localTime" customizeMode={customizeUiMode} position={widgetPositions.localTime} onMove={setWidgetPosition}>
+          {(() => {
         const now = new Date();
         const utcMs = now.getTime();
         const offsetH = cameraState.lon / 15;
@@ -8527,12 +8536,13 @@ ${wpts}
           </div>
         );
       })()}
+        </Draggable>
+      )}
 
-      {/* Altitude-scale widget — show camera altitude as a fraction of
-          recognizable references. Helps users grok orbital scale: "you're
-          higher than the ISS but lower than the Moon" is more meaningful
-          than "you're at 8,000 km altitude." */}
-      {layers.altScale && (() => {
+      {/* Altitude-scale widget */}
+      {layers.altScale && (
+        <Draggable id="altScale" customizeMode={customizeUiMode} position={widgetPositions.altScale} onMove={setWidgetPosition}>
+          {(() => {
         const altKm = cameraState.altKm;
         const REFS = [
           { name: "Cruise altitude", km: 11, emoji: "✈" },
@@ -8573,6 +8583,8 @@ ${wpts}
           </div>
         );
       })()}
+        </Draggable>
+      )}
 
       {/* Aircraft Radar widget — closest 5 aircraft to current view.
           Live-updating from aircraftSnapshot which polls every 8s. */}
@@ -9129,7 +9141,9 @@ ${wpts}
         </div>
       )}
 
-      {layers.worldDigest && (() => {
+      {layers.worldDigest && (
+        <Draggable id="worldDigest" customizeMode={customizeUiMode} position={widgetPositions.worldDigest} onMove={setWidgetPosition}>
+          {(() => {
         // One-stop dashboard. Pulls from: aircraft snapshot, EONET events,
         // space weather, next rocket launch. Each data source is loaded
         // independently — the digest just reads whichever are populated.
@@ -9194,8 +9208,12 @@ ${wpts}
           </div>
         );
       })()}
+        </Draggable>
+      )}
 
-      {layers.timeClock && (() => {
+      {layers.timeClock && (
+        <Draggable id="timeClock" customizeMode={customizeUiMode} position={widgetPositions.timeClock} onMove={setWidgetPosition}>
+          {(() => {
         const now = new Date();
         const cities = [
           { label: "UTC", tz: "UTC" },
@@ -9219,6 +9237,8 @@ ${wpts}
           </div>
         );
       })()}
+        </Draggable>
+      )}
 
       {selectedVolcanoId && (() => {
         const v = FAMOUS_VOLCANOES.find((x) => x.id === selectedVolcanoId);
@@ -9357,21 +9377,26 @@ ${wpts}
         </div>
       )}
 
-      {layers.aurora && spaceWeather && (() => {
-        const { kpLatest, swSpeedKmS, swDensityCm3 } = spaceWeather;
-        const sev = kpScale(kpLatest);
-        return (
-          <div className="atlasAuroraPill" role="status" data-severity={sev.severity}>
-            <Sparkles size={11} />
-            <span>
-              <b>Kp {kpLatest.toFixed(1)}</b>
-              <span className="atlasFlightMeta"> · {sev.label} · solar wind {Math.round(swSpeedKmS)} km/s · {swDensityCm3.toFixed(1)}/cc</span>
-            </span>
-          </div>
-        );
-      })()}
+      {layers.aurora && spaceWeather && (
+        <Draggable id="auroraPill" customizeMode={customizeUiMode} position={widgetPositions.auroraPill} onMove={setWidgetPosition}>
+          {(() => {
+            const { kpLatest, swSpeedKmS, swDensityCm3 } = spaceWeather;
+            const sev = kpScale(kpLatest);
+            return (
+              <div className="atlasAuroraPill" role="status" data-severity={sev.severity}>
+                <Sparkles size={11} />
+                <span>
+                  <b>Kp {kpLatest.toFixed(1)}</b>
+                  <span className="atlasFlightMeta"> · {sev.label} · solar wind {Math.round(swSpeedKmS)} km/s · {swDensityCm3.toFixed(1)}/cc</span>
+                </span>
+              </div>
+            );
+          })()}
+        </Draggable>
+      )}
 
       {layers.eonet && (
+        <Draggable id="eonet" customizeMode={customizeUiMode} position={widgetPositions.eonet} onMove={setWidgetPosition}>
         <div className="atlasEonetControls" role="status">
           <div className="atlasEonetPillInline">
             <Sparkles size={11} />
@@ -9425,6 +9450,7 @@ ${wpts}
             );
           })()}
         </div>
+        </Draggable>
       )}
 
       {selectedEonetId && (() => {
@@ -9611,7 +9637,11 @@ ${wpts}
         </div>
       )}
 
-      {pins.length > 0 && layers.pins && <PinsMiniList pins={pins} selectedId={selectedPin} onSelect={(id) => setSelectedPin(id)} onFly={flyToPin} onDelete={deletePin} />}
+      {pins.length > 0 && layers.pins && (
+        <Draggable id="pinsMini" customizeMode={customizeUiMode} position={widgetPositions.pinsMini} onMove={setWidgetPosition}>
+          <PinsMiniList pins={pins} selectedId={selectedPin} onSelect={(id) => setSelectedPin(id)} onFly={flyToPin} onDelete={deletePin} />
+        </Draggable>
+      )}
 
       {mode === "atlas" && cameraState.altKm < 80 && cameraState.altKm > 0 && (
         <button type="button" className="atlasSurfaceHint" onClick={switchToSurface}>
@@ -11306,9 +11336,12 @@ function formatElevM(m: number, imperial: boolean): string {
 }
 
 // Draggable widget wrapper — when customizeUiMode is on, the widget
-// can be repositioned by mouse drag. Position persists via the
-// onMove callback. When NOT in customize mode, just renders children
+// can be repositioned by mouse OR touch drag. Position persists via
+// the onMove callback. When NOT in customize mode, renders children
 // as-is so existing CSS positioning takes effect.
+//
+// Supports both pointer types: a single pointerdown handler covers
+// mouse + touch + stylus uniformly via the Pointer Events API.
 function Draggable({
   id,
   customizeMode,
@@ -11323,11 +11356,15 @@ function Draggable({
   children: React.ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const dragRef = useRef<{ origX: number; origY: number; startX: number; startY: number } | null>(null);
+  const dragRef = useRef<{ origX: number; origY: number; startX: number; startY: number; pointerId: number } | null>(null);
   const [dragging, setDragging] = useState(false);
 
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
     if (!customizeMode) return;
+    // Don't hijack pointers on interactive children (buttons, inputs,
+    // links) — user expects those to still work in customize mode.
+    const target = e.target as HTMLElement;
+    if (target.closest("button, input, textarea, select, a, [role='button']")) return;
     e.preventDefault();
     const rect = ref.current?.getBoundingClientRect();
     if (!rect) return;
@@ -11336,15 +11373,18 @@ function Draggable({
       origY: rect.top,
       startX: e.clientX,
       startY: e.clientY,
+      pointerId: e.pointerId,
     };
     setDragging(true);
+    // Capture so we keep getting events even if pointer leaves the element
+    try { ref.current?.setPointerCapture(e.pointerId); } catch { /* ignore */ }
   }, [customizeMode]);
 
   useEffect(() => {
     if (!dragging) return;
-    const onMove2 = (e: MouseEvent) => {
+    const onMove2 = (e: PointerEvent) => {
       const d = dragRef.current;
-      if (!d) return;
+      if (!d || e.pointerId !== d.pointerId) return;
       const newX = d.origX + (e.clientX - d.startX);
       const newY = d.origY + (e.clientY - d.startY);
       // Clamp to viewport
@@ -11355,15 +11395,19 @@ function Draggable({
       const clampedY = Math.max(0, Math.min(window.innerHeight - h, newY));
       onMove(id, { x: clampedX, y: clampedY });
     };
-    const onUp = () => {
+    const onUp = (e: PointerEvent) => {
+      const d = dragRef.current;
+      if (d && e.pointerId !== d.pointerId) return;
       setDragging(false);
       dragRef.current = null;
     };
-    window.addEventListener("mousemove", onMove2);
-    window.addEventListener("mouseup", onUp);
+    window.addEventListener("pointermove", onMove2);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
     return () => {
-      window.removeEventListener("mousemove", onMove2);
-      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("pointermove", onMove2);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
     };
   }, [dragging, id, onMove]);
 
@@ -11374,14 +11418,23 @@ function Draggable({
     ? { position: "fixed", top: position.y, left: position.x, right: "auto", bottom: "auto" }
     : {};
   const customizeStyle: React.CSSProperties = customizeMode
-    ? { outline: "2px dashed var(--accent)", outlineOffset: 4, cursor: dragging ? "grabbing" : "grab" }
+    ? {
+        outline: "2px dashed var(--accent)",
+        outlineOffset: 4,
+        cursor: dragging ? "grabbing" : "grab",
+        // Disable browser touch panning so phone drag works smoothly.
+        touchAction: "none",
+        // Subtle bounce when dragging starts
+        transition: dragging ? "none" : "outline-color 200ms",
+      }
     : {};
   return (
     <div
       ref={ref}
-      onMouseDown={handleMouseDown}
+      onPointerDown={handlePointerDown}
       style={{ ...styleOverride, ...customizeStyle }}
       data-customize={customizeMode ? "" : undefined}
+      data-dragging={dragging ? "" : undefined}
     >
       {children}
     </div>
