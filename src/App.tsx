@@ -808,6 +808,11 @@ function App() {
   const [imageryProgress, setImageryProgress] = useState(0);
   const [dayTexture, setDayTexture] = useState<THREE.Texture | null>(null);
   const [nightTexture, setNightTexture] = useState<THREE.Texture | null>(null);
+  // Multi-planet mode — swap the globe's base texture between Earth
+  // (default GIBS imagery), Moon (procedural cratered grayscale), and
+  // Mars (procedural rust-red surface). Atlas mode only — Surface uses
+  // Cesium which would need different terrain providers.
+  const [planet, setPlanet] = useState<"earth" | "moon" | "mars">("earth");
   const imageryAbortRef = useRef<AbortController | null>(null);
   const fallbackImagesRef = useRef<{
     day: HTMLImageElement | null;
@@ -2069,6 +2074,114 @@ function App() {
     nightTexture?.dispose();
     imageryAbortRef.current?.abort();
   }, [dayTexture, nightTexture]);
+
+  // ===== Multi-planet texture override =====
+  // When `planet` is 'moon' or 'mars', synthesize a recognizable
+  // surface procedurally on a canvas and use it as both day + night
+  // textures. Skips the GIBS pipeline entirely so it's instant and
+  // works offline. Crater algorithm: a base grayscale gradient + 200
+  // randomly-placed circular dark spots with soft edges. Mars uses a
+  // rust palette and adds a polar ice cap.
+  useEffect(() => {
+    if (planet === "earth") return;       // Earth uses the GIBS effect
+    const canvas = document.createElement("canvas");
+    canvas.width = 1024;
+    canvas.height = 512;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    if (planet === "moon") {
+      // Base gradient — warmer at equator, cooler at poles
+      const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      grad.addColorStop(0, "#7d7670");
+      grad.addColorStop(0.5, "#bbb5ae");
+      grad.addColorStop(1, "#7d7670");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // Lunar maria — large dark patches
+      const maria = [
+        { x: 320, y: 200, r: 110, color: "#5a5550" },  // Mare Imbrium
+        { x: 400, y: 240, r: 80, color: "#5a5550" },   // Mare Serenitatis
+        { x: 470, y: 280, r: 70, color: "#605b56" },   // Mare Tranquillitatis
+        { x: 280, y: 280, r: 90, color: "#5a5550" },   // Oceanus Procellarum
+        { x: 540, y: 230, r: 60, color: "#5a5550" },   // Mare Crisium
+      ];
+      for (const m of maria) {
+        const g = ctx.createRadialGradient(m.x, m.y, 0, m.x, m.y, m.r);
+        g.addColorStop(0, m.color);
+        g.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = g;
+        ctx.fillRect(m.x - m.r, m.y - m.r, m.r * 2, m.r * 2);
+      }
+      // Random small craters
+      ctx.globalCompositeOperation = "source-over";
+      for (let i = 0; i < 400; i++) {
+        const x = Math.random() * canvas.width;
+        const y = Math.random() * canvas.height;
+        const r = 1 + Math.random() * 8;
+        const shade = Math.random() < 0.5 ? "rgba(60,55,50,0.5)" : "rgba(220,215,210,0.4)";
+        ctx.fillStyle = shade;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (planet === "mars") {
+      // Base rust gradient
+      const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      grad.addColorStop(0, "#c8d8e8");      // North polar ice
+      grad.addColorStop(0.13, "#a86e4a");
+      grad.addColorStop(0.5, "#c2784a");
+      grad.addColorStop(0.87, "#a86e4a");
+      grad.addColorStop(1, "#c8d8e8");      // South polar ice
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // Major dark regions (Syrtis Major, etc)
+      const regions = [
+        { x: 600, y: 240, r: 80, color: "#7a4530" },
+        { x: 200, y: 280, r: 100, color: "#8a4f37" },
+        { x: 750, y: 230, r: 60, color: "#7a4530" },
+      ];
+      for (const r of regions) {
+        const g = ctx.createRadialGradient(r.x, r.y, 0, r.x, r.y, r.r);
+        g.addColorStop(0, r.color);
+        g.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = g;
+        ctx.fillRect(r.x - r.r, r.y - r.r, r.r * 2, r.r * 2);
+      }
+      // Olympus Mons (giant volcano)
+      const om = ctx.createRadialGradient(420, 250, 0, 420, 250, 30);
+      om.addColorStop(0, "#d4906a");
+      om.addColorStop(0.5, "#a86e4a");
+      om.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = om;
+      ctx.fillRect(390, 220, 60, 60);
+      // Random craters + dust streaks
+      for (let i = 0; i < 250; i++) {
+        const x = Math.random() * canvas.width;
+        const y = canvas.height * 0.13 + Math.random() * canvas.height * 0.74;
+        const r = 1 + Math.random() * 6;
+        ctx.fillStyle = Math.random() < 0.5 ? "rgba(80,40,20,0.45)" : "rgba(220,150,100,0.3)";
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 8;
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.ClampToEdgeWrapping;
+    tex.flipY = true;
+    setDayTexture((prev) => { prev?.dispose(); return tex; });
+    // Use the same texture for night (no city lights on Moon/Mars).
+    const nightTex = new THREE.CanvasTexture(canvas);
+    nightTex.colorSpace = THREE.SRGBColorSpace;
+    nightTex.anisotropy = 8;
+    nightTex.wrapS = THREE.RepeatWrapping;
+    nightTex.wrapT = THREE.ClampToEdgeWrapping;
+    nightTex.flipY = true;
+    setNightTexture((prev) => { prev?.dispose(); return nightTex; });
+    showToast(`🌑 Switched to ${planet === "moon" ? "Moon" : "Mars"} (Atlas mode only)`);
+  }, [planet]);
 
   const updateImagery = useCallback((patch: Partial<Imagery>) => {
     setImagery((prev) => ({ ...prev, ...patch }));
@@ -4584,6 +4697,30 @@ function App() {
                 setTimeout(tick, 500);
               };
               tick();
+            }},
+            // ===== Multi-planet =====
+            // Swap the Atlas-mode globe between Earth (default GIBS),
+            // Moon (procedural cratered grayscale), Mars (procedural
+            // rust). No external textures — generated on-the-fly via
+            // canvas, so instant + works offline.
+            { id: "planetEarth", label: planet === "earth" ? "🌍 Already on Earth" : "🌍 Switch to Earth", group: "View", icon: Globe2, run: () => {
+              if (planet === "earth") return;
+              setPlanet("earth");
+              // Re-trigger Earth imagery load by bumping the date (no-op)
+              setImagery((prev) => ({ ...prev, date: prev.date }));
+              showToast("🌍 Back to Earth");
+            }},
+            { id: "planetMoon", label: planet === "moon" ? "🌑 Already on Moon" : "🌑 Switch to Moon (Atlas mode — procedural texture)", group: "View", icon: Globe2, run: () => {
+              if (mode !== "atlas") {
+                setMode("atlas");
+              }
+              setPlanet("moon");
+            }},
+            { id: "planetMars", label: planet === "mars" ? "🔴 Already on Mars" : "🔴 Switch to Mars (Atlas mode — procedural texture)", group: "View", icon: Globe2, run: () => {
+              if (mode !== "atlas") {
+                setMode("atlas");
+              }
+              setPlanet("mars");
             }},
             // ===== Time Machine =====
             // NASA GIBS imagery is date-aware all the way back to ~2000.
