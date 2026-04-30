@@ -836,6 +836,35 @@ function App() {
     current?: { temp: number; code: number; wind: number; windDir: number; humidity: number; feels?: number };
     daily?: Array<{ date: string; code: number; tmax: number; tmin: number; precipProb: number; windMax: number }>;
   }>(null);
+  // ===== Layer Presets =====
+  // Save the current set of enabled layers as a named preset, then
+  // restore later. Useful for switching between use-cases (travel mode
+  // vs astronomy mode vs storm-tracking mode).
+  type LayerPreset = { id: string; name: string; layers: LayerVisibility; createdAt: number };
+  const [layerPresets, setLayerPresets] = useState<LayerPreset[]>(() => {
+    try {
+      const raw = window.localStorage.getItem("atlas-layer-presets");
+      if (raw) return JSON.parse(raw) as LayerPreset[];
+    } catch { /* ignore */ }
+    return [];
+  });
+  const persistLayerPresets = useCallback((presets: LayerPreset[]) => {
+    setLayerPresets(presets);
+    try { window.localStorage.setItem("atlas-layer-presets", JSON.stringify(presets)); } catch { /* ignore */ }
+  }, []);
+  const saveLayerPreset = useCallback(() => {
+    const name = window.prompt("Name this layer preset:", "My layout");
+    if (!name) return;
+    const preset: LayerPreset = {
+      id: `preset-${Date.now()}`,
+      name,
+      layers: { ...layers },
+      createdAt: Date.now(),
+    };
+    persistLayerPresets([...layerPresets, preset]);
+    showToast(`✓ Saved layer preset '${name}'`);
+  }, [layers, layerPresets, persistLayerPresets]);
+
   // ===== Tour Creator + Player =====
   // A user-created sequence of camera positions with optional captions.
   // Stored in localStorage as `atlas-tours`. Recording mode appends the
@@ -3879,6 +3908,30 @@ function App() {
             }},
             // Show essential nav layers only — what most users will want
             // for orienting themselves: borders, pins, mini-map, compass.
+            // ===== Layer presets =====
+            { id: "layerPresetSave", label: "💾 Save current layer config as a preset…", group: "Layers", icon: Bookmark, run: saveLayerPreset },
+            ...layerPresets.map((p) => ({
+              id: `layerPresetRestore-${p.id}`,
+              label: `📂 Restore layer preset '${p.name}' (${Object.values(p.layers).filter(Boolean).length} on)`,
+              group: "Layers" as const,
+              icon: Bookmark,
+              run: () => {
+                setLayers(p.layers);
+                showToast(`📂 Restored '${p.name}'`);
+              },
+            })),
+            ...(layerPresets.length > 0 ? [{
+              id: "layerPresetDeleteAll",
+              label: `🗑 Delete all ${layerPresets.length} layer preset${layerPresets.length === 1 ? "" : "s"}`,
+              group: "Layers" as const,
+              icon: Trash2,
+              run: () => {
+                if (window.confirm(`Delete all ${layerPresets.length} layer preset${layerPresets.length === 1 ? "" : "s"}? This cannot be undone.`)) {
+                  persistLayerPresets([]);
+                  showToast("All layer presets deleted");
+                }
+              },
+            }] : []),
             { id: "layerEssentialsOnly", label: "Show essentials only (borders, pins, compass, mini-map)", group: "Layers", icon: Compass, run: () => {
               const allOff: LayerVisibility = { ...layers };
               for (const k of Object.keys(allOff) as Array<keyof LayerVisibility>) allOff[k] = false;
