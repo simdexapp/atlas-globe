@@ -186,13 +186,18 @@ input:focus-visible,
   display: flex;
   align-items: center;
   gap: var(--s-3);
-  padding: 8px 14px;
+  padding: 10px 16px;
   border: 1px dashed var(--accent);
   border-radius: 99px;
   background: var(--surface-elevated);
   color: var(--gray-12);
   font-size: 12px;
-  box-shadow: var(--shadow-2);
+  box-shadow: 0 8px 32px rgba(92, 181, 255, 0.25), var(--shadow-2);
+  animation: customizeBannerIn 250ms var(--ease-out);
+}
+@keyframes customizeBannerIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(-12px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 .atlasCustomizeBanner strong {
   color: var(--accent);
@@ -202,6 +207,23 @@ input:focus-visible,
 .atlasCustomizeBanner span {
   color: var(--gray-10);
   font-size: 11px;
+}
+
+/* Pulsing dashed outline animation while in customize mode — the whole
+   page gets a subtle accent overlay so it's obvious you're in mode. */
+.atlas[data-customize-active] .globeLayer::after {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  pointer-events: none;
+  border: 2px dashed color-mix(in srgb, var(--accent), transparent 70%);
+  border-radius: var(--r-3);
+  z-index: 40;
+  animation: customizePulse 3s ease-in-out infinite;
+}
+@keyframes customizePulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.9; }
 }
 
 /* Skip-to-content link — visually hidden until keyboard-focused. The

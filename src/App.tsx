@@ -3522,7 +3522,7 @@ function App() {
   } as CSSProperties;
 
   return (
-    <div className={`atlas${hideUi ? " hideUi" : ""} theme-${uiTheme}`} style={rootStyle}>
+    <div className={`atlas${hideUi ? " hideUi" : ""} theme-${uiTheme}`} style={rootStyle} data-customize-active={customizeUiMode ? "" : undefined}>
       {/* Skip-to-content link — visually hidden until focused by Tab.
           Lets keyboard/screen-reader users jump past the UI chrome
           straight to the command palette trigger. */}
@@ -11424,8 +11424,11 @@ function Draggable({
         cursor: dragging ? "grabbing" : "grab",
         // Disable browser touch panning so phone drag works smoothly.
         touchAction: "none",
-        // Subtle bounce when dragging starts
-        transition: dragging ? "none" : "outline-color 200ms",
+        // Premium feel: gently scale-up while dragging
+        transform: dragging ? "scale(1.04)" : undefined,
+        boxShadow: dragging ? "0 16px 40px rgba(92, 181, 255, 0.35)" : undefined,
+        transition: dragging ? "transform 80ms ease, box-shadow 120ms" : "outline-color 200ms",
+        zIndex: dragging ? 100 : undefined,
       }
     : {};
   return (
