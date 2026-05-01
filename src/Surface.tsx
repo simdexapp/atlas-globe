@@ -2626,10 +2626,14 @@ export default function Surface({
           verticalOrigin: Cesium.VerticalOrigin.CENTER,
           horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
           sizeInMeters: false,
-          // Disable depth test so planes always render in front of terrain
-          // and pin entities, making them clickable even when ground-level
-          // pins overlap.
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          // Disable depth test ONLY for planes within 8,000 km of camera —
+          // close planes still render in front of terrain (so they're
+          // clickable when overlapping ground pins), but planes on the
+          // BACK side of the globe get depth-tested normally and are
+          // hidden by Earth. Using POSITIVE_INFINITY here previously
+          // made the globe look transparent — back-hemisphere planes
+          // bled through to the front.
+          disableDepthTestDistance: 8_000_000,
         });
         byIcao.set(a.icao24, bb);
         billboardIndex.set(bb, a.icao24);
