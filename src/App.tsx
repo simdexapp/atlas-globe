@@ -7961,6 +7961,55 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: c.lat, lon: c.lon, altKm: 1500 }));
               showToast(`🗺 ${c.name}`);
             }},
+            // ===== Airport browsing — uses curated AIRPORTS dataset for
+            // proximity / country-aggregation / random-walk commands.
+            { id: "airportsClosest5", label: "🛬 Show top 5 closest major airports to current view", group: "Tools", icon: Plane, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const ranked = AIRPORTS
+                .map(a => ({ a, km: haversineKm(c.lat, c.lon, a.lat, a.lon) }))
+                .sort((x, y) => x.km - y.km)
+                .slice(0, 5);
+              const list = ranked.map(({ a, km }) => `${a.iata} (${a.city}, ${formatDistKm(km, unitsImperial)})`).join(" · ");
+              showToast(`🛬 Closest 5 airports: ${list}`);
+            }},
+            { id: "airportsByCountry", label: "📊 Airport count by country (top 10)", group: "Tools", icon: Plane, run: () => {
+              const counts = new Map<string, number>();
+              for (const a of AIRPORTS) counts.set(a.country, (counts.get(a.country) ?? 0) + 1);
+              const sorted = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 10);
+              const list = sorted.map(([c, n]) => `${c}: ${n}`).join(" · ");
+              showToast(`📊 Top 10 by airport count (${AIRPORTS.length} total in dataset): ${list}`);
+            }},
+            { id: "airportsByCountryHere", label: "🇺🇳 Show all major airports in current view's country", group: "Tools", icon: Plane, run: async () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              showToast("🇺🇳 Looking up country…");
+              const data = await cachedReverseGeocode(c.lat, c.lon, 5);
+              if (!data) { showToast("Couldn't reverse-geocode current view"); return; }
+              // Country code from address
+              const cc = (data.address?.country_code || "").toUpperCase();
+              if (!cc) { showToast("No country code at this view"); return; }
+              const matching = AIRPORTS.filter(a => a.country === cc);
+              if (matching.length === 0) { showToast(`🇺🇳 No major airports in our dataset for country ${cc}`); return; }
+              const list = matching.slice(0, 8).map(a => `${a.iata} (${a.city})`).join(" · ");
+              const more = matching.length > 8 ? ` +${matching.length - 8} more` : "";
+              showToast(`🇺🇳 ${matching.length} airports in ${cc}: ${list}${more}`);
+            }},
+            { id: "airportsHubsRandomTour", label: "🌐 Pin top 10 busiest world airports as a quick reference set", group: "Tools", icon: BookmarkPlus, run: () => {
+              // The first 10 airports in AIRPORTS are roughly ordered by
+              // passenger traffic (per the file's curated comment).
+              const top = AIRPORTS.slice(0, 10);
+              const stamp = Date.now();
+              const newPins: Pin[] = top.map((a, i) => ({
+                id: `pin-airport-hub-${i}-${stamp}`,
+                lat: a.lat, lon: a.lon,
+                label: `✈ ${a.iata} · ${a.name}`,
+                color: "#5cb5ff",
+                createdAt: stamp + i,
+              }));
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`✈ Dropped pins for the world's 10 busiest airports (ATL, DXB, DFW, HND, LHR, DEN, ORD, IST, DEL, JFK)`);
+            }},
             { id: "randAirport", label: "🎲 Random world-busy airport", group: "Tools", icon: Plane, run: () => {
               const a = AIRPORTS[Math.floor(Math.random() * AIRPORTS.length)];
               setFlyTo((p) => ({ id: p.id + 1, lat: a.lat, lon: a.lon, altKm: 2 }));
