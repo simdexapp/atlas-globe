@@ -11731,6 +11731,61 @@ function App() {
               const zoom = Math.max(2, Math.min(19, Math.round(20 - Math.log2(Math.max(0.5, c.altKm)))));
               window.open(`https://www.openstreetmap.org/#map=${zoom}/${c.lat.toFixed(5)}/${c.lon.toFixed(5)}`, "_blank", "noopener,noreferrer");
             }},
+            // ===== Copy as map-platform URL strings (don't open, just
+            // copy). Useful for pasting into chat / docs / email.
+            { id: "copyGoogleMapsUrl", label: "📋 Copy current view as Google Maps URL", group: "Tools", icon: Share2, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const zoom = Math.max(2, Math.min(19, Math.round(20 - Math.log2(Math.max(0.5, c.altKm)))));
+              const url = `https://www.google.com/maps/@${c.lat.toFixed(5)},${c.lon.toFixed(5)},${zoom}z`;
+              navigator.clipboard?.writeText(url).then(
+                () => showToast(`📋 Google Maps URL copied`),
+                () => showToast(url)
+              );
+            }},
+            { id: "copyAppleMapsUrl", label: "📋 Copy current view as Apple Maps URL", group: "Tools", icon: Share2, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              // Apple Maps web URL: maps.apple.com/?ll=lat,lon&z=zoom
+              const zoom = Math.max(2, Math.min(19, Math.round(20 - Math.log2(Math.max(0.5, c.altKm)))));
+              const url = `https://maps.apple.com/?ll=${c.lat.toFixed(5)},${c.lon.toFixed(5)}&z=${zoom}`;
+              navigator.clipboard?.writeText(url).then(
+                () => showToast(`📋 Apple Maps URL copied`),
+                () => showToast(url)
+              );
+            }},
+            { id: "copyOsmUrl", label: "📋 Copy current view as OpenStreetMap permalink", group: "Tools", icon: Share2, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const zoom = Math.max(2, Math.min(19, Math.round(20 - Math.log2(Math.max(0.5, c.altKm)))));
+              const url = `https://www.openstreetmap.org/#map=${zoom}/${c.lat.toFixed(5)}/${c.lon.toFixed(5)}`;
+              navigator.clipboard?.writeText(url).then(
+                () => showToast(`📋 OpenStreetMap permalink copied`),
+                () => showToast(url)
+              );
+            }},
+            { id: "copyBingMapsUrl", label: "📋 Copy current view as Bing Maps URL", group: "Tools", icon: Share2, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              // Bing Maps web URL: bing.com/maps?cp=lat~lon&lvl=zoom
+              const zoom = Math.max(2, Math.min(19, Math.round(20 - Math.log2(Math.max(0.5, c.altKm)))));
+              const url = `https://www.bing.com/maps?cp=${c.lat.toFixed(5)}~${c.lon.toFixed(5)}&lvl=${zoom}`;
+              navigator.clipboard?.writeText(url).then(
+                () => showToast(`📋 Bing Maps URL copied`),
+                () => showToast(url)
+              );
+            }},
+            { id: "copyWindyUrl", label: "📋 Copy current view as Windy.com URL (weather radar)", group: "Tools", icon: Share2, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              // Windy.com URL: windy.com/lat/lon/zoom
+              const zoom = Math.max(3, Math.min(11, Math.round(20 - Math.log2(Math.max(0.5, c.altKm)))));
+              const url = `https://www.windy.com/?${c.lat.toFixed(3)},${c.lon.toFixed(3)},${zoom}`;
+              navigator.clipboard?.writeText(url).then(
+                () => showToast(`📋 Windy.com URL copied — paste to see live weather/wind/waves at this view`),
+                () => showToast(url)
+              );
+            }},
             // ===== More clipboard formats — geohash, plus altitude in
             // multiple units, CSV row, and a citation-style block.
             { id: "copyGeohash", label: "🔢 Copy current view as Geohash (precision 8)", group: "Tools", icon: Share2, run: () => {
