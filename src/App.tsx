@@ -13012,7 +13012,11 @@ const RailButton = memo(function RailButton({ icon: Icon, label, onClick, active
   );
 });
 
-function GlobePanel({ globe, onUpdate, onSunPreset }: { globe: GlobeSettings; onUpdate: (patch: Partial<GlobeSettings>) => void; onSunPreset?: (preset: "sunrise" | "noon" | "sunset") => void }) {
+// Memoized: this panel renders ~30 sliders. When the user moves the
+// camera, parent re-renders ~5×/sec but globe settings rarely change
+// — memo skips the per-tick deep tree diff and saves measurable work
+// on the inspector tab.
+const GlobePanel = memo(function GlobePanel({ globe, onUpdate, onSunPreset }: { globe: GlobeSettings; onUpdate: (patch: Partial<GlobeSettings>) => void; onSunPreset?: (preset: "sunrise" | "noon" | "sunset") => void }) {
   return (
     <>
       <PanelSection title="Rotation" icon={RotateCcw}>
@@ -13062,9 +13066,12 @@ function GlobePanel({ globe, onUpdate, onSunPreset }: { globe: GlobeSettings; on
       </PanelSection>
     </>
   );
-}
+});
 
-function LayersPanel({ layers, onToggle, bordersLoading, mode }: { layers: LayerVisibility; onToggle: (key: keyof LayerVisibility) => void; bordersLoading: boolean; mode?: Mode }) {
+// Memoized: ~25 layer toggle rows. layers object is the only thing that
+// changes regularly, and only when toggleLayer fires. Skips re-renders
+// caused by camera-state updates.
+const LayersPanel = memo(function LayersPanel({ layers, onToggle, bordersLoading, mode }: { layers: LayerVisibility; onToggle: (key: keyof LayerVisibility) => void; bordersLoading: boolean; mode?: Mode }) {
   // Per-mode applicability — Atlas-only layers are visual effects on
   // the shader globe; Surface-only ones are Cesium-side primitives.
   // Layers without a `modes` key apply in both modes.
@@ -13154,9 +13161,11 @@ function LayersPanel({ layers, onToggle, bordersLoading, mode }: { layers: Layer
       </div>
     </PanelSection>
   );
-}
+});
 
-function ImageryPanel({ imagery, onUpdate, onReset, loading, progress }: { imagery: Imagery; onUpdate: (patch: Partial<Imagery>) => void; onReset: () => void; loading: boolean; progress: number }) {
+// Memoized: imagery picker grid + 3 sliders. imagery state changes only
+// when the user picks a new layer / opacity. Skips camera-tick re-renders.
+const ImageryPanel = memo(function ImageryPanel({ imagery, onUpdate, onReset, loading, progress }: { imagery: Imagery; onUpdate: (patch: Partial<Imagery>) => void; onReset: () => void; loading: boolean; progress: number }) {
   const dayLayers = Object.values(GIBS_LAYERS).filter((l) => l.swap !== "night");
   const nightLayers = Object.values(GIBS_LAYERS).filter((l) => l.swap === "night");
   const today = todayUTC();
@@ -13269,7 +13278,7 @@ function ImageryPanel({ imagery, onUpdate, onReset, loading, progress }: { image
       )}
     </>
   );
-}
+});
 
 function DataPanel({ pins, earthquakes, coordFormat, pinSearch, tourPlaying, onPinSearch, onSetCoordFormat, onSelectPin, onFlyPin, onDeletePin, onClearPins, onCapture, onStartRecord, onStopRecord, recordingState, recordingSeconds, onCopyShare, onOpenCoord, onExportPins, onImportPins, onExportPinsKml, onExportGif, onExportProject, onImportProject, onTimelapse, timelapseRecording, cameraState, onFlyMyLocation, onCaptureJpg, onStartTour, onStopTour, onShowEmbed }: {
   pins: Pin[];
