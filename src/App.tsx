@@ -201,6 +201,10 @@ type LayerVisibility = {
   // selected pin: distance, bearing, compass direction. Updates as
   // camera moves. Only renders when a pin is selected.
   selectedPinNav: boolean;
+  // Sun/Moon position widget — current sun altitude+azimuth and moon
+  // phase at the view's lat/lon. Useful for photographers, sailors,
+  // hikers planning around daylight + moonlight.
+  sunMoonInfo: boolean;
 };
 
 type GlobeSettings = {
@@ -541,6 +545,7 @@ const defaultLayers: LayerVisibility = {
   // Off by default — only useful once a pin is selected. Users opt in
   // when they're navigating toward a target.
   selectedPinNav: false,
+  sunMoonInfo: false,
   // 3D OSM Buildings tileset is heavy and renders with edge outlines
   // that disable imagery draping underneath, painting the screen with
   // dark olive boxes at low altitudes (the user's tear repro). Off by
@@ -4607,6 +4612,7 @@ function App() {
             { id: "toggleQuickToggles", label: layers.quickToggles ? "Hide Quick layer toggles widget" : "⚡ Show Quick layer toggles widget (6 common layer buttons)", group: "Widgets", icon: Layers, run: () => toggleLayer("quickToggles") },
             { id: "toggleNearbyAircraft", label: layers.nearbyAircraft ? "Hide Nearby aircraft widget" : "✈ Show Nearby aircraft widget (top 5 closest to view)", group: "Widgets", icon: Plane, run: () => toggleLayer("nearbyAircraft") },
             { id: "toggleSelectedPinNav", label: layers.selectedPinNav ? "Hide Selected pin nav widget" : "🎯 Show Selected pin nav widget (GPS-style guidance to selected pin)", group: "Widgets", icon: Navigation, run: () => toggleLayer("selectedPinNav") },
+            { id: "toggleSunMoonInfo", label: layers.sunMoonInfo ? "Hide Sun/Moon info widget" : "☀🌙 Show Sun/Moon info widget (live altitude, azimuth, phase at view)", group: "Widgets", icon: SunIcon, run: () => toggleLayer("sunMoonInfo") },
             // Widget batch operations — all-on / all-off / essential only
             { id: "widgetsAllOn", label: "🪟 Show ALL stat widgets at once (LiveStats + Coords + Anchors + Nearby + QuickToggles)", group: "Widgets", icon: Layers, run: () => {
               setLayers((p) => ({ ...p, liveStats: true, distanceAnchors: true, coordinates: true, quickToggles: true, nearbyAircraft: true }));
@@ -12233,6 +12239,12 @@ ${wpts}
         );
       })()}
 
+      {layers.sunMoonInfo && (
+        <Draggable id="sunMoonInfo" customizeMode={customizeUiMode} position={widgetPositions.sunMoonInfo} onMove={setWidgetPosition}>
+          <SunMoonInfoWidget cameraLat={cameraState.lat} cameraLon={cameraState.lon} />
+        </Draggable>
+      )}
+
       {recordingState === "recording" && (
         <div className="atlasRecordIndicator" role="status">
           <span className="atlasRecordDot" /> REC {formatSeconds(recordingSeconds)}
@@ -15376,6 +15388,95 @@ function SelectedPinNavWidget({
       <button type="button" className="atlasSelectedPinNavFlyBtn" onClick={onFly} aria-label={`Fly to ${targetPin.label}`}>
         <Navigation size={11} aria-hidden="true" /> Fly to pin
       </button>
+    </div>
+  );
+}
+
+// Sun/Moon info widget — live solar altitude+azimuth at the current
+// view's lat/lon, plus moon phase + age. Updates every minute. No
+// external API; uses Spencer's declination + standard hour-angle math
+// + the synodic-month moon phase formula already used elsewhere.
+function SunMoonInfoWidget({ cameraLat, cameraLon }: { cameraLat: number; cameraLon: number }) {
+  // Tick every minute so the sun/moon readouts stay current. The
+  // computation is cheap so this won't pose a perf issue.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+  const sun = useMemo(() => {
+    const d = new Date(now);
+    const utcHours = d.getUTCHours() + d.getUTCMinutes() / 60;
+    // Day of year for declination (Spencer's formula approximation)
+    const start = Date.UTC(d.getUTCFullYear(), 0, 0);
+    const doy = Math.floor((d.getTime() - start) / 86400_000);
+    const declDeg = 23.45 * Math.sin(2 * Math.PI / 365 * (doy - 81));
+    const declRad = declDeg * Math.PI / 180;
+    // Hour angle: 0 at solar noon at observer's longitude, +15°/h to west
+    const hourAngleDeg = (utcHours - 12) * 15 + cameraLon;
+    const hourAngleRad = hourAngleDeg * Math.PI / 180;
+    const latRad = cameraLat * Math.PI / 180;
+    // Sun altitude: sin(alt) = sin(φ)·sin(δ) + cos(φ)·cos(δ)·cos(H)
+    const sinAlt = Math.sin(latRad) * Math.sin(declRad) + Math.cos(latRad) * Math.cos(declRad) * Math.cos(hourAngleRad);
+    const altDeg = Math.asin(Math.max(-1, Math.min(1, sinAlt))) * 180 / Math.PI;
+    // Azimuth (from north, clockwise): atan2(sin(H), cos(H)·sin(φ) − tan(δ)·cos(φ))
+    const azRad = Math.atan2(Math.sin(hourAngleRad), Math.cos(hourAngleRad) * Math.sin(latRad) - Math.tan(declRad) * Math.cos(latRad));
+    let azDeg = (azRad * 180 / Math.PI + 180) % 360;       // shift so 0 = N, 90 = E
+    if (azDeg < 0) azDeg += 360;
+    return { altDeg, azDeg };
+  }, [now, cameraLat, cameraLon]);
+  const moon = useMemo(() => {
+    // Synodic-month phase formula (matches the moonPhase command above)
+    const synodic = 29.530588853;
+    const newMoonRef = Date.UTC(2000, 0, 6, 18, 14) / 86400_000;
+    const today = now / 86400_000;
+    const phase = ((today - newMoonRef) % synodic + synodic) % synodic;
+    const pct = phase / synodic;
+    let label: string;
+    if (pct < 0.03 || pct > 0.97) label = "🌑 New";
+    else if (pct < 0.22) label = "🌒 Waxing crescent";
+    else if (pct < 0.28) label = "🌓 First qtr";
+    else if (pct < 0.47) label = "🌔 Waxing gibbous";
+    else if (pct < 0.53) label = "🌕 Full";
+    else if (pct < 0.72) label = "🌖 Waning gibbous";
+    else if (pct < 0.78) label = "🌗 Last qtr";
+    else label = "🌘 Waning crescent";
+    const illum = Math.round(50 * (1 - Math.cos(2 * Math.PI * pct)));
+    return { label, illum, ageDays: phase };
+  }, [now]);
+  // Compass direction for sun azimuth
+  const cardinal = (() => {
+    const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+    return dirs[Math.round(sun.azDeg / 45) % 8];
+  })();
+  // Status: above/below horizon
+  const aboveHorizon = sun.altDeg > 0;
+  const sunIcon = aboveHorizon ? "☀" : "🌙";
+  return (
+    <div
+      className="atlasSunMoonInfoWidget"
+      role="region"
+      aria-label={`Sun and Moon info at view: sun ${aboveHorizon ? "above" : "below"} horizon, moon phase ${moon.label}`}
+    >
+      <div className="atlasSunMoonInfoHead">
+        <SunIcon size={11} aria-hidden="true" />
+        <span>Sun &amp; Moon at view</span>
+      </div>
+      <div className="atlasSunMoonInfoGrid">
+        <div className="atlasSunMoonInfoCell">
+          <span className="atlasSunMoonInfoLabel">{sunIcon} Sun</span>
+          <span className="atlasSunMoonInfoValue">{sun.altDeg.toFixed(1)}° alt</span>
+          <span className="atlasSunMoonInfoSub">{Math.round(sun.azDeg)}° {cardinal}</span>
+        </div>
+        <div className="atlasSunMoonInfoCell">
+          <span className="atlasSunMoonInfoLabel">Phase</span>
+          <span className="atlasSunMoonInfoValue">{moon.label}</span>
+          <span className="atlasSunMoonInfoSub">{moon.illum}% lit · {moon.ageDays.toFixed(1)}d old</span>
+        </div>
+      </div>
+      <div className="atlasSunMoonInfoFoot">
+        {aboveHorizon ? "☀ Sun above horizon" : "🌙 Sun below horizon"} · solar mean
+      </div>
     </div>
   );
 }
