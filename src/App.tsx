@@ -7799,6 +7799,79 @@ function App() {
               try { window.localStorage.removeItem("atlas-view-history"); } catch { /* ignore */ }
               showToast("View history cleared");
             }},
+            // ===== View-history navigation commands =====
+            ...(viewHistory.length >= 1 ? [{
+              id: "viewHistoryBack" as const,
+              label: `⏪ Go back to previous view (${viewHistory[0]?.label ?? "?"})`,
+              group: "View" as const,
+              icon: RotateCcw,
+              run: () => {
+                const prev = viewHistory[0];
+                if (!prev) return;
+                setFlyTo((p) => ({ id: p.id + 1, lat: prev.lat, lon: prev.lon, altKm: prev.altKm }));
+                showToast(`⏪ Back to ${prev.label}`);
+              },
+            }] : []),
+            ...(viewHistory.length >= 3 ? [{
+              id: "viewHistoryRandom" as const,
+              label: `🎲 Random view from history (${viewHistory.length} entries)`,
+              group: "View" as const,
+              icon: Sparkles,
+              run: () => {
+                const v = viewHistory[Math.floor(Math.random() * viewHistory.length)];
+                setFlyTo((p) => ({ id: p.id + 1, lat: v.lat, lon: v.lon, altKm: v.altKm }));
+                showToast(`🎲 ${v.label}`);
+              },
+            }] : []),
+            ...(viewHistory.length >= 1 ? [{
+              id: "viewHistoryCopyMd" as const,
+              label: `📋 Copy view history as Markdown list (${viewHistory.length} entries)`,
+              group: "Tools" as const,
+              icon: Share2,
+              run: () => {
+                const md = viewHistory.map((v, i) => {
+                  const d = new Date(v.ts);
+                  return `${i + 1}. **${v.label}** (${formatLat(v.lat)} ${formatLon(v.lon)}, ${v.altKm.toFixed(0)} km) · ${d.toISOString().slice(0, 16).replace("T", " ")} UTC`;
+                }).join("\n");
+                navigator.clipboard?.writeText(md).then(
+                  () => showToast(`📋 Copied ${viewHistory.length} history entries as Markdown`),
+                  () => showToast(md.slice(0, 100) + "…")
+                );
+              },
+            }] : []),
+            ...(viewHistory.some(v => Date.now() - v.ts > 86400_000) ? [{
+              id: "viewHistoryClearOld" as const,
+              label: "🗑 Clear view-history entries older than 24h",
+              group: "Widgets" as const,
+              icon: Trash2,
+              run: () => {
+                const cutoff = Date.now() - 86400_000;
+                const kept = viewHistory.filter(v => v.ts >= cutoff);
+                const removed = viewHistory.length - kept.length;
+                setViewHistory(kept);
+                try { window.localStorage.setItem("atlas-view-history", JSON.stringify(kept)); } catch { /* ignore */ }
+                showToast(`🗑 Removed ${removed} stale view-history entr${removed === 1 ? "y" : "ies"}; ${kept.length} remain`);
+              },
+            }] : []),
+            ...(viewHistory.length >= 2 ? [{
+              id: "viewHistoryPinAll" as const,
+              label: `📍 Convert view history to ${viewHistory.length} pins`,
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                if (!window.confirm(`Drop ${viewHistory.length} pins (one per recent view)? Adds to your existing pin list.`)) return;
+                const stamp = Date.now();
+                const newPins: Pin[] = viewHistory.map((v, i) => ({
+                  id: `pin-vh-${i}-${stamp}`,
+                  lat: v.lat, lon: v.lon,
+                  label: `🕘 ${v.label}`,
+                  color: "#a8a8ff",
+                  createdAt: stamp + i,
+                }));
+                setPins((prev) => [...prev, ...newPins]);
+                showToast(`📍 Dropped ${newPins.length} pins from view history`);
+              },
+            }] : []),
             { id: "layerClouds", label: layers.clouds ? "Hide clouds" : "Show clouds", group: "Layers", icon: Cloud, run: () => toggleLayer("clouds") },
             { id: "layerNight", label: layers.nightLights ? "Hide city lights" : "Show city lights", group: "Layers", icon: SunIcon, run: () => toggleLayer("nightLights") },
             { id: "layerAtm", label: layers.atmosphere ? "Hide atmosphere" : "Show atmosphere", group: "Layers", icon: Sparkles, run: () => toggleLayer("atmosphere") },
