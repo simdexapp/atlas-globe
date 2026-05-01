@@ -10865,6 +10865,97 @@ ${wpts}
                 showToast(`🎯 Dropped centroid pin · ${formatLat(lat)} ${formatLon(lon)}`);
               },
             }] : []),
+            // ===== Pin metadata insights — first/last by date, label
+            // word frequency, hemisphere distribution. Help users
+            // understand the SHAPE of their pin collection.
+            ...(pins.length >= 1 ? [{
+              id: "pinFlyOldest" as const,
+              label: "🥇 Fly to oldest pin (first one you created)",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const oldest = [...pins].sort((a, b) => a.createdAt - b.createdAt)[0];
+                const ageDays = (Date.now() - oldest.createdAt) / 86400_000;
+                setSelectedPin(oldest.id);
+                setFlyTo((p) => ({ id: p.id + 1, lat: oldest.lat, lon: oldest.lon, altKm: 5 }));
+                showToast(`🥇 ${oldest.label} · created ${ageDays.toFixed(0)} days ago`);
+              },
+            }] : []),
+            ...(pins.length >= 1 ? [{
+              id: "pinFlyNewest" as const,
+              label: "🆕 Fly to newest pin (most recently created)",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const newest = [...pins].sort((a, b) => b.createdAt - a.createdAt)[0];
+                const ageHrs = (Date.now() - newest.createdAt) / 3600_000;
+                const ageStr = ageHrs < 1 ? `${Math.round(ageHrs * 60)} min ago` : ageHrs < 24 ? `${ageHrs.toFixed(1)} h ago` : `${(ageHrs / 24).toFixed(0)} days ago`;
+                setSelectedPin(newest.id);
+                setFlyTo((p) => ({ id: p.id + 1, lat: newest.lat, lon: newest.lon, altKm: 5 }));
+                showToast(`🆕 ${newest.label} · created ${ageStr}`);
+              },
+            }] : []),
+            // Creation timeline by month — counts pins grouped by their
+            // YYYY-MM, sorted with newest first. Shows up to 6 months.
+            ...(pins.length >= 3 ? [{
+              id: "pinTimelineByMonth" as const,
+              label: "📅 Pin creation timeline — count by month (last 6)",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const buckets = new Map<string, number>();
+                for (const p of pins) {
+                  const d = new Date(p.createdAt);
+                  const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+                  buckets.set(key, (buckets.get(key) ?? 0) + 1);
+                }
+                const sorted = Array.from(buckets.entries()).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 6);
+                const summary = sorted.map(([m, n]) => `${m}: ${n}`).join(" · ");
+                showToast(`📅 ${pins.length} pins · ${summary}`);
+              },
+            }] : []),
+            // Most-common label words — strip punctuation, lowercase,
+            // skip 1-2 char words and a small stop-word set, count word
+            // frequencies, show top 5. Useful for spotting tags you've
+            // unconsciously used.
+            ...(pins.length >= 3 ? [{
+              id: "pinTopLabelWords" as const,
+              label: "🏷 Most-common words across all pin labels",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const STOP = new Set(["the", "and", "for", "with", "from", "this", "that", "near", "old", "new", "see", "see"]);
+                const counts = new Map<string, number>();
+                for (const p of pins) {
+                  const words = p.label.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(w => w.length >= 3 && !STOP.has(w));
+                  for (const w of words) counts.set(w, (counts.get(w) ?? 0) + 1);
+                }
+                const top = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5);
+                if (top.length === 0) { showToast("No countable label words"); return; }
+                const summary = top.map(([w, n]) => `"${w}" ×${n}`).join(" · ");
+                showToast(`🏷 Top label words: ${summary}`);
+              },
+            }] : []),
+            // Hemisphere distribution — splits pins into NE/NW/SE/SW
+            // quadrants by lat/lon sign. Reveals geographic biases.
+            ...(pins.length >= 3 ? [{
+              id: "pinHemisphereDist" as const,
+              label: "🌐 Pin hemisphere distribution (N/S × E/W quadrants)",
+              group: "Tools" as const,
+              icon: Compass,
+              run: () => {
+                let ne = 0, nw = 0, se = 0, sw = 0;
+                for (const p of pins) {
+                  if (p.lat >= 0 && p.lon >= 0) ne++;
+                  else if (p.lat >= 0 && p.lon < 0) nw++;
+                  else if (p.lat < 0 && p.lon >= 0) se++;
+                  else sw++;
+                }
+                const total = pins.length;
+                const pct = (n: number) => `${(n/total*100).toFixed(0)}%`;
+                showToast(`🌐 NE ${ne} (${pct(ne)}) · NW ${nw} (${pct(nw)}) · SE ${se} (${pct(se)}) · SW ${sw} (${pct(sw)})`);
+              },
+            }] : []),
             // Pin import from GeoJSON file
             { id: "pinImport", label: "Import pins from GeoJSON file", group: "Tools", icon: BookmarkPlus, run: () => {
               const input = document.createElement("input");
