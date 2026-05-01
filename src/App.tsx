@@ -6849,6 +6849,46 @@ function App() {
               keys.forEach(k => localStorage.removeItem(k));
               showToast(`🧹 Cleared ${keys.length} cached network result${keys.length === 1 ? "" : "s"}`);
             }},
+            // ===== State / storage management commands =====
+            { id: "localStorageStats", label: "📊 Show localStorage usage breakdown by key prefix", group: "Tools", icon: Compass, run: () => {
+              try {
+                const buckets = new Map<string, { count: number; bytes: number }>();
+                let totalBytes = 0;
+                for (let i = 0; i < localStorage.length; i++) {
+                  const key = localStorage.key(i);
+                  if (!key) continue;
+                  const value = localStorage.getItem(key) ?? "";
+                  // 2 bytes per char for UTF-16, plus key overhead
+                  const bytes = (key.length + value.length) * 2;
+                  totalBytes += bytes;
+                  // Bucket by first segment of the key (e.g. 'atlas-cache:' → 'atlas-cache')
+                  const prefix = key.includes(":") ? key.split(":")[0] : key.split("-").slice(0, 2).join("-");
+                  const existing = buckets.get(prefix) ?? { count: 0, bytes: 0 };
+                  existing.count++;
+                  existing.bytes += bytes;
+                  buckets.set(prefix, existing);
+                }
+                const sorted = Array.from(buckets.entries()).sort((a, b) => b[1].bytes - a[1].bytes).slice(0, 5);
+                const totalKb = (totalBytes / 1024).toFixed(1);
+                const top = sorted.map(([p, s]) => `${p}: ${(s.bytes / 1024).toFixed(1)}KB (${s.count})`).join(" · ");
+                showToast(`📊 ${totalKb}KB total in ${localStorage.length} keys · ${top}`);
+              } catch { showToast("Couldn't read localStorage"); }
+            }},
+            { id: "clearPhotosFromPins", label: pins.filter(p => p.photo).length > 0 ? `🖼 Clear photos from all ${pins.filter(p => p.photo).length} pins (frees space, keeps pins)` : "Clear photos (no pins have photos)", group: "Tools", icon: Trash2, run: () => {
+              const withPhotos = pins.filter(p => p.photo);
+              if (withPhotos.length === 0) { showToast("No pins have photos to clear"); return; }
+              const totalKb = withPhotos.reduce((s, p) => s + (p.photo?.length ?? 0) * 2, 0) / 1024;
+              if (!window.confirm(`Clear photos from ${withPhotos.length} pin${withPhotos.length === 1 ? "" : "s"}? This will free ~${totalKb.toFixed(0)} KB of localStorage but keep the pins themselves.`)) return;
+              setPins((prev) => prev.map((p) => p.photo ? { ...p, photo: undefined } : p));
+              showToast(`🖼 Cleared photos from ${withPhotos.length} pin${withPhotos.length === 1 ? "" : "s"} · freed ~${totalKb.toFixed(0)} KB`);
+            }},
+            { id: "listAtlasKeys", label: "🔑 List all Atlas localStorage keys (debug)", group: "Tools", icon: Compass, run: () => {
+              const keys = Object.keys(localStorage).filter(k => k.startsWith("atlas-") || k.startsWith("atlasGlobe"));
+              if (keys.length === 0) { showToast("No atlas-* keys in localStorage"); return; }
+              console.log(`🔑 ${keys.length} atlas-* localStorage keys:\n${keys.map(k => `  ${k} (${(localStorage.getItem(k)?.length ?? 0).toLocaleString()} chars)`).join("\n")}`);
+              showToast(`🔑 ${keys.length} atlas-* keys logged to console (open DevTools)`);
+            }},
+            { id: "exportProjectPalette", label: "💾 Export full project state to JSON file (pins + bookmarks + settings)", group: "Tools", icon: Share2, run: () => exportProject() },
             // 📖 Wikipedia summary for the current camera view location.
             // Two-step fetch: Nominatim reverse-geocode → place name →
             // Wikipedia REST API summary endpoint. Both calls hit the
