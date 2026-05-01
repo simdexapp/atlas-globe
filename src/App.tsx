@@ -11411,6 +11411,83 @@ function App() {
               const mm = Math.floor((localMs % 3600_000) / 60_000);
               showToast(`Mean solar time at ${formatLat(c.lat)} ${formatLon(c.lon)}: ${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`);
             }},
+            // ===== Calendar / time utility commands =====
+            { id: "calendarToday", label: "📅 Today's day-of-year, ISO week, Julian day", group: "Tools", icon: Compass, run: () => {
+              const now = new Date();
+              const start = Date.UTC(now.getUTCFullYear(), 0, 1);
+              const doy = Math.floor((now.getTime() - start) / 86400_000) + 1;
+              // ISO week: ISO weeks start on Monday and the year is the year
+              // containing the Thursday of that week.
+              const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+              const dayNum = d.getUTCDay() || 7;
+              d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+              const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+              const isoWeek = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400_000) + 1) / 7);
+              // Julian Date (Astronomical) — number of days since
+              // -4712 Jan 01 noon UTC. Using formula for Gregorian.
+              const a = Math.floor((14 - (now.getUTCMonth() + 1)) / 12);
+              const y = now.getUTCFullYear() + 4800 - a;
+              const m = (now.getUTCMonth() + 1) + 12 * a - 3;
+              const jdn = now.getUTCDate() + Math.floor((153 * m + 2) / 5) + 365 * y + Math.floor(y / 4) - Math.floor(y / 100) + Math.floor(y / 400) - 32045;
+              const jd = jdn + (now.getUTCHours() - 12) / 24 + now.getUTCMinutes() / 1440 + now.getUTCSeconds() / 86400;
+              showToast(`📅 ${now.toISOString().slice(0, 10)} · DoY ${doy} · ISO week W${isoWeek} · JD ${jd.toFixed(4)}`);
+            }},
+            { id: "calendarDaysUntil", label: "🎂 How many days until a date (prompt)", group: "Tools", icon: Compass, run: () => {
+              const input = window.prompt("Enter a date (YYYY-MM-DD or natural like 'Dec 25'):", "");
+              if (!input) return;
+              // Try ISO first, then attempt natural parse via Date()
+              let target: Date | null = null;
+              const iso = input.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+              if (iso) {
+                target = new Date(Date.UTC(parseInt(iso[1]), parseInt(iso[2]) - 1, parseInt(iso[3])));
+              } else {
+                const t = Date.parse(input);
+                if (Number.isFinite(t)) target = new Date(t);
+              }
+              if (!target || Number.isNaN(target.getTime())) { showToast(`Couldn't parse "${input}" as a date`); return; }
+              const now = new Date();
+              const days = Math.round((target.getTime() - now.getTime()) / 86400_000);
+              const verb = days < 0 ? `${Math.abs(days)} days ago` : days === 0 ? "today" : `in ${days} days`;
+              showToast(`🎂 ${target.toISOString().slice(0, 10)} · ${verb} (${(days / 365.25).toFixed(2)} years from now)`);
+            }},
+            { id: "calendarTimezoneOffset", label: "🌍 UTC offset for current view (longitude-based)", group: "Tools", icon: Compass, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              // Pure mean-solar offset: longitude/15 hours from UTC
+              const offsetH = c.lon / 15;
+              const wholeH = Math.floor(Math.abs(offsetH));
+              const minutes = Math.round((Math.abs(offsetH) - wholeH) * 60);
+              const sign = offsetH >= 0 ? "+" : "−";
+              showToast(`🌍 At ${formatLon(c.lon)}: solar offset ${sign}${wholeH}h ${minutes}m vs UTC (note: political timezones can differ by ±2h)`);
+            }},
+            { id: "calendarNextEquinoxSolstice", label: "🌗 Countdown to next equinox / solstice", group: "Tools", icon: SunIcon, run: () => {
+              const now = new Date();
+              const year = now.getUTCFullYear();
+              // Approximate astronomical events (varies by ±1 day annually):
+              const events: Array<{ name: string; date: Date }> = [
+                { name: "Vernal equinox",   date: new Date(Date.UTC(year, 2, 20, 12, 0)) },     // Mar 20
+                { name: "Summer solstice",  date: new Date(Date.UTC(year, 5, 21, 12, 0)) },     // Jun 21
+                { name: "Autumnal equinox", date: new Date(Date.UTC(year, 8, 22, 12, 0)) },     // Sep 22
+                { name: "Winter solstice",  date: new Date(Date.UTC(year, 11, 21, 12, 0)) },    // Dec 21
+                { name: "Vernal equinox",   date: new Date(Date.UTC(year + 1, 2, 20, 12, 0)) }, // Next year's vernal — used when Dec→Mar
+              ];
+              const next = events.find(e => e.date.getTime() > now.getTime());
+              if (!next) return;
+              const days = Math.ceil((next.date.getTime() - now.getTime()) / 86400_000);
+              showToast(`🌗 Next: ${next.name} on ${next.date.toISOString().slice(0, 10)} (${days} days)`);
+            }},
+            { id: "calendarNextMoonPhase", label: "🌒🌕 Countdown to next new + next full moon", group: "Tools", icon: SunIcon, run: () => {
+              const synodic = 29.530588853;
+              const newMoonRef = Date.UTC(2000, 0, 6, 18, 14) / 86400_000;
+              const today = Date.now() / 86400_000;
+              const phase = ((today - newMoonRef) % synodic + synodic) % synodic;
+              const pct = phase / synodic;
+              const daysToNew = ((1 - pct) * synodic + synodic) % synodic;
+              const daysToFull = ((0.5 - pct) * synodic + synodic) % synodic;
+              const nextNewDate = new Date(Date.now() + daysToNew * 86400_000);
+              const nextFullDate = new Date(Date.now() + daysToFull * 86400_000);
+              showToast(`🌒 Next new moon: ${nextNewDate.toISOString().slice(0, 10)} (${Math.ceil(daysToNew)}d) · 🌕 Next full: ${nextFullDate.toISOString().slice(0, 10)} (${Math.ceil(daysToFull)}d)`);
+            }},
             // Find / fly to the pin nearest the current view — very useful
             // when you have many pins and want to navigate to the closest
             // one without scrolling the list.
