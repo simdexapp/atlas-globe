@@ -7427,6 +7427,69 @@ function App() {
                 showToast(`🔗 Snapped ${snapped}/${measurePoints.length} vertices to nearest pins (within 50km)`);
               },
             }] : []),
+            // Snap-to-airports: align measure vertices to the nearest
+            // airport in the curated AIRPORTS dataset (within 100km).
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureSnapAirports" as const,
+              label: "🛬 Snap each measure vertex to its nearest major airport (within 100km)",
+              group: "View" as const,
+              icon: Plane,
+              run: () => {
+                let snapped = 0;
+                setMeasurePoints((pts) => pts.map((v) => {
+                  let best: { lat: number; lon: number; iata: string; km: number } | null = null;
+                  for (const a of AIRPORTS) {
+                    const km = haversineKm(v.lat, v.lon, a.lat, a.lon);
+                    if (km < 100 && (!best || km < best.km)) best = { lat: a.lat, lon: a.lon, iata: a.iata, km };
+                  }
+                  if (best) { snapped++; return { lat: best.lat, lon: best.lon }; }
+                  return v;
+                }));
+                showToast(`🛬 Snapped ${snapped}/${measurePoints.length} vertices to nearest airports (within 100km)`);
+              },
+            }] : []),
+            // Snap-to-cities: align measure vertices to the nearest
+            // major city (within 200km — cities are sparser than airports).
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureSnapCities" as const,
+              label: "🏙 Snap each measure vertex to its nearest major city (within 200km)",
+              group: "View" as const,
+              icon: Globe2,
+              run: () => {
+                let snapped = 0;
+                setMeasurePoints((pts) => pts.map((v) => {
+                  let best: { lat: number; lon: number; name: string; km: number } | null = null;
+                  for (const c of MAJOR_CITIES) {
+                    const km = haversineKm(v.lat, v.lon, c.lat, c.lon);
+                    if (km < 200 && (!best || km < best.km)) best = { lat: c.lat, lon: c.lon, name: c.name, km };
+                  }
+                  if (best) { snapped++; return { lat: best.lat, lon: best.lon }; }
+                  return v;
+                }));
+                showToast(`🏙 Snapped ${snapped}/${measurePoints.length} vertices to nearest major cities (within 200km)`);
+              },
+            }] : []),
+            // Snap-to-landmarks: align measure vertices to the nearest
+            // famous landmark (within 100km).
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureSnapLandmarks" as const,
+              label: "🏛 Snap each measure vertex to its nearest famous landmark (within 100km)",
+              group: "View" as const,
+              icon: Sparkles,
+              run: () => {
+                let snapped = 0;
+                setMeasurePoints((pts) => pts.map((v) => {
+                  let best: { lat: number; lon: number; name: string; km: number } | null = null;
+                  for (const l of LANDMARKS) {
+                    const km = haversineKm(v.lat, v.lon, l.lat, l.lon);
+                    if (km < 100 && (!best || km < best.km)) best = { lat: l.lat, lon: l.lon, name: l.name, km };
+                  }
+                  if (best) { snapped++; return { lat: best.lat, lon: best.lon }; }
+                  return v;
+                }));
+                showToast(`🏛 Snapped ${snapped}/${measurePoints.length} vertices to nearest landmarks (within 100km)`);
+              },
+            }] : []),
             // Fly to the longest leg's midpoint — useful for visually
             // inspecting the leg that dominates trip distance.
             ...(measureMode && measurePoints.length >= 3 ? [{
