@@ -2,6 +2,7 @@ import {
   Component,
   Suspense,
   lazy,
+  memo,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -12184,7 +12185,12 @@ function extractShortcutHint(label: string): string | undefined {
   return m ? m[1].toUpperCase() : undefined;
 }
 
-function IconAction({ icon: Icon, label, onClick, active }: { icon: IconComponent; label: string; onClick: () => void; active?: boolean }) {
+// React.memo: parent (App) re-renders ~5×/sec when the camera moves.
+// Each rail/icon button is a leaf with stable props (onClick is usually a
+// useCallback ref or a setter-style closure). Memoizing skips the per-frame
+// VDOM diff cost. For inline-arrow callsites memo provides no benefit but
+// no penalty either — the prop comparison is O(few) regardless.
+const IconAction = memo(function IconAction({ icon: Icon, label, onClick, active }: { icon: IconComponent; label: string; onClick: () => void; active?: boolean }) {
   // When `active` is provided, this button is being used as a toggle —
   // announce its on/off state via aria-pressed. Otherwise it's a plain
   // action button and aria-pressed should be omitted entirely.
@@ -12203,9 +12209,9 @@ function IconAction({ icon: Icon, label, onClick, active }: { icon: IconComponen
       <Icon size={15} />
     </button>
   );
-}
+});
 
-function RailButton({ icon: Icon, label, onClick, active }: { icon: IconComponent; label: string; onClick?: () => void; active?: boolean }) {
+const RailButton = memo(function RailButton({ icon: Icon, label, onClick, active }: { icon: IconComponent; label: string; onClick?: () => void; active?: boolean }) {
   // Rail buttons that select a tab/panel report their state as aria-pressed
   // (toggle semantic) — not aria-current, since pressing them again often
   // toggles the panel off too. The DOM order isn't a navigation list so
@@ -12225,7 +12231,7 @@ function RailButton({ icon: Icon, label, onClick, active }: { icon: IconComponen
       <Icon size={17} />
     </button>
   );
-}
+});
 
 function GlobePanel({ globe, onUpdate, onSunPreset }: { globe: GlobeSettings; onUpdate: (patch: Partial<GlobeSettings>) => void; onSunPreset?: (preset: "sunrise" | "noon" | "sunset") => void }) {
   return (
@@ -12975,7 +12981,10 @@ function PanelSection({ title, icon: Icon, children }: { title: string; icon: Ic
   );
 }
 
-function Slider({
+// Memoized: many sliders inside the GlobePanel/ImageryPanel only update
+// when the user drags, but the parent's render rate is camera-driven.
+// Skipping per-frame VDOM diffs across 10+ sliders is a meaningful win.
+const Slider = memo(function Slider({
   label,
   value,
   min,
@@ -13011,9 +13020,9 @@ function Slider({
       />
     </label>
   );
-}
+});
 
-function ScaleBar({ altKm }: { altKm: number }) {
+const ScaleBar = memo(function ScaleBar({ altKm }: { altKm: number }) {
   // approximate: at this altitude, how many km does a 100px span represent?
   const kmPerPx = altKm * 0.0014; // rough heuristic
   const span = Math.max(1, Math.round(100 * kmPerPx));
@@ -13023,7 +13032,7 @@ function ScaleBar({ altKm }: { altKm: number }) {
       <span>≈ {span.toLocaleString()} km</span>
     </div>
   );
-}
+});
 
 function FpsOverlay() {
   const [fps, setFps] = useState(0);
@@ -13842,7 +13851,10 @@ function NearbyAircraftWidget({
 // for the most-toggled overlays. Saves the user from opening the full
 // Layers inspector tab when they want to flick aircraft / weather /
 // quakes / aurora / ISS / EONET on or off.
-function QuickTogglesWidget({ layers, onToggle }: { layers: LayerVisibility; onToggle: (key: keyof LayerVisibility) => void }) {
+// Memoized: layers object identity changes only on toggle (parent uses
+// setLayers); onToggle is the useCallback'd toggleLayer ref. So this
+// widget skips re-rendering on every camera tick.
+const QuickTogglesWidget = memo(function QuickTogglesWidget({ layers, onToggle }: { layers: LayerVisibility; onToggle: (key: keyof LayerVisibility) => void }) {
   const toggles: Array<{ key: keyof LayerVisibility; emoji: string; label: string }> = [
     { key: "aircraft",    emoji: "✈",  label: "Aircraft" },
     { key: "weather",     emoji: "☁",  label: "Weather" },
@@ -13878,7 +13890,7 @@ function QuickTogglesWidget({ layers, onToggle }: { layers: LayerVisibility; onT
       </div>
     </div>
   );
-}
+});
 
 // Coordinates display widget — shows the current view's lat/lon in
 // multiple coordinate format conventions, all at once. Educational
