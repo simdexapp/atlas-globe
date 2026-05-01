@@ -197,6 +197,10 @@ type LayerVisibility = {
   // Nearby aircraft widget — top 5 closest aircraft to current view
   // with callsign + altitude + bearing. Updates as camera moves.
   nearbyAircraft: boolean;
+  // Selected pin nav widget — GPS-style live guidance to the currently
+  // selected pin: distance, bearing, compass direction. Updates as
+  // camera moves. Only renders when a pin is selected.
+  selectedPinNav: boolean;
 };
 
 type GlobeSettings = {
@@ -534,6 +538,9 @@ const defaultLayers: LayerVisibility = {
   coordinates: false,
   quickToggles: false,
   nearbyAircraft: false,
+  // Off by default — only useful once a pin is selected. Users opt in
+  // when they're navigating toward a target.
+  selectedPinNav: false,
   // 3D OSM Buildings tileset is heavy and renders with edge outlines
   // that disable imagery draping underneath, painting the screen with
   // dark olive boxes at low altitudes (the user's tear repro). Off by
@@ -4551,6 +4558,7 @@ function App() {
             { id: "toggleCoordinates", label: layers.coordinates ? "Hide Coordinates widget" : "📐 Show Coordinates widget (DD/DMS/Maidenhead/Mercator/Antipode)", group: "Widgets", icon: Compass, run: () => toggleLayer("coordinates") },
             { id: "toggleQuickToggles", label: layers.quickToggles ? "Hide Quick layer toggles widget" : "⚡ Show Quick layer toggles widget (6 common layer buttons)", group: "Widgets", icon: Layers, run: () => toggleLayer("quickToggles") },
             { id: "toggleNearbyAircraft", label: layers.nearbyAircraft ? "Hide Nearby aircraft widget" : "✈ Show Nearby aircraft widget (top 5 closest to view)", group: "Widgets", icon: Plane, run: () => toggleLayer("nearbyAircraft") },
+            { id: "toggleSelectedPinNav", label: layers.selectedPinNav ? "Hide Selected pin nav widget" : "🎯 Show Selected pin nav widget (GPS-style guidance to selected pin)", group: "Widgets", icon: Navigation, run: () => toggleLayer("selectedPinNav") },
             // Widget batch operations — all-on / all-off / essential only
             { id: "widgetsAllOn", label: "🪟 Show ALL stat widgets at once (LiveStats + Coords + Anchors + Nearby + QuickToggles)", group: "Widgets", icon: Layers, run: () => {
               setLayers((p) => ({ ...p, liveStats: true, distanceAnchors: true, coordinates: true, quickToggles: true, nearbyAircraft: true }));
@@ -11160,6 +11168,28 @@ ${wpts}
         </Draggable>
       )}
 
+      {layers.selectedPinNav && (() => {
+        // Resolve the currently-selected pin if any. The widget renders
+        // an empty-state message when no pin is selected so the toggle
+        // surface stays visible (otherwise the widget would silently
+        // vanish and users would think the toggle did nothing).
+        const target = selectedPin ? pins.find(p => p.id === selectedPin) ?? null : null;
+        return (
+          <Draggable id="selectedPinNav" customizeMode={customizeUiMode} position={widgetPositions.selectedPinNav} onMove={setWidgetPosition}>
+            <SelectedPinNavWidget
+              targetPin={target}
+              cameraLat={cameraState.lat}
+              cameraLon={cameraState.lon}
+              cameraAltKm={cameraState.altKm}
+              unitsImperial={unitsImperial}
+              onFly={() => {
+                if (target) setFlyTo((c) => ({ id: c.id + 1, lat: target.lat, lon: target.lon, altKm: 5 }));
+              }}
+            />
+          </Draggable>
+        );
+      })()}
+
       {recordingState === "recording" && (
         <div className="atlasRecordIndicator" role="status">
           <span className="atlasRecordDot" /> REC {formatSeconds(recordingSeconds)}
@@ -14221,6 +14251,83 @@ function NearbyAircraftWidget({
     </div>
   );
 }
+
+// Selected pin nav — GPS-style live guidance to the currently-selected
+// pin. Shows distance + bearing + compass cardinal + a button to fly to
+// the pin. Updates as the camera moves. When no pin is selected, an
+// empty-state message tells the user how to select one — keeps the
+// widget visible so the toggle surface remains discoverable.
+function SelectedPinNavWidget({
+  targetPin,
+  cameraLat,
+  cameraLon,
+  cameraAltKm,
+  unitsImperial,
+  onFly,
+}: {
+  targetPin: Pin | null;
+  cameraLat: number;
+  cameraLon: number;
+  cameraAltKm: number;
+  unitsImperial: boolean;
+  onFly: () => void;
+}) {
+  if (!targetPin) {
+    return (
+      <div className="atlasSelectedPinNavWidget" role="region" aria-label="Selected pin nav (no pin selected)">
+        <div className="atlasSelectedPinNavHead">
+          <Navigation size={11} aria-hidden="true" />
+          <span>Pin nav</span>
+        </div>
+        <div className="atlasSelectedPinNavEmpty">Select a pin to see live distance & bearing here.</div>
+      </div>
+    );
+  }
+  const km = haversineKm(cameraLat, cameraLon, targetPin.lat, targetPin.lon);
+  const bearing = bearingDeg(cameraLat, cameraLon, targetPin.lat, targetPin.lon);
+  const cardinal = compassDir(bearing);
+  // ETA assuming a Mach 0.85 jet (~900 km/h) — gives a sense of travel
+  // time at common cruise speed. Below 50km it's < 4 min so we drop the
+  // ETA to avoid useless precision.
+  const etaMin = km > 50 ? Math.round(km / 900 * 60) : null;
+  const etaStr = etaMin === null ? null : etaMin < 60 ? `${etaMin} min` : etaMin < 24 * 60 ? `${(etaMin / 60).toFixed(1)} h` : `${(etaMin / 60 / 24).toFixed(1)} d`;
+  // Camera altitude relative to pin for "directly above?" indicator
+  const directlyAbove = km < 5;
+  return (
+    <div className="atlasSelectedPinNavWidget" role="region" aria-label={`Selected pin nav · target ${targetPin.label}`}>
+      <div className="atlasSelectedPinNavHead">
+        <Navigation size={11} aria-hidden="true" />
+        <span className="atlasSelectedPinNavTitle">{targetPin.label}</span>
+        <span className="atlasSelectedPinNavBadge" style={{ background: targetPin.color }} aria-hidden="true" />
+      </div>
+      <div className="atlasSelectedPinNavGrid">
+        <div className="atlasSelectedPinNavCell">
+          <span className="atlasSelectedPinNavLabel">Distance</span>
+          <span className="atlasSelectedPinNavValue">{formatDistKm(km, unitsImperial)}</span>
+        </div>
+        <div className="atlasSelectedPinNavCell">
+          <span className="atlasSelectedPinNavLabel">Bearing</span>
+          <span className="atlasSelectedPinNavValue">{Math.round(bearing)}° {cardinal}</span>
+        </div>
+        {etaStr ? (
+          <div className="atlasSelectedPinNavCell">
+            <span className="atlasSelectedPinNavLabel">ETA @ Mach 0.85</span>
+            <span className="atlasSelectedPinNavValue">{etaStr}</span>
+          </div>
+        ) : null}
+        <div className="atlasSelectedPinNavCell">
+          <span className="atlasSelectedPinNavLabel">View alt</span>
+          <span className="atlasSelectedPinNavValue">{formatDistKm(cameraAltKm, unitsImperial)}</span>
+        </div>
+      </div>
+      {directlyAbove && <div className="atlasSelectedPinNavTouchdown">🎯 Directly above the pin</div>}
+      <button type="button" className="atlasSelectedPinNavFlyBtn" onClick={onFly} aria-label={`Fly to ${targetPin.label}`}>
+        <Navigation size={11} aria-hidden="true" /> Fly to pin
+      </button>
+    </div>
+  );
+}
+
 
 // Quick layer toggles — a small "remote control" panel of 6 buttons
 // for the most-toggled overlays. Saves the user from opening the full
