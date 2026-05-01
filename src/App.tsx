@@ -6529,6 +6529,112 @@ function App() {
                 showToast("Path direction reversed");
               },
             }] : []),
+            // ===== Travel-time estimates for the measured path. Distances
+            // assume continuous travel at typical mode speeds — useful for
+            // trip planning, "is this hike doable today?" gut-checks.
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureTravelTimes" as const,
+              label: "🕒 Travel time estimates (walking / cycling / driving / flying)",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                let total = 0;
+                for (let i = 1; i < measurePoints.length; i++) {
+                  total += haversineKm(measurePoints[i-1].lat, measurePoints[i-1].lon, measurePoints[i].lat, measurePoints[i].lon);
+                }
+                // Speed assumptions: walk 5 km/h, bike 18 km/h, drive 80 km/h
+                // (highway-cruise average), commercial-jet cruise 850 km/h.
+                const speeds: Array<[string, number, string]> = [
+                  ["🚶 walk", 5, "5 km/h"],
+                  ["🚴 cycle", 18, "18 km/h"],
+                  ["🚗 drive", 80, "80 km/h"],
+                  ["✈ fly", 850, "850 km/h"],
+                ];
+                const fmt = (h: number) => h < 1 ? `${Math.round(h * 60)} min` : h < 24 ? `${h.toFixed(1)} h` : `${(h / 24).toFixed(1)} d`;
+                const parts = speeds.map(([emoji, kmh]) => `${emoji} ${fmt(total / kmh)}`).join(" · ");
+                showToast(`🕒 ${formatDistKm(total, unitsImperial)} continuous · ${parts}`);
+              },
+            }] : []),
+            // Halve the path — drop every other vertex. Useful for cleaning
+            // up a too-densely-sampled freehand sketch.
+            ...(measureMode && measurePoints.length >= 4 ? [{
+              id: "measureHalve" as const,
+              label: `➗ Halve path — drop every 2nd vertex (${measurePoints.length} → ${Math.ceil(measurePoints.length / 2)})`,
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                setMeasurePoints((pts) => pts.filter((_, i) => i % 2 === 0));
+                showToast(`➗ Halved path · ${Math.ceil(measurePoints.length / 2)} vertices remain`);
+              },
+            }] : []),
+            // Densify — insert one midpoint between each pair. Useful for
+            // smoothing a coarse great-circle skeleton into a finer curve.
+            ...(measureMode && measurePoints.length >= 2 && measurePoints.length <= 200 ? [{
+              id: "measureDensify" as const,
+              label: `🔬 Densify path — insert midpoints (${measurePoints.length} → ${measurePoints.length * 2 - 1})`,
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                setMeasurePoints((pts) => {
+                  const out: typeof pts = [];
+                  for (let i = 0; i < pts.length; i++) {
+                    out.push(pts[i]);
+                    if (i < pts.length - 1) {
+                      // Spherical midpoint between pts[i] and pts[i+1]
+                      const a = pts[i], b = pts[i + 1];
+                      const phi1 = a.lat * Math.PI / 180, lam1 = a.lon * Math.PI / 180;
+                      const phi2 = b.lat * Math.PI / 180, lam2 = b.lon * Math.PI / 180;
+                      const x = (Math.cos(phi1) * Math.cos(lam1) + Math.cos(phi2) * Math.cos(lam2)) / 2;
+                      const y = (Math.cos(phi1) * Math.sin(lam1) + Math.cos(phi2) * Math.sin(lam2)) / 2;
+                      const z = (Math.sin(phi1) + Math.sin(phi2)) / 2;
+                      out.push({
+                        lat: Math.atan2(z, Math.sqrt(x*x + y*y)) * 180 / Math.PI,
+                        lon: Math.atan2(y, x) * 180 / Math.PI,
+                      });
+                    }
+                  }
+                  return out;
+                });
+                showToast(`🔬 Densified · ${measurePoints.length * 2 - 1} vertices`);
+              },
+            }] : []),
+            // Loop closure — how far is the start from the end? <0.5km =
+            // basically a closed loop; large values mean the route is open.
+            ...(measureMode && measurePoints.length >= 3 ? [{
+              id: "measureLoopClose" as const,
+              label: "♻ Loop closure check — how far is start from end?",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                const a = measurePoints[0];
+                const b = measurePoints[measurePoints.length - 1];
+                const km = haversineKm(a.lat, a.lon, b.lat, b.lon);
+                const verdict = km < 0.5 ? "✓ closed loop" : km < 5 ? "≈ near-loop" : km < 100 ? "open route" : "very open route";
+                showToast(`♻ Start↔End: ${formatDistKm(km, unitsImperial)} · ${verdict}`);
+              },
+            }] : []),
+            // Snap each measure-vertex to its nearest pin (if pins exist
+            // and there are any within 50km). Useful for converting a
+            // freehand sketch into "actual stops on my trip".
+            ...(measureMode && measurePoints.length >= 2 && pins.length >= 1 ? [{
+              id: "measureSnapPins" as const,
+              label: `🔗 Snap each measure vertex to its nearest pin (within 50km, ${pins.length} pins available)`,
+              group: "View" as const,
+              icon: MapPin,
+              run: () => {
+                let snapped = 0;
+                setMeasurePoints((pts) => pts.map((v) => {
+                  let best: { p: Pin; km: number } | null = null;
+                  for (const p of pins) {
+                    const km = haversineKm(v.lat, v.lon, p.lat, p.lon);
+                    if (km < 50 && (!best || km < best.km)) best = { p, km };
+                  }
+                  if (best) { snapped++; return { lat: best.p.lat, lon: best.p.lon }; }
+                  return v;
+                }));
+                showToast(`🔗 Snapped ${snapped}/${measurePoints.length} vertices to nearest pins (within 50km)`);
+              },
+            }] : []),
             // Save the active measure path with a name so it can be
             // restored / overlaid / shared later. Library lives in
             // localStorage so paths survive across sessions.
