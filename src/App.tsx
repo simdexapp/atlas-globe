@@ -6052,6 +6052,97 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: aLat, lon: aLon, altKm: 5000 }));
               showToast(`🌐 Dropped pin at antipode: ${formatLat(aLat)} ${formatLon(aLon)}`);
             }},
+            // ===== Ring / radial pin commands — drop pins at fixed
+            // distances around the current view, useful for visualizing
+            // distance/coverage from a location.
+            // Uses standard great-circle 'destination point given distance
+            // and bearing' formula.
+            { id: "pinDropRing100km", label: "⭕ Drop 8 pins forming a 100km ring around current view", group: "Tools", icon: BookmarkPlus, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const R = EARTH_RADIUS_KM;
+              const r = 100;
+              const phi1 = c.lat * Math.PI / 180;
+              const lam1 = c.lon * Math.PI / 180;
+              const stamp = Date.now();
+              const newPins: Pin[] = [];
+              for (let i = 0; i < 8; i++) {
+                const bearing = (i * 45) * Math.PI / 180;       // 0/45/90/135/180/225/270/315
+                const phi2 = Math.asin(Math.sin(phi1) * Math.cos(r/R) + Math.cos(phi1) * Math.sin(r/R) * Math.cos(bearing));
+                const lam2 = lam1 + Math.atan2(Math.sin(bearing) * Math.sin(r/R) * Math.cos(phi1), Math.cos(r/R) - Math.sin(phi1) * Math.sin(phi2));
+                const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+                newPins.push({
+                  id: `pin-ring100-${i}-${stamp}`,
+                  lat: phi2 * 180 / Math.PI,
+                  lon: lam2 * 180 / Math.PI,
+                  label: `⭕ 100km ${dirs[i]}`,
+                  color: "#7cffb1",
+                  createdAt: stamp + i,
+                });
+              }
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`⭕ Dropped 8 pins in a 100km ring around current view`);
+            }},
+            { id: "pinDropRingsConcentric", label: "🎯 Drop concentric rings — 100/500/1000 km around view (24 pins)", group: "Tools", icon: BookmarkPlus, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const R = EARTH_RADIUS_KM;
+              const phi1 = c.lat * Math.PI / 180;
+              const lam1 = c.lon * Math.PI / 180;
+              const stamp = Date.now();
+              const newPins: Pin[] = [];
+              const radii = [
+                { km: 100, color: "#7cffb1" },
+                { km: 500, color: "#ffd66b" },
+                { km: 1000, color: "#ff7be0" },
+              ];
+              for (const { km: r, color } of radii) {
+                for (let i = 0; i < 8; i++) {
+                  const bearing = (i * 45) * Math.PI / 180;
+                  const phi2 = Math.asin(Math.sin(phi1) * Math.cos(r/R) + Math.cos(phi1) * Math.sin(r/R) * Math.cos(bearing));
+                  const lam2 = lam1 + Math.atan2(Math.sin(bearing) * Math.sin(r/R) * Math.cos(phi1), Math.cos(r/R) - Math.sin(phi1) * Math.sin(phi2));
+                  const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+                  newPins.push({
+                    id: `pin-rings-${r}-${i}-${stamp}`,
+                    lat: phi2 * 180 / Math.PI,
+                    lon: lam2 * 180 / Math.PI,
+                    label: `🎯 ${r}km ${dirs[i]}`,
+                    color,
+                    createdAt: stamp + (r * 10) + i,
+                  });
+                }
+              }
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`🎯 Dropped 24 pins forming 3 concentric rings (100km green, 500km yellow, 1000km pink)`);
+            }},
+            { id: "pinDrop4Cardinals", label: "🧭 Drop 4 cardinal pins (N/E/S/W) at user-prompted distance", group: "Tools", icon: BookmarkPlus, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const input = window.prompt("Distance for the 4 cardinal pins (km, e.g. 250):", "500");
+              if (!input) return;
+              const r = parseFloat(input);
+              if (!Number.isFinite(r) || r <= 0 || r > 20000) { showToast("Invalid distance (must be 0–20000 km)"); return; }
+              const R = EARTH_RADIUS_KM;
+              const phi1 = c.lat * Math.PI / 180;
+              const lam1 = c.lon * Math.PI / 180;
+              const stamp = Date.now();
+              const cardinals: Array<[string, number]> = [["N", 0], ["E", 90], ["S", 180], ["W", 270]];
+              const newPins: Pin[] = cardinals.map(([dir, deg], i) => {
+                const bearing = deg * Math.PI / 180;
+                const phi2 = Math.asin(Math.sin(phi1) * Math.cos(r/R) + Math.cos(phi1) * Math.sin(r/R) * Math.cos(bearing));
+                const lam2 = lam1 + Math.atan2(Math.sin(bearing) * Math.sin(r/R) * Math.cos(phi1), Math.cos(r/R) - Math.sin(phi1) * Math.sin(phi2));
+                return {
+                  id: `pin-card-${dir}-${stamp}`,
+                  lat: phi2 * 180 / Math.PI,
+                  lon: lam2 * 180 / Math.PI,
+                  label: `🧭 ${formatDistKm(r, unitsImperial)} ${dir}`,
+                  color: "#5cb5ff",
+                  createdAt: stamp + i,
+                };
+              });
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`🧭 Dropped 4 cardinal pins at ${formatDistKm(r, unitsImperial)} from current view`);
+            }},
             // Drop pin at the geographic centroid of all current pins.
             // Useful for "where's my travel center of mass" + having that
             // computed location available for further calculations.
