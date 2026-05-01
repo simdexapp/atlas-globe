@@ -7639,6 +7639,67 @@ function App() {
               if (mode !== "surface") setMode("surface");
               toggleLayer("submarineCables");
             }},
+            // ===== Submarine cable analytics — uses the curated
+            // SUBMARINE_CABLES dataset for stats / fly-tos / lookups.
+            { id: "cableNearest", label: "🌊 Find nearest submarine cable landing point to current view", group: "Tools", icon: Sparkles, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              // Each cable has 2 endpoints (fromLat/fromLon and toLat/toLon).
+              // Treat both as candidate landing points; find the closest.
+              type Landing = { name: string; cable: string; lat: number; lon: number; km: number };
+              let best: Landing | null = null;
+              for (const cable of SUBMARINE_CABLES) {
+                const fromKm = haversineKm(c.lat, c.lon, cable.fromLat, cable.fromLon);
+                if (!best || fromKm < best.km) best = { name: cable.fromName, cable: cable.name, lat: cable.fromLat, lon: cable.fromLon, km: fromKm };
+                const toKm = haversineKm(c.lat, c.lon, cable.toLat, cable.toLon);
+                if (toKm < best.km) best = { name: cable.toName, cable: cable.name, lat: cable.toLat, lon: cable.toLon, km: toKm };
+              }
+              if (!best) { showToast("No cables loaded"); return; }
+              setFlyTo((p) => ({ id: p.id + 1, lat: best!.lat, lon: best!.lon, altKm: 80 }));
+              showToast(`🌊 Nearest landing: ${best.name} (${best.cable}) · ${formatDistKm(best.km, unitsImperial)} away`);
+            }},
+            { id: "cableLongest", label: "🌊 Fly to the longest submarine cable's midpoint", group: "Tools", icon: Sparkles, run: () => {
+              let longest: typeof SUBMARINE_CABLES[number] | null = null;
+              let longestKm = 0;
+              for (const cable of SUBMARINE_CABLES) {
+                const km = haversineKm(cable.fromLat, cable.fromLon, cable.toLat, cable.toLon);
+                if (km > longestKm) { longestKm = km; longest = cable; }
+              }
+              if (!longest) { showToast("No cables loaded"); return; }
+              const midLat = (longest.fromLat + longest.toLat) / 2;
+              const midLon = (longest.fromLon + longest.toLon) / 2;
+              setFlyTo((p) => ({ id: p.id + 1, lat: midLat, lon: midLon, altKm: Math.max(2000, longestKm * 0.8) }));
+              showToast(`🌊 Longest cable: ${longest.name} (${longest.fromName} ↔ ${longest.toName}) · ${formatDistKm(longestKm, unitsImperial)} · ${longest.capacityTbps ?? "?"} Tbps`);
+            }},
+            { id: "cableHighestCapacity", label: "🌊 Fly to the highest-capacity submarine cable", group: "Tools", icon: Sparkles, run: () => {
+              let highest: typeof SUBMARINE_CABLES[number] | null = null;
+              for (const cable of SUBMARINE_CABLES) {
+                if (typeof cable.capacityTbps !== "number") continue;
+                if (!highest || (cable.capacityTbps > (highest.capacityTbps ?? 0))) highest = cable;
+              }
+              if (!highest) { showToast("No cable capacity data"); return; }
+              const midLat = (highest.fromLat + highest.toLat) / 2;
+              const midLon = (highest.fromLon + highest.toLon) / 2;
+              setFlyTo((p) => ({ id: p.id + 1, lat: midLat, lon: midLon, altKm: 3000 }));
+              showToast(`🌊 ${highest.name} · ${highest.capacityTbps} Tbps · ${highest.fromName} ↔ ${highest.toName} · ${highest.consortium ?? "?"}`);
+            }},
+            { id: "cableStats", label: "📊 Submarine cable network stats (count, total Tbps, oldest)", group: "Tools", icon: Sparkles, run: () => {
+              const total = SUBMARINE_CABLES.length;
+              const totalTbps = SUBMARINE_CABLES.reduce((s, c) => s + (c.capacityTbps ?? 0), 0);
+              const withCap = SUBMARINE_CABLES.filter(c => typeof c.capacityTbps === "number").length;
+              const yearsLive = SUBMARINE_CABLES.map(c => c.yearLive).filter((y): y is number => typeof y === "number");
+              const oldest = yearsLive.length > 0 ? Math.min(...yearsLive) : null;
+              const newest = yearsLive.length > 0 ? Math.max(...yearsLive) : null;
+              showToast(`📊 ${total} cables · ${totalTbps.toLocaleString()} Tbps total (${withCap} with published capacity) · spanning ${oldest}–${newest}`);
+            }},
+            { id: "cableRandom", label: "🎲 Fly to a random submarine cable", group: "Tools", icon: Sparkles, run: () => {
+              const cable = SUBMARINE_CABLES[Math.floor(Math.random() * SUBMARINE_CABLES.length)];
+              const midLat = (cable.fromLat + cable.toLat) / 2;
+              const midLon = (cable.fromLon + cable.toLon) / 2;
+              const km = haversineKm(cable.fromLat, cable.fromLon, cable.toLat, cable.toLon);
+              setFlyTo((p) => ({ id: p.id + 1, lat: midLat, lon: midLon, altKm: Math.max(800, km * 0.6) }));
+              showToast(`🌊 ${cable.name} · ${cable.fromName} ↔ ${cable.toName} · ${formatDistKm(km, unitsImperial)} · ${cable.capacityTbps ?? "?"} Tbps`);
+            }},
             // Reset every layer to its default state — useful after a
             // user has toggled many things on and wants a clean slate
             // without losing pins/bookmarks (those don't reset).
