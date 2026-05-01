@@ -3460,23 +3460,71 @@ function App() {
   }, [showToast]);
 
   // Pin tour — sequence of pins with auto-fly between
-  const startPinTour = useCallback(() => {
-    if (pins.length < 2) {
-      showToast("Drop at least 2 pins to start a tour");
+  // Generalized pin tour — can pull stops from pins or bookmarks, in
+  // stored / random / nearest-neighbor order, with adjustable interval.
+  // Each variant exposed as its own palette command below; this one
+  // call site supports the existing toolbar 'tour' button (defaults).
+  const startPinTour = useCallback((opts?: {
+    intervalMs?: number;
+    order?: "stored" | "random" | "nearest";
+    source?: "pins" | "bookmarks";
+    label?: string;          // shown in opening toast
+  }) => {
+    const intervalMs = opts?.intervalMs ?? 5000;
+    const order = opts?.order ?? "stored";
+    const source = opts?.source ?? "pins";
+    const stops: Array<{ lat: number; lon: number; label: string; id: string; altKm?: number }> =
+      source === "bookmarks"
+        ? bookmarks.map(b => ({ lat: b.lat, lon: b.lon, label: b.name, id: b.id, altKm: b.altKm }))
+        : pins.map(p => ({ lat: p.lat, lon: p.lon, label: p.label, id: p.id }));
+    if (stops.length < 2) {
+      showToast(source === "bookmarks" ? "Need at least 2 bookmarks to start a tour" : "Drop at least 2 pins to start a tour");
       return;
+    }
+    // Reorder if requested
+    let sequence = stops.slice();
+    if (order === "random") {
+      // Fisher–Yates shuffle for unbiased random order
+      for (let i = sequence.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [sequence[i], sequence[j]] = [sequence[j], sequence[i]];
+      }
+    } else if (order === "nearest") {
+      // Greedy nearest-neighbor TSP starting from first stop. Minimizes
+      // total flight distance — good for a smooth tour without long jumps.
+      const visited = new Set<string>();
+      const ordered: typeof sequence = [];
+      let current = sequence[0];
+      ordered.push(current);
+      visited.add(current.id);
+      while (ordered.length < sequence.length) {
+        let best: { stop: typeof current; km: number } | null = null;
+        for (const s of sequence) {
+          if (visited.has(s.id)) continue;
+          const km = haversineKm(current.lat, current.lon, s.lat, s.lon);
+          if (!best || km < best.km) best = { stop: s, km };
+        }
+        if (!best) break;
+        ordered.push(best.stop);
+        visited.add(best.stop.id);
+        current = best.stop;
+      }
+      sequence = ordered;
     }
     tourIndexRef.current = 0;
     setTourPlaying(true);
-    showToast(`Pin tour: ${pins.length} stops`);
+    const labelPrefix = opts?.label ?? `${source === "bookmarks" ? "Bookmark" : "Pin"} tour`;
+    showToast(`${labelPrefix}: ${sequence.length} stops · ${(intervalMs / 1000).toFixed(0)}s each`);
     const advance = () => {
-      const target = pins[tourIndexRef.current % pins.length];
-      setFlyTo((c) => ({ id: c.id + 1, lat: target.lat, lon: target.lon, altKm: 1500 }));
-      setSelectedPin(target.id);
+      const target = sequence[tourIndexRef.current % sequence.length];
+      setFlyTo((c) => ({ id: c.id + 1, lat: target.lat, lon: target.lon, altKm: target.altKm ?? 1500 }));
+      // Only select pins (bookmark IDs aren't pin IDs)
+      if (source === "pins") setSelectedPin(target.id);
       tourIndexRef.current++;
-      tourTimerRef.current = window.setTimeout(advance, 5000);
+      tourTimerRef.current = window.setTimeout(advance, intervalMs);
     };
     advance();
-  }, [pins, showToast]);
+  }, [pins, bookmarks, showToast]);
 
   const stopPinTour = useCallback(() => {
     if (tourTimerRef.current) clearTimeout(tourTimerRef.current);
@@ -6908,6 +6956,41 @@ function App() {
             { id: "dayNightCycle", label: globe.timeAnim ? "Stop day/night cycle" : "Start day/night cycle (24h time-lapse)", group: "View", icon: SunIcon, run: () => updateGlobe({ timeAnim: !globe.timeAnim }) },
             { id: "togglePause", label: paused ? "Resume animation" : "Pause animation", group: "View", icon: paused ? Play : Pause, run: () => setPaused((p) => !p) },
             { id: "tour", label: tourPlaying ? "Stop bookmark tour" : "Start bookmark tour (cycle through pins)", group: "View", icon: Play, run: () => tourPlaying ? stopPinTour() : startPinTour() },
+            // ===== Tour variants — different orderings and intervals.
+            // All call into the generalized startPinTour; stop button is
+            // the same `tour` command above (toggles the tourPlaying flag).
+            ...(pins.length >= 2 && !tourPlaying ? [{
+              id: "tourRandom" as const,
+              label: `🎲 Random-order pin tour (${pins.length} pins, 5s each)`,
+              group: "View" as const,
+              icon: Play,
+              run: () => startPinTour({ order: "random", label: "Random pin tour" }),
+            }, {
+              id: "tourNearest" as const,
+              label: `🛤 Optimal pin tour — nearest-neighbor TSP (${pins.length} pins, 5s each)`,
+              group: "View" as const,
+              icon: Play,
+              run: () => startPinTour({ order: "nearest", label: "Optimal pin tour" }),
+            }, {
+              id: "tourFast" as const,
+              label: `⏩ Fast pin tour (${pins.length} pins, 2s each — quick overview)`,
+              group: "View" as const,
+              icon: Play,
+              run: () => startPinTour({ intervalMs: 2000, label: "Fast pin tour" }),
+            }, {
+              id: "tourSlow" as const,
+              label: `🐌 Slow pin tour (${pins.length} pins, 15s each — for presentations)`,
+              group: "View" as const,
+              icon: Play,
+              run: () => startPinTour({ intervalMs: 15000, label: "Slow pin tour" }),
+            }] : []),
+            ...(bookmarks.length >= 2 && !tourPlaying ? [{
+              id: "tourBookmarks" as const,
+              label: `🔖 Bookmark tour (${bookmarks.length} bookmarks, 5s each)`,
+              group: "View" as const,
+              icon: Play,
+              run: () => startPinTour({ source: "bookmarks", label: "Bookmark tour" }),
+            }] : []),
             { id: "saveBookmark", label: "Bookmark current view", group: "View", icon: BookmarkPlus, hint: "B", run: () => saveCurrentBookmark() },
             { id: "myLoc", label: "Fly to my location", group: "View", icon: Navigation, run: () => flyToMyLocation() },
             // Home location — saved per-user via localStorage. Three commands:
