@@ -4516,6 +4516,15 @@ function App() {
             { id: "toggleCoordinates", label: layers.coordinates ? "Hide Coordinates widget" : "📐 Show Coordinates widget (DD/DMS/Maidenhead/Mercator/Antipode)", group: "Widgets", icon: Compass, run: () => toggleLayer("coordinates") },
             { id: "toggleQuickToggles", label: layers.quickToggles ? "Hide Quick layer toggles widget" : "⚡ Show Quick layer toggles widget (6 common layer buttons)", group: "Widgets", icon: Layers, run: () => toggleLayer("quickToggles") },
             { id: "toggleNearbyAircraft", label: layers.nearbyAircraft ? "Hide Nearby aircraft widget" : "✈ Show Nearby aircraft widget (top 5 closest to view)", group: "Widgets", icon: Plane, run: () => toggleLayer("nearbyAircraft") },
+            // Widget batch operations — all-on / all-off / essential only
+            { id: "widgetsAllOn", label: "🪟 Show ALL stat widgets at once (LiveStats + Coords + Anchors + Nearby + QuickToggles)", group: "Widgets", icon: Layers, run: () => {
+              setLayers((p) => ({ ...p, liveStats: true, distanceAnchors: true, coordinates: true, quickToggles: true, nearbyAircraft: true }));
+              showToast("🪟 All 5 stat widgets shown");
+            }},
+            { id: "widgetsAllOff", label: "🚫 Hide ALL stat widgets at once", group: "Widgets", icon: Layers, run: () => {
+              setLayers((p) => ({ ...p, liveStats: false, distanceAnchors: false, coordinates: false, quickToggles: false, nearbyAircraft: false }));
+              showToast("🚫 All stat widgets hidden");
+            }},
             // Show a random tip from the curated TIPS list — useful when
             // discovering features for the first time, or as a periodic
             // reminder of what's available.
