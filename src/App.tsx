@@ -5374,6 +5374,48 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: target.lat, lon: c.lon, altKm: c.altKm }));
               showToast(`♋ ${target.name} (${formatLat(target.lat)})`);
             }},
+            // ===== Pin route optimization =====
+            // Reorder pins via nearest-neighbor heuristic to minimize
+            // total trip distance. Not optimal (TSP is NP-hard) but a
+            // good greedy approximation that runs instantly.
+            ...(pins.length >= 4 ? [{
+              id: "pinOptimizeRoute" as const,
+              label: `🛤 Optimize pin order (nearest-neighbor TSP heuristic, ${pins.length} pins)`,
+              group: "Tools" as const,
+              icon: Compass,
+              run: () => {
+                if (!window.confirm(`Reorder ${pins.length} pins via nearest-neighbor heuristic? The pin createdAt order will be reset.`)) return;
+                // Compute existing total distance for comparison
+                let oldTotal = 0;
+                for (let i = 1; i < pins.length; i++) {
+                  oldTotal += haversineKm(pins[i-1].lat, pins[i-1].lon, pins[i].lat, pins[i].lon);
+                }
+                // Greedy nearest neighbor starting from pin 0
+                const remaining = pins.slice(1);
+                const ordered = [pins[0]];
+                while (remaining.length > 0) {
+                  const last = ordered[ordered.length - 1];
+                  let bestI = 0, bestKm = Infinity;
+                  for (let i = 0; i < remaining.length; i++) {
+                    const d = haversineKm(last.lat, last.lon, remaining[i].lat, remaining[i].lon);
+                    if (d < bestKm) { bestKm = d; bestI = i; }
+                  }
+                  ordered.push(remaining[bestI]);
+                  remaining.splice(bestI, 1);
+                }
+                let newTotal = 0;
+                for (let i = 1; i < ordered.length; i++) {
+                  newTotal += haversineKm(ordered[i-1].lat, ordered[i-1].lon, ordered[i].lat, ordered[i].lon);
+                }
+                const saved = oldTotal - newTotal;
+                const pct = oldTotal > 0 ? ((saved / oldTotal) * 100).toFixed(0) : "0";
+                // Apply via createdAt re-stamp so the order persists
+                const baseTime = Date.now();
+                const reordered = ordered.map((p, i) => ({ ...p, createdAt: baseTime + i }));
+                setPins(reordered);
+                showToast(`🛤 Reordered ${pins.length} pins · ${formatDistKm(oldTotal, unitsImperial)} → ${formatDistKm(newTotal, unitsImperial)} (saved ${formatDistKm(saved, unitsImperial)}, ${pct}%)`);
+              },
+            }] : []),
             // ===== Pin trip-planning commands =====
             // Trip cost estimate — flight cost + accommodation. Crude
             // heuristic but useful for sanity-checking trip planning.
