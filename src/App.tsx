@@ -5476,6 +5476,56 @@ function App() {
                 showToast(`🛤 Reordered ${pins.length} pins · ${formatDistKm(oldTotal, unitsImperial)} → ${formatDistKm(newTotal, unitsImperial)} (saved ${formatDistKm(saved, unitsImperial)}, ${pct}%)`);
               },
             }] : []),
+            // ===== Landmark discovery =====
+            { id: "landmarksClosest", label: "🗺 Show 5 closest landmarks to current view", group: "Tools", icon: Sparkles, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const ranked = LANDMARKS
+                .map(l => ({ l, km: haversineKm(c.lat, c.lon, l.lat, l.lon) }))
+                .sort((a, b) => a.km - b.km)
+                .slice(0, 5);
+              const list = ranked.map(({ l, km }) => `${l.emoji} ${l.name} (${formatDistKm(km, unitsImperial)})`).join(" · ");
+              showToast(`🗺 Closest 5 landmarks: ${list}`);
+            }},
+            // Find a famous landmark you haven't pinned yet
+            { id: "landmarkUnvisited", label: "🗺 Fly to the closest landmark you haven't pinned yet", group: "Tools", icon: Sparkles, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              // "Pinned" = a pin within 50km of the landmark
+              const isPinned = (l: typeof LANDMARKS[number]) => pins.some(p => haversineKm(p.lat, p.lon, l.lat, l.lon) < 50);
+              const unvisited = LANDMARKS
+                .filter(l => !isPinned(l))
+                .map(l => ({ l, km: haversineKm(c.lat, c.lon, l.lat, l.lon) }))
+                .sort((a, b) => a.km - b.km);
+              if (unvisited.length === 0) { showToast("🗺 You've visited every landmark in the database! 🎉"); return; }
+              const target = unvisited[0];
+              setFlyTo((p) => ({ id: p.id + 1, lat: target.l.lat, lon: target.l.lon, altKm: target.l.zoomKm }));
+              showToast(`🗺 ${target.l.emoji} ${target.l.name} (${formatDistKm(target.km, unitsImperial)} away · unvisited)`);
+            }},
+            // Continent-anchored landmark random
+            { id: "landmarkSameContinent", label: "🌍 Random landmark on same continent as current view", group: "Tools", icon: Sparkles, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              // Crude continent classification by lat/lon box. Six continents
+              // approximated as rectangles — close enough for "same continent
+              // as me" exploration.
+              const continentOf = (lat: number, lon: number): string => {
+                if (lat > 12 && lon < -30 && lon > -170) return "NA";
+                if (lat <= 12 && lat > -56 && lon < -30 && lon > -83) return "SA";
+                if (lat > 35 && lon > -10 && lon < 70) return "EU";
+                if (lat > -35 && lat < 37 && lon > -20 && lon < 53) return "AF";
+                if (lat > -10 && lat < 70 && lon >= 60 && lon < 180) return "AS";
+                if (lat < -10 && lon > 110 && lon < 180) return "OC";
+                if (lat < -55) return "AN";
+                return "OTHER";
+              };
+              const myContinent = continentOf(c.lat, c.lon);
+              const sameLandmarks = LANDMARKS.filter(l => continentOf(l.lat, l.lon) === myContinent);
+              if (sameLandmarks.length === 0) { showToast(`🌍 No landmarks on continent ${myContinent} (probably ocean view)`); return; }
+              const pick = sameLandmarks[Math.floor(Math.random() * sameLandmarks.length)];
+              setFlyTo((p) => ({ id: p.id + 1, lat: pick.lat, lon: pick.lon, altKm: pick.zoomKm }));
+              showToast(`🌍 ${pick.emoji} ${pick.name} (continent: ${myContinent}, ${sameLandmarks.length} options)`);
+            }},
             // ===== Time-at-pins commands =====
             ...(pins.length >= 2 ? [{
               id: "pinsTimes" as const,
