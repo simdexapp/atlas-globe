@@ -6974,6 +6974,132 @@ function App() {
                 showToast(`🔗 Snapped ${snapped}/${measurePoints.length} vertices to nearest pins (within 50km)`);
               },
             }] : []),
+            // Fly to the longest leg's midpoint — useful for visually
+            // inspecting the leg that dominates trip distance.
+            ...(measureMode && measurePoints.length >= 3 ? [{
+              id: "measureFlyLongestLeg" as const,
+              label: "🎯 Fly to midpoint of longest leg",
+              group: "View" as const,
+              icon: Crosshair,
+              run: () => {
+                let bestKm = 0, bestI = 1;
+                for (let i = 1; i < measurePoints.length; i++) {
+                  const km = haversineKm(measurePoints[i-1].lat, measurePoints[i-1].lon, measurePoints[i].lat, measurePoints[i].lon);
+                  if (km > bestKm) { bestKm = km; bestI = i; }
+                }
+                const a = measurePoints[bestI-1], b = measurePoints[bestI];
+                // Spherical midpoint
+                const phi1 = a.lat * Math.PI / 180, lam1 = a.lon * Math.PI / 180;
+                const phi2 = b.lat * Math.PI / 180, lam2 = b.lon * Math.PI / 180;
+                const x = (Math.cos(phi1) * Math.cos(lam1) + Math.cos(phi2) * Math.cos(lam2)) / 2;
+                const y = (Math.cos(phi1) * Math.sin(lam1) + Math.cos(phi2) * Math.sin(lam2)) / 2;
+                const z = (Math.sin(phi1) + Math.sin(phi2)) / 2;
+                const lat = Math.atan2(z, Math.sqrt(x*x + y*y)) * 180 / Math.PI;
+                const lon = Math.atan2(y, x) * 180 / Math.PI;
+                setFlyTo((c) => ({ id: c.id + 1, lat, lon, altKm: Math.max(500, bestKm * 1.4) }));
+                showToast(`🎯 Flew to longest leg #${bestI} (${formatDistKm(bestKm, unitsImperial)})`);
+              },
+            }] : []),
+            // Drop pace markers as pins along the path every N km.
+            // Picks N to give roughly 5–10 markers based on total length.
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measurePaceMarkers" as const,
+              label: "📍 Drop pace-marker pins along path (auto-spaced for ~7 markers)",
+              group: "View" as const,
+              icon: MapPin,
+              run: () => {
+                let total = 0;
+                for (let i = 1; i < measurePoints.length; i++) {
+                  total += haversineKm(measurePoints[i-1].lat, measurePoints[i-1].lon, measurePoints[i].lat, measurePoints[i].lon);
+                }
+                if (total < 1) { showToast("Path too short for pace markers"); return; }
+                const spacingKm = Math.max(1, total / 7);
+                const stamp = Date.now();
+                const newPins: Pin[] = [];
+                let accum = 0;
+                let nextMark = spacingKm;
+                let markIdx = 1;
+                for (let i = 1; i < measurePoints.length && markIdx < 50; i++) {
+                  const a = measurePoints[i-1], b = measurePoints[i];
+                  const segKm = haversineKm(a.lat, a.lon, b.lat, b.lon);
+                  while (accum + segKm >= nextMark && markIdx < 50) {
+                    // Linear interpolation along the segment (close enough
+                    // at typical pace-marker scale; spherical interp would
+                    // matter only for very long legs > 1000km).
+                    const f = (nextMark - accum) / segKm;
+                    const lat = a.lat + (b.lat - a.lat) * f;
+                    const lon = a.lon + (b.lon - a.lon) * f;
+                    newPins.push({
+                      id: `pacemark-${stamp}-${markIdx}`,
+                      lat, lon,
+                      label: `🏁 ${formatDistKm(nextMark, unitsImperial)}`,
+                      color: "#7cffb1",
+                      createdAt: stamp + markIdx,
+                    });
+                    nextMark += spacingKm;
+                    markIdx++;
+                  }
+                  accum += segKm;
+                }
+                setPins((prev) => [...prev, ...newPins]);
+                showToast(`📍 Dropped ${newPins.length} pace markers · ${formatDistKm(spacingKm, unitsImperial)} apart on a ${formatDistKm(total, unitsImperial)} path`);
+              },
+            }] : []),
+            // 3-point moving average smoothing — replaces each interior
+            // vertex with the spherical mean of itself + its neighbors.
+            // Good for cleaning up jittery hand-drawn traces.
+            ...(measureMode && measurePoints.length >= 5 ? [{
+              id: "measureSmooth" as const,
+              label: `🌊 Smooth path with 3-point moving average (${measurePoints.length} pts)`,
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                setMeasurePoints((pts) => {
+                  if (pts.length < 5) return pts;
+                  const out = [pts[0]];
+                  for (let i = 1; i < pts.length - 1; i++) {
+                    const a = pts[i-1], b = pts[i], c = pts[i+1];
+                    // Spherical mean of three vectors
+                    let x = 0, y = 0, z = 0;
+                    for (const p of [a, b, c]) {
+                      const phi = p.lat * Math.PI / 180;
+                      const lam = p.lon * Math.PI / 180;
+                      x += Math.cos(phi) * Math.cos(lam);
+                      y += Math.cos(phi) * Math.sin(lam);
+                      z += Math.sin(phi);
+                    }
+                    x /= 3; y /= 3; z /= 3;
+                    out.push({
+                      lat: Math.atan2(z, Math.sqrt(x*x + y*y)) * 180 / Math.PI,
+                      lon: Math.atan2(y, x) * 180 / Math.PI,
+                    });
+                  }
+                  out.push(pts[pts.length - 1]);
+                  return out;
+                });
+                showToast(`🌊 Smoothed path · interior vertices averaged with neighbors`);
+              },
+            }] : []),
+            // Per-leg bearing list — print the bearing for every leg in
+            // sequence. Useful for following a route on foot/sea/air
+            // without the visual map.
+            ...(measureMode && measurePoints.length >= 3 ? [{
+              id: "measureBearingList" as const,
+              label: "🧭 List bearings for every leg (numbered, console)",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                const lines: string[] = [];
+                for (let i = 1; i < measurePoints.length; i++) {
+                  const a = measurePoints[i-1], b = measurePoints[i];
+                  const km = haversineKm(a.lat, a.lon, b.lat, b.lon);
+                  const bearing = bearingDeg(a.lat, a.lon, b.lat, b.lon);
+                  lines.push(`Leg ${i}: ${Math.round(bearing).toString().padStart(3, "0")}° ${compassDir(bearing)}  (${formatDistKm(km, unitsImperial)})`);
+                }
+                console.log(`🧭 Per-leg bearings (${lines.length} legs):\n${lines.join("\n")}`);
+                showToast(`🧭 Logged ${lines.length} bearings to console (open DevTools to read)`);
+              },
+            }] : []),
             // Save the active measure path with a name so it can be
             // restored / overlaid / shared later. Library lives in
             // localStorage so paths survive across sessions.
