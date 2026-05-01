@@ -9727,6 +9727,68 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: c.lat, lon: c.lon, altKm: 30 }));
               showToast(`✈ Random city: ${c.name}, ${c.country}`);
             }},
+            // ===== City browsing — uses curated MAJOR_CITIES dataset
+            // (~50 cities ordered by metro population).
+            { id: "citiesTopByPop", label: "👥 Show top 5 most populous cities (with metro pop)", group: "Tools", icon: Globe2, run: () => {
+              const top = [...MAJOR_CITIES].sort((a, b) => b.population - a.population).slice(0, 5);
+              const list = top.map(c => `${c.name} ${(c.population / 1_000_000).toFixed(1)}M`).join(" · ");
+              showToast(`👥 Top 5 by metro pop: ${list}`);
+            }},
+            { id: "citiesNearby", label: "🏙 Show top 5 closest major cities to current view", group: "Tools", icon: Globe2, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const ranked = MAJOR_CITIES
+                .map(city => ({ city, km: haversineKm(c.lat, c.lon, city.lat, city.lon) }))
+                .sort((a, b) => a.km - b.km)
+                .slice(0, 5);
+              const list = ranked.map(({ city, km }) => `${city.name} (${formatDistKm(km, unitsImperial)})`).join(" · ");
+              showToast(`🏙 Closest 5 cities: ${list}`);
+            }},
+            { id: "citiesByCountry", label: "📊 Major-city count by country (top 10)", group: "Tools", icon: Globe2, run: () => {
+              const counts = new Map<string, number>();
+              for (const c of MAJOR_CITIES) counts.set(c.country, (counts.get(c.country) ?? 0) + 1);
+              const sorted = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 10);
+              const list = sorted.map(([cc, n]) => `${cc}: ${n}`).join(" · ");
+              showToast(`📊 Top 10 by major-city count (${MAJOR_CITIES.length} total): ${list}`);
+            }},
+            { id: "citiesTotalPop", label: "🌍 Total metro population across all major cities", group: "Tools", icon: Globe2, run: () => {
+              const total = MAJOR_CITIES.reduce((s, c) => s + c.population, 0);
+              const max = MAJOR_CITIES.reduce((max, c) => c.population > max.population ? c : max);
+              const min = MAJOR_CITIES.reduce((min, c) => c.population < min.population ? c : min);
+              showToast(`🌍 ${MAJOR_CITIES.length} cities · ${(total / 1_000_000_000).toFixed(2)}B people total · biggest: ${max.name} (${(max.population / 1_000_000).toFixed(1)}M) · smallest: ${min.name} (${(min.population / 1_000_000).toFixed(1)}M)`);
+            }},
+            { id: "citiesPinAllByContinent", label: "🏙 Pin top city per continent (7 pins, 1 per continent)", group: "Tools", icon: BookmarkPlus, run: () => {
+              // Crude continent classification by lat/lon box (matches the
+              // continentOf helper used elsewhere)
+              const continentOf = (lat: number, lon: number): string => {
+                if (lat > 12 && lon < -30 && lon > -170) return "NA";
+                if (lat <= 12 && lat > -56 && lon < -30 && lon > -83) return "SA";
+                if (lat > 35 && lon > -10 && lon < 70) return "EU";
+                if (lat > -35 && lat < 37 && lon > -20 && lon < 53) return "AF";
+                if (lat > -10 && lat < 70 && lon >= 60 && lon < 180) return "AS";
+                if (lat < -10 && lon > 110 && lon < 180) return "OC";
+                if (lat < -55) return "AN";
+                return "OTHER";
+              };
+              const topByContinent = new Map<string, typeof MAJOR_CITIES[0]>();
+              for (const city of MAJOR_CITIES) {
+                const cont = continentOf(city.lat, city.lon);
+                const existing = topByContinent.get(cont);
+                if (!existing || city.population > existing.population) topByContinent.set(cont, city);
+              }
+              const stamp = Date.now();
+              const newPins: Pin[] = Array.from(topByContinent.entries())
+                .filter(([cont]) => cont !== "OTHER")
+                .map(([cont, city], i) => ({
+                  id: `pin-citycont-${cont}-${stamp}`,
+                  lat: city.lat, lon: city.lon,
+                  label: `🏙 ${city.name}, ${city.country} (${cont} largest, ${(city.population / 1_000_000).toFixed(1)}M)`,
+                  color: "#7cffb1",
+                  createdAt: stamp + i,
+                }));
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`🏙 Dropped pins for largest city per continent (${newPins.length} continents)`);
+            }},
             { id: "biggestQuake", label: "Fly to today's biggest earthquake", group: "Tools", icon: Sparkles, run: () => {
               if (earthquakes.length === 0) { showToast("Earthquake layer not loaded"); return; }
               const biggest = earthquakes.reduce((max, q) => q.mag > max.mag ? q : max);
