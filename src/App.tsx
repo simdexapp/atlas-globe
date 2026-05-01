@@ -4441,6 +4441,46 @@ function App() {
             // Cycle to the next theme (matches the T keyboard shortcut so
             // users discover it from the palette too)
             { id: "cycleTheme", label: "Cycle UI theme (next)", group: "View", icon: SunIcon, hint: "T", run: cycleTheme },
+            // ===== Share-to-platform commands =====
+            // Share to Twitter via web intent — opens twitter.com/intent/tweet
+            // pre-filled with a link to the current view.
+            { id: "shareTwitter", label: "🐦 Share current view via Twitter (X)", group: "Tools", icon: Share2, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const url = new URL(window.location.href);
+              url.hash = `#@${c.lat.toFixed(4)},${c.lon.toFixed(4)},${c.altKm.toFixed(1)}km`;
+              const text = `Exploring ${formatLat(c.lat)} ${formatLon(c.lon)} on Atlas`;
+              const intent = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url.toString())}`;
+              window.open(intent, "_blank", "noopener,noreferrer");
+              showToast("🐦 Opened Twitter share intent in new tab");
+            }},
+            // Share via email — opens user's mail client with prefilled body
+            { id: "shareEmail", label: "✉ Share current view via email", group: "Tools", icon: Share2, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const url = new URL(window.location.href);
+              url.hash = `#@${c.lat.toFixed(4)},${c.lon.toFixed(4)},${c.altKm.toFixed(1)}km`;
+              const subject = encodeURIComponent(`Atlas — ${formatLat(c.lat)} ${formatLon(c.lon)}`);
+              const body = encodeURIComponent(`Check out this view on Atlas:\n\n${url.toString()}\n\nCoordinates: ${c.lat.toFixed(4)}, ${c.lon.toFixed(4)}\nAltitude: ${c.altKm.toFixed(1)} km\n`);
+              window.location.href = `mailto:?subject=${subject}&body=${body}`;
+              showToast("✉ Opened email client with pre-filled message");
+            }},
+            // Copy as a Markdown link — for pasting into docs/notes/PRs
+            { id: "shareMarkdown", label: "📝 Copy current view as Markdown link", group: "Tools", icon: Share2, run: async () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const url = new URL(window.location.href);
+              url.hash = `#@${c.lat.toFixed(4)},${c.lon.toFixed(4)},${c.altKm.toFixed(1)}km`;
+              // Try to get a place name from cache (instant) or skip if not available
+              const data = await cachedReverseGeocode(c.lat, c.lon, 10);
+              const a = data?.address || {};
+              const name = a.city || a.town || a.village || a.county || a.state || a.country || `${formatLat(c.lat)} ${formatLon(c.lon)}`;
+              const md = `[${name}](${url.toString()})`;
+              navigator.clipboard?.writeText(md).then(
+                () => showToast(`📝 Copied: ${md.slice(0, 80)}…`),
+                () => showToast(`📝 ${md}`)
+              );
+            }},
             // Rich share: encode camera + active layers + theme into URL.
             // When opened, recipient lands on identical view configuration.
             { id: "shareViewRich", label: "📤 Copy RICH share link (camera + layers + theme)", group: "Tools", icon: Share2, run: () => copyShareWithView(true) },
