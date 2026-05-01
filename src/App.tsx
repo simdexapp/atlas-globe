@@ -11302,6 +11302,80 @@ function App() {
               const zoom = Math.max(2, Math.min(19, Math.round(20 - Math.log2(Math.max(0.5, c.altKm)))));
               window.open(`https://www.openstreetmap.org/#map=${zoom}/${c.lat.toFixed(5)}/${c.lon.toFixed(5)}`, "_blank", "noopener,noreferrer");
             }},
+            // ===== More clipboard formats — geohash, plus altitude in
+            // multiple units, CSV row, and a citation-style block.
+            { id: "copyGeohash", label: "🔢 Copy current view as Geohash (precision 8)", group: "Tools", icon: Share2, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              // Standard base32 geohash. Interleaves lat/lon bit ranges
+              // halving each step. Precision 8 = ~38m × ~19m cell.
+              const BASE32 = "0123456789bcdefghjkmnpqrstuvwxyz";
+              const precision = 8;
+              let lat = [-90, 90];
+              let lon = [-180, 180];
+              let bits = 0, ch = 0, even = true;
+              let geohash = "";
+              while (geohash.length < precision) {
+                if (even) {
+                  const mid = (lon[0] + lon[1]) / 2;
+                  if (c.lon >= mid) { ch = (ch << 1) | 1; lon[0] = mid; } else { ch = (ch << 1); lon[1] = mid; }
+                } else {
+                  const mid = (lat[0] + lat[1]) / 2;
+                  if (c.lat >= mid) { ch = (ch << 1) | 1; lat[0] = mid; } else { ch = (ch << 1); lat[1] = mid; }
+                }
+                even = !even;
+                if (++bits === 5) { geohash += BASE32[ch]; bits = 0; ch = 0; }
+              }
+              navigator.clipboard?.writeText(geohash).then(
+                () => showToast(`🔢 Geohash copied: ${geohash} (precision 8 ≈ 38m × 19m cell)`),
+                () => showToast(`🔢 Geohash: ${geohash}`)
+              );
+            }},
+            { id: "copyAllAltitudes", label: "📋 Copy current view altitude in km/mi/m/ft", group: "Tools", icon: Share2, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const km = c.altKm;
+              const mi = km / 1.609344;
+              const m = km * 1000;
+              const ft = m / 0.3048;
+              const text = `Altitude: ${km.toFixed(1)} km · ${mi.toFixed(1)} mi · ${m.toLocaleString()} m · ${ft.toLocaleString(undefined, { maximumFractionDigits: 0 })} ft`;
+              navigator.clipboard?.writeText(text).then(
+                () => showToast(`📋 ${text}`),
+                () => showToast(text)
+              );
+            }},
+            { id: "copyCsvRow", label: "📊 Copy current view as one CSV row (timestamp,lat,lon,alt)", group: "Tools", icon: Share2, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const ts = new Date().toISOString();
+              const csv = `${ts},${c.lat.toFixed(6)},${c.lon.toFixed(6)},${c.altKm.toFixed(2)}`;
+              navigator.clipboard?.writeText(csv).then(
+                () => showToast(`📊 Copied CSV row: ${csv}`),
+                () => showToast(csv)
+              );
+            }},
+            { id: "copyMarkdownRow", label: "📋 Copy current view as Markdown table row", group: "Tools", icon: Share2, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const ts = new Date().toISOString().slice(0, 19).replace("T", " ");
+              const md = `| ${ts} UTC | ${formatLat(c.lat)} | ${formatLon(c.lon)} | ${c.altKm.toFixed(1)} km |`;
+              navigator.clipboard?.writeText(md).then(
+                () => showToast(`📋 Markdown row copied`),
+                () => showToast(md)
+              );
+            }},
+            { id: "copyCitation", label: "📚 Copy current view as a citation block (BibTeX-like)", group: "Tools", icon: Share2, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const url = new URL(window.location.href);
+              url.hash = `#@${c.lat.toFixed(4)},${c.lon.toFixed(4)},${c.altKm.toFixed(1)}km`;
+              const ts = new Date().toISOString().slice(0, 10);
+              const citation = `@misc{atlas_${Date.now().toString(36)},\n  title  = {Atlas Globe view at ${formatLat(c.lat)} ${formatLon(c.lon)}},\n  author = {{Atlas Globe}},\n  year   = {${new Date().getUTCFullYear()}},\n  url    = {${url.toString()}},\n  note   = {Accessed ${ts}}\n}`;
+              navigator.clipboard?.writeText(citation).then(
+                () => showToast(`📚 BibTeX citation copied (${citation.length} chars)`),
+                () => showToast(`📚 ${citation.slice(0, 60)}…`)
+              );
+            }},
             { id: "localTime", label: "Show approximate local time at this view", group: "Tools", icon: Compass, run: () => {
               const c = cameraStateRef.current;
               if (!c) return;
