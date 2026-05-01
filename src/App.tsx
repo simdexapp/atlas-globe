@@ -5348,6 +5348,97 @@ function App() {
               setPins((prev) => [...prev, ...newPins]);
               showToast(`🕳 Dropped pins at Earth's 5 deepest ocean trenches`);
             }},
+            { id: "pinAncientWonders", label: "🏛 Drop pins for the 7 Ancient Wonders of the World", group: "Tools", icon: BookmarkPlus, run: () => {
+              const wonders = [
+                { name: "Great Pyramid of Giza, Egypt (still standing)", lat: 29.9792, lon:  31.1342 },
+                { name: "Hanging Gardens of Babylon, Iraq (legendary)", lat: 32.5424, lon:  44.4214 },
+                { name: "Statue of Zeus at Olympia, Greece",            lat: 37.6378, lon:  21.6300 },
+                { name: "Temple of Artemis at Ephesus, Turkey",         lat: 37.9498, lon:  27.3640 },
+                { name: "Mausoleum at Halicarnassus, Turkey",           lat: 37.0376, lon:  27.4239 },
+                { name: "Colossus of Rhodes, Greece",                   lat: 36.4515, lon:  28.2274 },
+                { name: "Lighthouse of Alexandria, Egypt",              lat: 31.2138, lon:  29.8856 },
+              ];
+              const stamp = Date.now();
+              const newPins: Pin[] = wonders.map((w, i) => ({
+                id: `pin-ancient-${i}-${stamp}`,
+                lat: w.lat, lon: w.lon, label: `🏛 ${w.name}`,
+                color: "#ffd66b", createdAt: stamp + i,
+              }));
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`🏛 Dropped pins for all 7 Ancient Wonders (only Giza pyramid still survives)`);
+            }},
+            { id: "pinMysteriousIslands", label: "🏝 Drop pins for 7 mysterious / remote islands", group: "Tools", icon: BookmarkPlus, run: () => {
+              const islands = [
+                { name: "Easter Island (Rapa Nui), Chile",                lat: -27.1212, lon: -109.3676 },
+                { name: "North Sentinel Island (uncontacted Sentinelese)", lat: 11.5500, lon:   92.2400 },
+                { name: "Tristan da Cunha (most remote inhabited island)", lat: -37.1052, lon:  -12.2777 },
+                { name: "Socotra (alien-flora island), Yemen",            lat: 12.4634, lon:   53.8237 },
+                { name: "Bouvet Island (most remote uninhabited)",         lat: -54.4233, lon:    3.4131 },
+                { name: "Surtsey, Iceland (formed by volcano in 1963)",    lat: 63.3033, lon:  -20.6042 },
+                { name: "Pitcairn Island (Bounty mutineers' descendants)", lat: -25.0667, lon: -130.1000 },
+              ];
+              const stamp = Date.now();
+              const newPins: Pin[] = islands.map((isl, i) => ({
+                id: `pin-island-${i}-${stamp}`,
+                lat: isl.lat, lon: isl.lon, label: `🏝 ${isl.name}`,
+                color: "#7cffb1", createdAt: stamp + i,
+              }));
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`🏝 Dropped pins for 7 of Earth's most mysterious or remote islands`);
+            }},
+            { id: "pinTallestWaterfalls", label: "💦 Drop pins for the 5 tallest waterfalls on Earth", group: "Tools", icon: BookmarkPlus, run: () => {
+              const falls = [
+                { name: "Angel Falls (979m), Venezuela — tallest in the world",    lat:  5.9700, lon: -62.5358 },
+                { name: "Tugela Falls (948m), South Africa",                       lat: -28.7506, lon:  28.8867 },
+                { name: "Tres Hermanas (914m), Peru",                              lat: -10.0833, lon: -73.9333 },
+                { name: "Olo'upena Falls (900m), Hawaii",                          lat: 21.1567, lon: -156.8222 },
+                { name: "Yumbilla Falls (896m), Peru",                             lat:  -5.9361, lon: -77.7894 },
+              ];
+              const stamp = Date.now();
+              const newPins: Pin[] = falls.map((f, i) => ({
+                id: `pin-falls-${i}-${stamp}`,
+                lat: f.lat, lon: f.lon, label: `💦 ${f.name}`,
+                color: "#5cb5ff", createdAt: stamp + i,
+              }));
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`💦 Dropped pins for Earth's 5 tallest waterfalls — none in North America (the Yosemite & Niagara legends are much shorter)`);
+            }},
+            { id: "pinLargestDeserts", label: "🏜 Drop pins for the 5 largest deserts on Earth", group: "Tools", icon: BookmarkPlus, run: () => {
+              const deserts = [
+                { name: "Antarctic Desert (14.2M km², coldest desert)",  lat: -82.000, lon:    0.000 },
+                { name: "Arctic Desert (13.9M km²)",                     lat:  78.000, lon:  -45.000 },
+                { name: "Sahara (9.2M km², largest hot desert)",         lat:  23.416, lon:   25.663 },
+                { name: "Arabian Desert (2.3M km²)",                     lat:  23.000, lon:   46.000 },
+                { name: "Gobi Desert (1.3M km²)",                        lat:  42.795, lon:  105.032 },
+              ];
+              const stamp = Date.now();
+              const newPins: Pin[] = deserts.map((d, i) => ({
+                id: `pin-desert-${i}-${stamp}`,
+                lat: d.lat, lon: d.lon, label: `🏜 ${d.name}`,
+                color: "#ff8a4d", createdAt: stamp + i,
+              }));
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`🏜 Dropped pins for Earth's 5 largest deserts — surprisingly, the polar deserts win on size`);
+            }},
+            { id: "pinOldestCities", label: "🏯 Drop pins for 7 of the world's oldest continuously-inhabited cities", group: "Tools", icon: BookmarkPlus, run: () => {
+              const cities = [
+                { name: "Damascus, Syria (~9000 BCE)",         lat: 33.5138, lon:  36.2765 },
+                { name: "Jericho, Palestine (~9000 BCE)",      lat: 31.8667, lon:  35.4500 },
+                { name: "Aleppo, Syria (~6000 BCE)",           lat: 36.2021, lon:  37.1343 },
+                { name: "Byblos, Lebanon (~5000 BCE)",         lat: 34.1208, lon:  35.6481 },
+                { name: "Athens, Greece (~5000 BCE)",          lat: 37.9838, lon:  23.7275 },
+                { name: "Plovdiv, Bulgaria (~4000 BCE)",       lat: 42.1354, lon:  24.7453 },
+                { name: "Varanasi, India (~3000 BCE)",         lat: 25.3176, lon:  82.9739 },
+              ];
+              const stamp = Date.now();
+              const newPins: Pin[] = cities.map((c, i) => ({
+                id: `pin-oldcity-${i}-${stamp}`,
+                lat: c.lat, lon: c.lon, label: `🏯 ${c.name}`,
+                color: "#a8a8ff", createdAt: stamp + i,
+              }));
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`🏯 Dropped pins for 7 cities humans have lived in continuously for 5000+ years`);
+            }},
             // Drop pins at all preset bookmarks — bulk conversion
             ...(bookmarks.length >= 5 ? [{
               id: "bookmarksToPins" as const,
