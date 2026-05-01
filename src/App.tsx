@@ -10482,6 +10482,145 @@ ${wpts}
                 showToast(`📍 ${nearby.length}/${pins.length} pins within 200km · ${list}${more}`);
               },
             }] : []),
+            // ===== Pin analytics — duplicates, outliers, clusters =====
+            // Duplicate detection: pins within 250m of each other are
+            // probably the same place tagged twice (e.g. accidental
+            // double-click). Surface count + label list so the user can
+            // decide whether to merge.
+            ...(pins.length >= 2 ? [{
+              id: "pinFindDuplicates" as const,
+              label: "🔍 Find duplicate pins (within 250m of each other)",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const dupes: Array<[Pin, Pin, number]> = [];
+                for (let i = 0; i < pins.length; i++) {
+                  for (let j = i + 1; j < pins.length; j++) {
+                    const km = haversineKm(pins[i].lat, pins[i].lon, pins[j].lat, pins[j].lon);
+                    if (km < 0.25) dupes.push([pins[i], pins[j], km]);
+                  }
+                }
+                if (dupes.length === 0) { showToast(`✓ No duplicate pins found among ${pins.length}`); return; }
+                const list = dupes.slice(0, 3).map(([a, b, km]) => `"${a.label}"↔"${b.label}" (${(km * 1000).toFixed(0)}m)`).join(" · ");
+                const more = dupes.length > 3 ? ` +${dupes.length - 3} more pairs` : "";
+                showToast(`🔍 Found ${dupes.length} duplicate pair${dupes.length === 1 ? "" : "s"}: ${list}${more}`);
+              },
+            }] : []),
+            // Auto-merge: keep the OLDER pin in each duplicate pair, drop
+            // the newer one. Older usually means "first time you marked
+            // this place" — the canonical one.
+            ...(pins.length >= 2 ? [{
+              id: "pinMergeDuplicates" as const,
+              label: "🧹 Merge duplicate pins (keep oldest in each pair, drop newer)",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const toDelete = new Set<string>();
+                for (let i = 0; i < pins.length; i++) {
+                  for (let j = i + 1; j < pins.length; j++) {
+                    const km = haversineKm(pins[i].lat, pins[i].lon, pins[j].lat, pins[j].lon);
+                    if (km < 0.25) {
+                      // Drop the newer one in the pair
+                      const [older, newer] = pins[i].createdAt <= pins[j].createdAt ? [pins[i], pins[j]] : [pins[j], pins[i]];
+                      void older;
+                      toDelete.add(newer.id);
+                    }
+                  }
+                }
+                if (toDelete.size === 0) { showToast(`✓ No duplicate pins to merge`); return; }
+                if (!window.confirm(`Merge by deleting ${toDelete.size} newer pin${toDelete.size === 1 ? "" : "s"}? Older pin in each duplicate pair is kept.`)) return;
+                setPins((prev) => prev.filter(p => !toDelete.has(p.id)));
+                showToast(`🧹 Merged ${toDelete.size} duplicate${toDelete.size === 1 ? "" : "s"} · ${pins.length - toDelete.size} pin${(pins.length - toDelete.size) === 1 ? "" : "s"} remain`);
+              },
+            }] : []),
+            // Outlier finder: pins furthest from the centroid of the set.
+            // Useful for spotting accidental drops on the wrong continent.
+            ...(pins.length >= 4 ? [{
+              id: "pinFindOutliers" as const,
+              label: "📍 Find outlier pins (furthest from the cluster centroid)",
+              group: "Tools" as const,
+              icon: Compass,
+              run: () => {
+                // Spherical centroid via 3D vector mean
+                let x = 0, y = 0, z = 0;
+                for (const p of pins) {
+                  const phi = p.lat * Math.PI / 180;
+                  const lam = p.lon * Math.PI / 180;
+                  x += Math.cos(phi) * Math.cos(lam);
+                  y += Math.cos(phi) * Math.sin(lam);
+                  z += Math.sin(phi);
+                }
+                x /= pins.length; y /= pins.length; z /= pins.length;
+                const cLat = Math.atan2(z, Math.sqrt(x*x + y*y)) * 180 / Math.PI;
+                const cLon = Math.atan2(y, x) * 180 / Math.PI;
+                const ranked = pins
+                  .map(p => ({ p, km: haversineKm(p.lat, p.lon, cLat, cLon) }))
+                  .sort((a, b) => b.km - a.km)
+                  .slice(0, 3);
+                const list = ranked.map(({ p, km }) => `"${p.label}" (${formatDistKm(km, unitsImperial)})`).join(" · ");
+                showToast(`📍 Top 3 outliers from centroid (${formatLat(cLat)} ${formatLon(cLon)}): ${list}`);
+              },
+            }] : []),
+            // Cluster report: groups of 3+ pins within 50km of each other.
+            // Helps the user see where their pin density is concentrated.
+            ...(pins.length >= 3 ? [{
+              id: "pinClusterReport" as const,
+              label: "🗂 Cluster report — groups of 3+ pins within 50km",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                // Greedy clustering: start with any pin, gather all others
+                // within 50km, mark them, repeat. Picks larger clusters
+                // first so reported groups are non-overlapping.
+                const visited = new Set<string>();
+                const clusters: Pin[][] = [];
+                for (const seed of pins) {
+                  if (visited.has(seed.id)) continue;
+                  const group = pins.filter(p => !visited.has(p.id) && haversineKm(seed.lat, seed.lon, p.lat, p.lon) < 50);
+                  if (group.length >= 3) {
+                    group.forEach(p => visited.add(p.id));
+                    clusters.push(group);
+                  }
+                }
+                if (clusters.length === 0) { showToast(`No clusters of 3+ pins within 50km`); return; }
+                clusters.sort((a, b) => b.length - a.length);
+                const top = clusters.slice(0, 3).map(g => `${g.length} pins near "${g[0].label}"`).join(" · ");
+                const more = clusters.length > 3 ? ` +${clusters.length - 3} more` : "";
+                showToast(`🗂 ${clusters.length} cluster${clusters.length === 1 ? "" : "s"}: ${top}${more}`);
+              },
+            }] : []),
+            // Drop a pin at the centroid of all existing pins. Sometimes
+            // the centroid is a meaningful landmark (e.g. centroid of all
+            // your travel pins = your "geographic center of life").
+            ...(pins.length >= 3 ? [{
+              id: "pinDropCentroid" as const,
+              label: `🎯 Drop pin at centroid of all ${pins.length} existing pins`,
+              group: "Tools" as const,
+              icon: MapPin,
+              run: () => {
+                let x = 0, y = 0, z = 0;
+                for (const p of pins) {
+                  const phi = p.lat * Math.PI / 180;
+                  const lam = p.lon * Math.PI / 180;
+                  x += Math.cos(phi) * Math.cos(lam);
+                  y += Math.cos(phi) * Math.sin(lam);
+                  z += Math.sin(phi);
+                }
+                x /= pins.length; y /= pins.length; z /= pins.length;
+                const lat = Math.atan2(z, Math.sqrt(x*x + y*y)) * 180 / Math.PI;
+                const lon = Math.atan2(y, x) * 180 / Math.PI;
+                const newPin: Pin = {
+                  id: `pin-centroid-${Date.now()}`,
+                  lat, lon,
+                  label: `Centroid of ${pins.length} pins`,
+                  color: "#ffd66b",
+                  createdAt: Date.now(),
+                };
+                setPins((prev) => [...prev, newPin]);
+                setFlyTo((c) => ({ id: c.id + 1, lat, lon, altKm: 5000 }));
+                showToast(`🎯 Dropped centroid pin · ${formatLat(lat)} ${formatLon(lon)}`);
+              },
+            }] : []),
             // Pin import from GeoJSON file
             { id: "pinImport", label: "Import pins from GeoJSON file", group: "Tools", icon: BookmarkPlus, run: () => {
               const input = document.createElement("input");
