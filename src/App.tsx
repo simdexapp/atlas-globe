@@ -193,6 +193,9 @@ type LayerVisibility = {
   coordinates: boolean;
   // Quick Layer Toggles widget — 6-button remote for common overlays.
   quickToggles: boolean;
+  // Nearby aircraft widget — top 5 closest aircraft to current view
+  // with callsign + altitude + bearing. Updates as camera moves.
+  nearbyAircraft: boolean;
 };
 
 type GlobeSettings = {
@@ -529,6 +532,7 @@ const defaultLayers: LayerVisibility = {
   distanceAnchors: false,
   coordinates: false,
   quickToggles: false,
+  nearbyAircraft: false,
   // 3D OSM Buildings tileset is heavy and renders with edge outlines
   // that disable imagery draping underneath, painting the screen with
   // dark olive boxes at low altitudes (the user's tear repro). Off by
@@ -4511,6 +4515,7 @@ function App() {
             { id: "toggleDistanceAnchors", label: layers.distanceAnchors ? "Hide Distance to anchor cities widget" : "📐 Show Distance to anchor cities widget (NYC/London/Tokyo/Sydney/Cape Town)", group: "Widgets", icon: Compass, run: () => toggleLayer("distanceAnchors") },
             { id: "toggleCoordinates", label: layers.coordinates ? "Hide Coordinates widget" : "📐 Show Coordinates widget (DD/DMS/Maidenhead/Mercator/Antipode)", group: "Widgets", icon: Compass, run: () => toggleLayer("coordinates") },
             { id: "toggleQuickToggles", label: layers.quickToggles ? "Hide Quick layer toggles widget" : "⚡ Show Quick layer toggles widget (6 common layer buttons)", group: "Widgets", icon: Layers, run: () => toggleLayer("quickToggles") },
+            { id: "toggleNearbyAircraft", label: layers.nearbyAircraft ? "Hide Nearby aircraft widget" : "✈ Show Nearby aircraft widget (top 5 closest to view)", group: "Widgets", icon: Plane, run: () => toggleLayer("nearbyAircraft") },
             // Show a random tip from the curated TIPS list — useful when
             // discovering features for the first time, or as a periodic
             // reminder of what's available.
@@ -10566,6 +10571,22 @@ ${wpts}
         </Draggable>
       )}
 
+      {layers.nearbyAircraft && aircraftSnapshot && (
+        <Draggable id="nearbyAircraft" customizeMode={customizeUiMode} position={widgetPositions.nearbyAircraft} onMove={setWidgetPosition}>
+          <NearbyAircraftWidget
+            aircraft={aircraftSnapshot.aircraft}
+            cameraLat={cameraState.lat}
+            cameraLon={cameraState.lon}
+            unitsImperial={unitsImperial}
+            onSelect={(icao) => {
+              setSelectedAircraftId(icao);
+              const a = aircraftSnapshot.aircraft.find(x => x.icao24 === icao);
+              if (a) setFlyTo((c) => ({ id: c.id + 1, lat: a.lat, lon: a.lon, altKm: 50 }));
+            }}
+          />
+        </Draggable>
+      )}
+
       {recordingState === "recording" && (
         <div className="atlasRecordIndicator" role="status">
           <span className="atlasRecordDot" /> REC {formatSeconds(recordingSeconds)}
@@ -13476,6 +13497,66 @@ function LiveStatsWidget({
         </div>
       </div>
       <div className="atlasLiveStatsFoot">UTC {utcHM} · {Math.abs(cameraLat).toFixed(1)}°{cameraLat >= 0 ? "N" : "S"} {Math.abs(cameraLon).toFixed(1)}°{cameraLon >= 0 ? "E" : "W"}</div>
+    </div>
+  );
+}
+
+// Nearby aircraft widget — top 5 aircraft closest to the current camera
+// position, with callsign + altitude + bearing. Each row is clickable to
+// select the aircraft (open the inspector card + fly there). Recomputes
+// whenever camera moves OR aircraft snapshot updates.
+function NearbyAircraftWidget({
+  aircraft,
+  cameraLat,
+  cameraLon,
+  unitsImperial,
+  onSelect,
+}: {
+  aircraft: Aircraft[];
+  cameraLat: number;
+  cameraLon: number;
+  unitsImperial: boolean;
+  onSelect: (icao24: string) => void;
+}) {
+  const nearby = useMemo(() => {
+    if (aircraft.length === 0) return [];
+    return aircraft
+      .map(a => ({ a, km: haversineKm(cameraLat, cameraLon, a.lat, a.lon) }))
+      .sort((x, y) => x.km - y.km)
+      .slice(0, 5);
+  }, [aircraft, cameraLat, cameraLon]);
+  return (
+    <div className="atlasNearbyAircraftWidget" role="region" aria-label="Top 5 aircraft closest to current view">
+      <div className="atlasNearbyAircraftHead">
+        <Plane size={11} />
+        <span>Nearby aircraft</span>
+        {nearby.length > 0 && (
+          <span className="atlasNearbyAircraftCount">{aircraft.length.toLocaleString()} airborne</span>
+        )}
+      </div>
+      {nearby.length === 0 ? (
+        <div className="atlasNearbyAircraftEmpty">No aircraft loaded</div>
+      ) : (
+        <div className="atlasNearbyAircraftList">
+          {nearby.map(({ a, km }) => {
+            const altFt = Math.round(a.altitudeM / 0.3048);
+            const bearing = bearingDeg(cameraLat, cameraLon, a.lat, a.lon);
+            return (
+              <button
+                key={a.icao24}
+                type="button"
+                className="atlasNearbyAircraftRow"
+                onClick={() => onSelect(a.icao24)}
+                title={`Click to select ${a.callsign?.trim() || a.icao24}`}
+              >
+                <span className="atlasNearbyAircraftCs">{(a.callsign || a.icao24).trim()}</span>
+                <span className="atlasNearbyAircraftAlt">{altFt.toLocaleString()} ft</span>
+                <span className="atlasNearbyAircraftDist">{formatDistKm(km, unitsImperial)} {compassDir(bearing)}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
