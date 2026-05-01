@@ -3323,6 +3323,16 @@ function App() {
         .map(([k]) => k);
       if (onLayers.length > 0) params.set("layers", onLayers.join(","));
       if (uiTheme !== "dark") params.set("theme", uiTheme);
+      // Selected pin — encode as p=<id>:<lat>:<lon>:<label>:<color>
+      // so the recipient lands with the same pin selected even if
+      // they don't have it locally. Includes the metadata so the pin
+      // can be re-created if missing.
+      if (selectedPin) {
+        const p = pins.find(x => x.id === selectedPin);
+        if (p) {
+          params.set("pin", `${p.id}:${p.lat.toFixed(4)}:${p.lon.toFixed(4)}:${encodeURIComponent(p.label).slice(0, 60)}:${encodeURIComponent(p.color)}`);
+        }
+      }
     }
     const url = `${window.location.origin}${window.location.pathname}#view=${params.toString()}`;
     try {
@@ -3363,6 +3373,30 @@ function App() {
       const themeParam = params.get("theme");
       if (themeParam && ["dark","light","oled","cyber","solar","mono"].includes(themeParam)) {
         setUiTheme(themeParam as typeof uiTheme);
+      }
+      // Restore the shared pin if encoded — adds it to local pin list
+      // (if not already present by id) and selects it.
+      const pinParam = params.get("pin");
+      if (pinParam) {
+        const parts = pinParam.split(":");
+        if (parts.length >= 5) {
+          const [pid, latStr, lonStr, labelEnc, colorEnc] = parts;
+          const pLat = parseFloat(latStr);
+          const pLon = parseFloat(lonStr);
+          if (Number.isFinite(pLat) && Number.isFinite(pLon)) {
+            const sharedPin: Pin = {
+              id: pid,
+              lat: pLat,
+              lon: pLon,
+              label: decodeURIComponent(labelEnc) || "Shared pin",
+              color: decodeURIComponent(colorEnc) || "#5cb5ff",
+              createdAt: Date.now(),
+            };
+            setPins((prev) => prev.some(p => p.id === pid) ? prev : [...prev, sharedPin]);
+            setSelectedPin(pid);
+            showToast(`📍 Shared pin "${sharedPin.label}" added & selected`);
+          }
+        }
       }
     } catch {/* ignore */}
     // eslint-disable-next-line react-hooks/exhaustive-deps
