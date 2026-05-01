@@ -7648,6 +7648,67 @@ function App() {
               const title = `${formatLat(c.lat)} ${formatLon(c.lon)} — Atlas Globe`;
               window.open(`https://www.reddit.com/r/MapPorn/submit?url=${encodeURIComponent(url.toString())}&title=${encodeURIComponent(title)}`, "_blank", "noopener,noreferrer");
             }},
+            // ===== Additional social-share targets — open the platform's
+            // native share intent with a pre-filled URL + title. Each
+            // opens in a new tab; we never POST or upload anything.
+            { id: "shareWhatsApp", label: "💬 Share current view via WhatsApp", group: "Tools", icon: Share2, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const url = new URL(window.location.href);
+              url.hash = `#@${c.lat.toFixed(4)},${c.lon.toFixed(4)},${c.altKm.toFixed(1)}km`;
+              const text = `Check out this view on Atlas Globe: ${formatLat(c.lat)} ${formatLon(c.lon)} — ${url.toString()}`;
+              window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
+            }},
+            { id: "shareTelegram", label: "✈ Share current view via Telegram", group: "Tools", icon: Share2, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const url = new URL(window.location.href);
+              url.hash = `#@${c.lat.toFixed(4)},${c.lon.toFixed(4)},${c.altKm.toFixed(1)}km`;
+              const text = `${formatLat(c.lat)} ${formatLon(c.lon)} — Atlas Globe`;
+              window.open(`https://t.me/share/url?url=${encodeURIComponent(url.toString())}&text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
+            }},
+            { id: "shareLinkedIn", label: "💼 Share current view via LinkedIn", group: "Tools", icon: Share2, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const url = new URL(window.location.href);
+              url.hash = `#@${c.lat.toFixed(4)},${c.lon.toFixed(4)},${c.altKm.toFixed(1)}km`;
+              window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url.toString())}`, "_blank", "noopener,noreferrer");
+            }},
+            { id: "shareDiscordMarkdown", label: "🎮 Copy Discord/Slack-friendly markdown link", group: "Tools", icon: Share2, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const url = new URL(window.location.href);
+              url.hash = `#@${c.lat.toFixed(4)},${c.lon.toFixed(4)},${c.altKm.toFixed(1)}km`;
+              // Discord and Slack both render [title](url) markdown into
+              // a clickable preview. Wrap in <> to suppress unfurl on
+              // platforms that respect that convention (Discord does).
+              const md = `[${formatLat(c.lat)} ${formatLon(c.lon)} on Atlas Globe](<${url.toString()}>)`;
+              navigator.clipboard?.writeText(md).then(
+                () => showToast(`🎮 Markdown link copied — paste into Discord/Slack`),
+                () => showToast(md.length > 80 ? md.slice(0, 77) + "…" : md)
+              );
+            }},
+            { id: "shareNativeApi", label: "📱 Share via OS share sheet (mobile / Mac / Windows 11)", group: "Tools", icon: Share2, run: async () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const url = new URL(window.location.href);
+              url.hash = `#@${c.lat.toFixed(4)},${c.lon.toFixed(4)},${c.altKm.toFixed(1)}km`;
+              if (typeof navigator.share === "function") {
+                try {
+                  await navigator.share({
+                    title: `Atlas Globe — ${formatLat(c.lat)} ${formatLon(c.lon)}`,
+                    text: `View on Atlas Globe`,
+                    url: url.toString(),
+                  });
+                } catch { /* user cancelled */ }
+              } else {
+                // Fallback for desktop browsers without Web Share API
+                navigator.clipboard?.writeText(url.toString()).then(
+                  () => showToast(`📱 Share API not available — link copied instead`),
+                  () => showToast(`📱 Share API not available · ${url.toString()}`)
+                );
+              }
+            }},
             // 📝 Copy current view as a markdown snippet — handy for
             // blog posts, daily notes, journal entries, study notes.
             // Async because it embeds Open-Meteo current weather.
