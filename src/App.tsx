@@ -12176,7 +12176,20 @@ ${wpts}
   );
 }
 
+// Extracts a single-char keyboard hint from a label like "Search (F)" so
+// screen readers can announce the shortcut via aria-keyshortcuts. Returns
+// undefined when the label has no trailing "(X)" pattern.
+function extractShortcutHint(label: string): string | undefined {
+  const m = label.match(/\(([A-Za-z0-9?/])\)\s*$/);
+  return m ? m[1].toUpperCase() : undefined;
+}
+
 function IconAction({ icon: Icon, label, onClick, active }: { icon: IconComponent; label: string; onClick: () => void; active?: boolean }) {
+  // When `active` is provided, this button is being used as a toggle —
+  // announce its on/off state via aria-pressed. Otherwise it's a plain
+  // action button and aria-pressed should be omitted entirely.
+  const ariaPressed = typeof active === "boolean" ? active : undefined;
+  const shortcut = extractShortcutHint(label);
   return (
     <button
       type="button"
@@ -12184,6 +12197,8 @@ function IconAction({ icon: Icon, label, onClick, active }: { icon: IconComponen
       onClick={onClick}
       title={label}
       aria-label={label}
+      aria-pressed={ariaPressed}
+      aria-keyshortcuts={shortcut}
     >
       <Icon size={15} />
     </button>
@@ -12191,6 +12206,12 @@ function IconAction({ icon: Icon, label, onClick, active }: { icon: IconComponen
 }
 
 function RailButton({ icon: Icon, label, onClick, active }: { icon: IconComponent; label: string; onClick?: () => void; active?: boolean }) {
+  // Rail buttons that select a tab/panel report their state as aria-pressed
+  // (toggle semantic) — not aria-current, since pressing them again often
+  // toggles the panel off too. The DOM order isn't a navigation list so
+  // aria-current="page" would be misleading.
+  const ariaPressed = typeof active === "boolean" ? active : undefined;
+  const shortcut = extractShortcutHint(label);
   return (
     <button
       type="button"
@@ -12198,6 +12219,8 @@ function RailButton({ icon: Icon, label, onClick, active }: { icon: IconComponen
       onClick={onClick}
       title={label}
       aria-label={label}
+      aria-pressed={ariaPressed}
+      aria-keyshortcuts={shortcut}
     >
       <Icon size={17} />
     </button>
@@ -13133,11 +13156,15 @@ function CommandPalette({
 
   // Compute global linear index for highlighting
   let runningIndex = 0;
+  // Stable id of the active row — needed by aria-activedescendant on the
+  // input so screen readers announce focus changes without DOM focus
+  // actually leaving the input field.
+  const activeRowId = filtered[activeIndex] ? `atlasCmdRow-${filtered[activeIndex].id}` : undefined;
   return (
     <div className="atlasModalShade" onClick={onClose} role="dialog" aria-modal="true" aria-label="Command palette">
       <div className="atlasCmdPalette" ref={dialogRef} onClick={(e) => e.stopPropagation()}>
         <div className="atlasCmdHead">
-          <Search size={16} />
+          <Search size={16} aria-hidden="true" />
           <input
             ref={inputRef}
             type="text"
@@ -13145,18 +13172,25 @@ function CommandPalette({
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKey}
             placeholder="Type a command, layer, or setting…"
-            aria-label="Command palette"
+            aria-label="Command palette — type to search, arrows to navigate, Enter to select"
+            // Combobox pattern: input controls a listbox whose currently-
+            // highlighted option is announced via aria-activedescendant.
+            role="combobox"
+            aria-expanded={filtered.length > 0}
+            aria-controls="atlasCmdListbox"
+            aria-autocomplete="list"
+            aria-activedescendant={activeRowId}
           />
-          <kbd>ESC</kbd>
+          <kbd aria-hidden="true">ESC</kbd>
         </div>
-        <div className="atlasCmdBody">
+        <div className="atlasCmdBody" id="atlasCmdListbox" role="listbox" aria-label="Commands">
           {filtered.length === 0 ? (
-            <div className="atlasCmdEmpty">No matches for "{query}"</div>
+            <div className="atlasCmdEmpty" role="status" aria-live="polite">No matches for "{query}"</div>
           ) : (
             <>
               {grouped.map(([group, list]) => (
-                <div key={group} className="atlasCmdGroup">
-                  <div className="atlasCmdGroupTitle">{group}</div>
+                <div key={group} className="atlasCmdGroup" role="group" aria-label={group}>
+                  <div className="atlasCmdGroupTitle" aria-hidden="true">{group}</div>
                   {list.map((it) => {
                     const idx = runningIndex++;
                     const isActive = idx === activeIndex;
@@ -13164,7 +13198,10 @@ function CommandPalette({
                     return (
                       <button
                         key={it.id}
+                        id={`atlasCmdRow-${it.id}`}
                         type="button"
+                        role="option"
+                        aria-selected={isActive}
                         className={isActive ? "atlasCmdItem active" : "atlasCmdItem"}
                         // aria-current marks the keyboard-highlighted row so
                         // screen readers announce it as the next-Enter target.
@@ -13172,23 +13209,23 @@ function CommandPalette({
                         onMouseEnter={() => setActiveIndex(idx)}
                         onClick={() => { it.run(); onClose(); }}
                       >
-                        <Icon size={14} />
+                        <Icon size={14} aria-hidden="true" />
                         <span>{it.label}</span>
-                        {it.hint && <kbd>{it.hint}</kbd>}
+                        {it.hint && <kbd aria-hidden="true">{it.hint}</kbd>}
                       </button>
                     );
                   })}
                 </div>
               ))}
               {showMoreHint && (
-                <div className="atlasCmdEmpty" style={{ opacity: 0.55, fontSize: "12px", padding: "8px 16px" }}>
+                <div className="atlasCmdEmpty" role="status" style={{ opacity: 0.55, fontSize: "12px", padding: "8px 16px" }}>
                   + {totalCommands - VISIBLE_NO_QUERY} more commands · type to search any city, airport, country, landmark…
                 </div>
               )}
             </>
           )}
         </div>
-        <div className="atlasCmdFoot">
+        <div className="atlasCmdFoot" aria-hidden="true">
           <span><kbd>↑↓</kbd> navigate</span>
           <span><kbd>↵</kbd> select</span>
           <span><kbd>ESC</kbd> close</span>
@@ -13257,32 +13294,38 @@ function SearchModal({
           {searching && <span className="atlasSearchSpinner" aria-hidden />}
           <button type="button" className="atlasIconBtn" onClick={onClose} aria-label="Close"><X size={14} /></button>
         </div>
-        <ul className="atlasSearchResults">
+        {/* role=listbox + aria-activedescendant pattern (set on the input
+            above) — screen readers announce the highlighted option as the
+            user arrows through results without moving DOM focus off the
+            input. Each <button> is a role=option with a stable id. */}
+        <ul className="atlasSearchResults" role="listbox" aria-label="Search results">
           {!query.trim() && history.length > 0 && (
             <>
-              <li className="atlasSearchEmpty" style={{ textAlign: "left", padding: "8px 12px", color: "var(--gray-9)", fontSize: "10.5px", textTransform: "uppercase", letterSpacing: "0.06em" }}>Recent searches</li>
+              <li className="atlasSearchEmpty" role="presentation" style={{ textAlign: "left", padding: "8px 12px", color: "var(--gray-9)", fontSize: "10.5px", textTransform: "uppercase", letterSpacing: "0.06em" }}>Recent searches</li>
               {history.map((h) => (
-                <li key={`h-${h}`}>
-                  <button type="button" onClick={() => onQuery(h)}>
-                    <Search size={12} />
+                <li key={`h-${h}`} role="presentation">
+                  <button type="button" onClick={() => onQuery(h)} aria-label={`Search again: ${h}`}>
+                    <Search size={12} aria-hidden="true" />
                     <div><strong>{h}</strong><span style={{ opacity: 0.6 }}>tap to search again</span></div>
                   </button>
                 </li>
               ))}
             </>
           )}
-          {results.length === 0 && !searching && query.trim() && <li className="atlasSearchEmpty">{query.trim().length < 3 ? "Type at least 3 characters…" : "No matches."}</li>}
+          {results.length === 0 && !searching && query.trim() && <li className="atlasSearchEmpty" role="status" aria-live="polite">{query.trim().length < 3 ? "Type at least 3 characters…" : "No matches."}</li>}
           {results.map((r, i) => (
-            <li key={r.id}>
+            <li key={r.id} role="presentation">
               <button
                 id={`search-r-${r.id}`}
                 type="button"
+                role="option"
+                aria-selected={i === activeIdx}
                 className={i === activeIdx ? "active" : undefined}
                 aria-current={i === activeIdx ? "true" : undefined}
                 onClick={() => onSelect(r)}
                 onMouseEnter={() => setActiveIdx(i)}
               >
-                <Navigation size={12} />
+                <Navigation size={12} aria-hidden="true" />
                 <div>
                   <strong>{r.name}</strong>
                   <span>{formatLat(r.lat)}, {formatLon(r.lon)}</span>
