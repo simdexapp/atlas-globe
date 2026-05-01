@@ -5439,6 +5439,87 @@ function App() {
               setPins((prev) => [...prev, ...newPins]);
               showToast(`🏯 Dropped pins for 7 cities humans have lived in continuously for 5000+ years`);
             }},
+            { id: "pinSpaceLaunchSites", label: "🚀 Drop pins for the 7 major active space launch sites", group: "Tools", icon: BookmarkPlus, run: () => {
+              const sites = [
+                { name: "Cape Canaveral / KSC, USA",                lat: 28.5729, lon: -80.6490 },
+                { name: "Baikonur Cosmodrome, Kazakhstan",          lat: 45.9646, lon:  63.3052 },
+                { name: "Vostochny Cosmodrome, Russia",             lat: 51.8842, lon: 128.3336 },
+                { name: "Vandenberg SFB, USA (polar orbits)",       lat: 34.7420, lon: -120.5724 },
+                { name: "Wenchang, China (heavy launches)",         lat: 19.6144, lon: 110.9525 },
+                { name: "Tanegashima, Japan",                       lat: 30.4007, lon: 130.9678 },
+                { name: "Kourou (CSG), French Guiana — Ariane",     lat:  5.2389, lon: -52.7681 },
+              ];
+              const stamp = Date.now();
+              const newPins: Pin[] = sites.map((s, i) => ({
+                id: `pin-launch-${i}-${stamp}`,
+                lat: s.lat, lon: s.lon, label: `🚀 ${s.name}`,
+                color: "#ff7be0", createdAt: stamp + i,
+              }));
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`🚀 Dropped pins for 7 major active orbital launch sites`);
+            }},
+            { id: "pinObservatories", label: "🔭 Drop pins for the 7 major astronomical observatories", group: "Tools", icon: BookmarkPlus, run: () => {
+              const obs = [
+                { name: "Mauna Kea Observatories, Hawaii (4205m)",       lat:  19.8208, lon: -155.4681 },
+                { name: "ALMA, Atacama, Chile (5058m, world's highest)", lat: -23.0294, lon:  -67.7547 },
+                { name: "Paranal Observatory (VLT), Chile",              lat: -24.6275, lon:  -70.4044 },
+                { name: "Cerro Tololo, Chile",                           lat: -30.1690, lon:  -70.8062 },
+                { name: "South Pole Telescope, Antarctica",              lat: -89.9911, lon:  -45.0000 },
+                { name: "Roque de los Muchachos, La Palma",              lat:  28.7541, lon:  -17.8847 },
+                { name: "FAST 500m radio telescope, Guizhou, China",     lat:  25.6529, lon:  106.8559 },
+              ];
+              const stamp = Date.now();
+              const newPins: Pin[] = obs.map((o, i) => ({
+                id: `pin-obs-${i}-${stamp}`,
+                lat: o.lat, lon: o.lon, label: `🔭 ${o.name}`,
+                color: "#5cb5ff", createdAt: stamp + i,
+              }));
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`🔭 Dropped pins for 7 of Earth's most important astronomical observatories`);
+            }},
+            { id: "pinMoonLandingSites", label: "👨‍🚀 Drop pins for all 6 crewed Moon landing sites (Apollo 11–17)", group: "Tools", icon: BookmarkPlus, run: () => {
+              // These are EARTH-facing coords showing where the Apollo
+              // landings would project if the Moon were transparent — useful
+              // for context but they really happened on the Moon. We use
+              // the Moon's selenocentric coords mapped to Earth equivalents
+              // by storing the actual landing-site lat/lon (selenographic).
+              // Atlas Globe doesn't render the Moon, so this is purely a
+              // 'pin marker on Earth showing where the Moon was overhead
+              // at the time of each landing' rough approximation.
+              const sites = [
+                { name: "Apollo 11 — Sea of Tranquility (Moon, 1969)",   lat:  0.6740, lon:  23.4730 },
+                { name: "Apollo 12 — Ocean of Storms (Moon, 1969)",       lat: -3.0140, lon: -23.4220 },
+                { name: "Apollo 14 — Fra Mauro (Moon, 1971)",             lat: -3.6450, lon: -17.4720 },
+                { name: "Apollo 15 — Hadley-Apennine (Moon, 1971)",       lat: 26.1320, lon:  3.6340 },
+                { name: "Apollo 16 — Descartes Highlands (Moon, 1972)",   lat: -8.9730, lon:  15.5010 },
+                { name: "Apollo 17 — Taurus-Littrow (Moon, 1972)",        lat: 20.1900, lon:  30.7720 },
+              ];
+              const stamp = Date.now();
+              const newPins: Pin[] = sites.map((s, i) => ({
+                id: `pin-moon-${i}-${stamp}`,
+                lat: s.lat, lon: s.lon, label: `👨‍🚀 ${s.name}`,
+                color: "#ffffff", createdAt: stamp + i,
+              }));
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`👨‍🚀 Dropped pins at the LUNAR coordinates of all 6 Apollo crewed landings (1969–1972)`);
+            }},
+            { id: "pinNuclearAccidents", label: "☢ Drop pins at the 5 worst civilian nuclear accidents", group: "Tools", icon: BookmarkPlus, run: () => {
+              const sites = [
+                { name: "Chernobyl, Ukraine (1986, INES 7)",        lat: 51.3890, lon:  30.0990 },
+                { name: "Fukushima Daiichi, Japan (2011, INES 7)",   lat: 37.4214, lon: 141.0327 },
+                { name: "Three Mile Island, USA (1979, INES 5)",     lat: 40.1531, lon: -76.7244 },
+                { name: "Kyshtym (Mayak), Russia (1957, INES 6)",    lat: 55.7062, lon:  60.7964 },
+                { name: "Windscale Pile, UK (1957, INES 5)",         lat: 54.4233, lon:  -3.4961 },
+              ];
+              const stamp = Date.now();
+              const newPins: Pin[] = sites.map((s, i) => ({
+                id: `pin-nuclear-${i}-${stamp}`,
+                lat: s.lat, lon: s.lon, label: `☢ ${s.name}`,
+                color: "#ff5a5a", createdAt: stamp + i,
+              }));
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`☢ Dropped pins at 5 worst civilian nuclear accidents (INES 5–7)`);
+            }},
             // Drop pins at all preset bookmarks — bulk conversion
             ...(bookmarks.length >= 5 ? [{
               id: "bookmarksToPins" as const,
