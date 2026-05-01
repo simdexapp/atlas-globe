@@ -5557,6 +5557,31 @@ function App() {
                 },
               }];
             })() : []),
+            // ===== Selected-pin Wikipedia lookup =====
+            ...(selectedPin ? (() => {
+              const p = pins.find(x => x.id === selectedPin);
+              if (!p) return [];
+              return [{
+                id: "pinWikipedia" as const,
+                label: `📖 Wikipedia summary for "${p.label}"'s location`,
+                group: "Tools" as const,
+                icon: Search,
+                run: async () => {
+                  showToast(`📖 Looking up "${p.label}"…`);
+                  const data = await cachedReverseGeocode(p.lat, p.lon, 10);
+                  const a = data?.address || {};
+                  const name = a.city || a.town || a.village || a.county || a.state || a.country || data?.display_name?.split(",")[0]?.trim() || p.label;
+                  const wd = await cachedWikiSummary(name);
+                  if (!wd) { showToast(`📖 ${name}: no Wikipedia article found`); return; }
+                  const extract = (wd.extract || "").slice(0, 220);
+                  if (!extract) { showToast(`📖 ${name}: empty Wikipedia summary`); return; }
+                  showToast(`📖 ${name}: ${extract}${extract.length === 220 ? "…" : ""}`);
+                  if (wd.content_urls?.desktop?.page) {
+                    (window as any).__atlasLastWikiUrl = wd.content_urls.desktop.page;
+                  }
+                },
+              }];
+            })() : []),
             // ===== Selected-pin power commands =====
             // Set selected pin as home location — one-click "this is home"
             ...(selectedPin ? (() => {
