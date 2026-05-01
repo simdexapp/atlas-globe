@@ -4621,6 +4621,52 @@ function App() {
                 () => showToast(`🔗 ${link}`)
               );
             }},
+            // ===== Specialized share-URL variants for kiosk / presentation /
+            // preview workflows. All share the same #@hash format but differ
+            // in the query-string flags they layer on top.
+            { id: "shareKioskUrl", label: "📺 Copy kiosk-mode share URL (hides UI, auto-orbit)", group: "Tools", icon: Share2, run: () => {
+              if (!cameraStateRef.current) return;
+              const c = cameraStateRef.current;
+              const url = new URL(window.location.href);
+              url.hash = `#@${c.lat.toFixed(4)},${c.lon.toFixed(4)},${c.altKm.toFixed(1)}km`;
+              url.searchParams.set("hideUi", "1");
+              url.searchParams.set("orbit", "1");
+              const link = url.toString();
+              navigator.clipboard?.writeText(link).then(
+                () => showToast(`📺 Kiosk URL copied — recipient sees a clean auto-rotating globe`),
+                () => showToast(`📺 ${link}`)
+              );
+            }},
+            { id: "sharePresentationUrl", label: "🎤 Copy presentation-mode URL (hides UI only)", group: "Tools", icon: Share2, run: () => {
+              if (!cameraStateRef.current) return;
+              const c = cameraStateRef.current;
+              const url = new URL(window.location.href);
+              url.hash = `#@${c.lat.toFixed(4)},${c.lon.toFixed(4)},${c.altKm.toFixed(1)}km`;
+              url.searchParams.set("hideUi", "1");
+              const link = url.toString();
+              navigator.clipboard?.writeText(link).then(
+                () => showToast(`🎤 Presentation URL copied — recipient sees a chrome-free view`),
+                () => showToast(`🎤 ${link}`)
+              );
+            }},
+            { id: "sharePreviewWindow", label: "👁 Open current share URL in a new window (preview)", group: "Tools", icon: Share2, run: () => {
+              if (!cameraStateRef.current) return;
+              const c = cameraStateRef.current;
+              const url = new URL(window.location.href);
+              url.hash = `#@${c.lat.toFixed(4)},${c.lon.toFixed(4)},${c.altKm.toFixed(1)}km`;
+              window.open(url.toString(), "_blank", "noopener,noreferrer,width=1280,height=800");
+              showToast(`👁 Opened share URL in a new window — see what recipients see`);
+            }},
+            { id: "shareBareUrl", label: "🌐 Copy bare app URL (no view, no settings)", group: "Tools", icon: Share2, run: () => {
+              const url = new URL(window.location.href);
+              url.hash = "";
+              url.search = "";
+              const link = url.toString();
+              navigator.clipboard?.writeText(link).then(
+                () => showToast(`🌐 Bare URL copied — recipient lands on default view`),
+                () => showToast(`🌐 ${link}`)
+              );
+            }},
             // Toggle hide-UI / presentation mode (same as H key)
             { id: "presentMode", label: hideUi ? "Show UI (exit presentation mode)" : "🎬 Presentation mode (hide all UI)", group: "View", icon: Eye, hint: "H", run: () => setHideUi((v) => !v) },
             // Print summary of CURRENTLY-ON layers — useful when you want
