@@ -6088,6 +6088,103 @@ function App() {
                 showToast(`🎲 ${b.name}`);
               },
             }] : []),
+            // ===== Bookmark management =====
+            // Duplicate detection — bookmarks within 5km of each other.
+            // City seeds + user-saved bookmarks can collide; this surfaces
+            // them so the user can manually clean up via the Bookmarks panel.
+            ...(bookmarks.length >= 2 ? [{
+              id: "bmkFindDuplicates" as const,
+              label: "🔍 Find duplicate bookmarks (within 5km of each other)",
+              group: "Tools" as const,
+              icon: Bookmark,
+              run: () => {
+                const dupes: Array<[Bookmark, Bookmark, number]> = [];
+                for (let i = 0; i < bookmarks.length; i++) {
+                  for (let j = i + 1; j < bookmarks.length; j++) {
+                    const km = haversineKm(bookmarks[i].lat, bookmarks[i].lon, bookmarks[j].lat, bookmarks[j].lon);
+                    if (km < 5) dupes.push([bookmarks[i], bookmarks[j], km]);
+                  }
+                }
+                if (dupes.length === 0) { showToast(`✓ No duplicate bookmarks within 5km of each other`); return; }
+                const list = dupes.slice(0, 3).map(([a, b, km]) => `"${a.name}"↔"${b.name}" (${(km).toFixed(1)}km)`).join(" · ");
+                const more = dupes.length > 3 ? ` +${dupes.length - 3} more pairs` : "";
+                showToast(`🔍 ${dupes.length} duplicate pair${dupes.length === 1 ? "" : "s"}: ${list}${more}`);
+              },
+            }] : []),
+            // Newest user-saved bookmark (savedAt > 0 means user-added,
+            // not from the seed list).
+            ...(bookmarks.some(b => b.savedAt > 0) ? [{
+              id: "bmkFlyNewestUser" as const,
+              label: "🆕 Fly to newest user-saved bookmark",
+              group: "Tools" as const,
+              icon: Bookmark,
+              run: () => {
+                const userSaved = bookmarks.filter(b => b.savedAt > 0).sort((a, b) => b.savedAt - a.savedAt);
+                if (userSaved.length === 0) { showToast("No user-saved bookmarks yet — press B to bookmark this view"); return; }
+                const b = userSaved[0];
+                const ageHrs = (Date.now() - b.savedAt) / 3600_000;
+                const ageStr = ageHrs < 1 ? `${Math.round(ageHrs * 60)} min ago` : ageHrs < 24 ? `${ageHrs.toFixed(1)} h ago` : `${(ageHrs / 24).toFixed(0)} days ago`;
+                setFlyTo((p) => ({ id: p.id + 1, lat: b.lat, lon: b.lon, altKm: b.altKm }));
+                showToast(`🆕 ${b.name} · saved ${ageStr}`);
+              },
+            }] : []),
+            // Bulk delete user-saved bookmarks (preserves the seed cities)
+            // — useful when the user wants to clean up exploration debris.
+            ...(bookmarks.some(b => b.savedAt > 0) ? [{
+              id: "bmkDeleteUserSaved" as const,
+              label: `🗑 Delete all ${bookmarks.filter(b => b.savedAt > 0).length} user-saved bookmark${bookmarks.filter(b => b.savedAt > 0).length === 1 ? "" : "s"} (keep city seeds)`,
+              group: "Tools" as const,
+              icon: Trash2,
+              run: () => {
+                const userCount = bookmarks.filter(b => b.savedAt > 0).length;
+                if (!window.confirm(`Delete all ${userCount} user-saved bookmark${userCount === 1 ? "" : "s"}? Default city seeds will be kept. This cannot be undone.`)) return;
+                setBookmarks((prev) => prev.filter(b => b.savedAt === 0));
+                showToast(`🗑 Deleted ${userCount} user-saved bookmark${userCount === 1 ? "" : "s"}`);
+              },
+            }] : []),
+            // Export bookmarks as GeoJSON — round-trips through any
+            // GeoJSON viewer and can be re-imported via the existing
+            // pinImport command (treating bookmarks as Point features).
+            { id: "bmkExportGeoJson", label: `📤 Export all ${bookmarks.length} bookmarks as GeoJSON`, group: "Tools", icon: Bookmark, run: () => {
+              const fc = {
+                type: "FeatureCollection",
+                features: bookmarks.map(b => ({
+                  type: "Feature",
+                  geometry: { type: "Point", coordinates: [b.lon, b.lat] },
+                  properties: { name: b.name, altKm: b.altKm, savedAt: b.savedAt },
+                })),
+              };
+              const blob = new Blob([JSON.stringify(fc, null, 2)], { type: "application/geo+json" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `atlas-bookmarks-${new Date().toISOString().slice(0, 10)}.geojson`;
+              a.click();
+              setTimeout(() => URL.revokeObjectURL(url), 500);
+              showToast(`📤 Exported ${bookmarks.length} bookmark${bookmarks.length === 1 ? "" : "s"} as GeoJSON`);
+            }},
+            // Export as CSV — spreadsheet-friendly. Includes savedAt as
+            // ISO so users can sort/filter by saved date in Excel.
+            { id: "bmkExportCsv", label: `📊 Export all ${bookmarks.length} bookmarks as CSV (spreadsheet)`, group: "Tools", icon: Bookmark, run: () => {
+              const escape = (s: string) => `"${(s || "").replace(/"/g, '""')}"`;
+              const header = "id,name,lat,lon,altKm,savedAt\n";
+              const rows = bookmarks.map(b => [
+                escape(b.id),
+                escape(b.name),
+                b.lat,
+                b.lon,
+                b.altKm,
+                b.savedAt > 0 ? new Date(b.savedAt).toISOString() : "",
+              ].join(",")).join("\n");
+              const blob = new Blob([header + rows], { type: "text/csv;charset=utf-8" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `atlas-bookmarks-${new Date().toISOString().slice(0, 10)}.csv`;
+              a.click();
+              setTimeout(() => URL.revokeObjectURL(url), 500);
+              showToast(`📊 Exported ${bookmarks.length} bookmark${bookmarks.length === 1 ? "" : "s"} as CSV`);
+            }},
             // ===== Pin power-user commands =====
             // Fly to the geographic centroid of all pins (mean lat/lon).
             // Useful for "where's the center of gravity of my travel".
