@@ -537,6 +537,24 @@ input:focus-visible,
   border-radius: 4px;
   background: var(--gray-1);
   font-size: 11px;
+  /* Button-specific resets when the cell is interactive */
+  border: 1px solid transparent;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 120ms, background 120ms;
+}
+button.atlasLiveStat:hover {
+  border-color: color-mix(in srgb, var(--accent), transparent 60%);
+}
+.atlasLiveStat.on {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent), transparent 88%);
+}
+/* The local-time cell is a non-interactive div, override cursor */
+div.atlasLiveStat {
+  cursor: default;
 }
 .atlasLiveStatIcon { font-size: 11px; }
 .atlasLiveStatValue {

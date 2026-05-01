@@ -10583,6 +10583,8 @@ ${wpts}
             launchesCount={launches.length}
             cameraLat={cameraState.lat}
             cameraLon={cameraState.lon}
+            layers={layers}
+            onToggleLayer={toggleLayer}
           />
         </Draggable>
       )}
@@ -13459,6 +13461,8 @@ function LiveStatsWidget({
   launchesCount,
   cameraLat,
   cameraLon,
+  layers,
+  onToggleLayer,
 }: {
   aircraftCount: number;
   quakesCount: number;
@@ -13467,6 +13471,8 @@ function LiveStatsWidget({
   launchesCount: number;
   cameraLat: number;
   cameraLon: number;
+  layers: LayerVisibility;
+  onToggleLayer: (key: keyof LayerVisibility) => void;
 }) {
   // Tick every minute so the local-time clock advances live (still cheap
   // — re-render only this widget, not the whole tree).
@@ -13499,32 +13505,65 @@ function LiveStatsWidget({
         <span>Live world stats</span>
       </div>
       <div className="atlasLiveStatsGrid">
-        <div className="atlasLiveStat">
+        {/* Each cell is now a button that toggles the corresponding layer.
+            Active layers get an outlined "on" style. The local-time cell
+            stays non-interactive since there's no toggle for "time". */}
+        <button
+          type="button"
+          className={`atlasLiveStat${layers.aircraft ? " on" : ""}`}
+          onClick={() => onToggleLayer("aircraft")}
+          aria-pressed={layers.aircraft}
+          title={`Aircraft layer ${layers.aircraft ? "on — click to hide" : "off — click to show"}`}
+        >
           <span className="atlasLiveStatIcon">✈</span>
           <span className="atlasLiveStatValue">{aircraftCount.toLocaleString()}</span>
           <span className="atlasLiveStatLabel">aircraft</span>
-        </div>
-        <div className="atlasLiveStat">
+        </button>
+        <button
+          type="button"
+          className={`atlasLiveStat${layers.earthquakes ? " on" : ""}`}
+          onClick={() => onToggleLayer("earthquakes")}
+          aria-pressed={layers.earthquakes}
+          title={`Earthquakes layer ${layers.earthquakes ? "on — click to hide" : "off — click to show"}`}
+        >
           <span className="atlasLiveStatIcon">🌍</span>
           <span className="atlasLiveStatValue">{quakesCount.toLocaleString()}</span>
           <span className="atlasLiveStatLabel">quakes</span>
-        </div>
-        <div className="atlasLiveStat">
+        </button>
+        <button
+          type="button"
+          className={`atlasLiveStat${layers.volcanoes ? " on" : ""}`}
+          onClick={() => onToggleLayer("volcanoes")}
+          aria-pressed={layers.volcanoes}
+          title={`Volcanoes layer ${layers.volcanoes ? "on — click to hide" : "off — click to show"}`}
+        >
           <span className="atlasLiveStatIcon">🌋</span>
           <span className="atlasLiveStatValue">{volcanoesCount.toLocaleString()}</span>
           <span className="atlasLiveStatLabel">volcanoes</span>
-        </div>
-        <div className="atlasLiveStat">
+        </button>
+        <button
+          type="button"
+          className={`atlasLiveStat${layers.storms ? " on" : ""}`}
+          onClick={() => onToggleLayer("storms")}
+          aria-pressed={layers.storms}
+          title={`Storms layer ${layers.storms ? "on — click to hide" : "off — click to show"}`}
+        >
           <span className="atlasLiveStatIcon">🌀</span>
           <span className="atlasLiveStatValue">{stormsCount.toLocaleString()}</span>
           <span className="atlasLiveStatLabel">storms</span>
-        </div>
-        <div className="atlasLiveStat">
+        </button>
+        <button
+          type="button"
+          className={`atlasLiveStat${layers.launches ? " on" : ""}`}
+          onClick={() => onToggleLayer("launches")}
+          aria-pressed={layers.launches}
+          title={`Launches layer ${layers.launches ? "on — click to hide" : "off — click to show"}`}
+        >
           <span className="atlasLiveStatIcon">🚀</span>
           <span className="atlasLiveStatValue">{launchesCount.toLocaleString()}</span>
           <span className="atlasLiveStatLabel">launches</span>
-        </div>
-        <div className="atlasLiveStat">
+        </button>
+        <div className="atlasLiveStat" aria-label={`Local solar time at view: ${localHM}`}>
           <span className="atlasLiveStatIcon">{isDay ? "☀️" : "🌙"}</span>
           <span className="atlasLiveStatValue">{localHM}</span>
           <span className="atlasLiveStatLabel">at view</span>
