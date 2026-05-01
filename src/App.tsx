@@ -5114,6 +5114,109 @@ function App() {
               setPins((prev) => [...prev, ...newPins]);
               showToast(`🌍 Dropped 7 pins — one per continent. View in Pins panel.`);
             }},
+            // ===== Thematic preset pin sets — same pattern, different
+            // curated collections. Each drops a labeled, colored set of
+            // pins for educational / exploration use cases.
+            { id: "pinSevenSummits", label: "🏔 Drop pins for the Seven Summits (highest peak per continent)", group: "Tools", icon: BookmarkPlus, run: () => {
+              const summits = [
+                { name: "Everest (Asia, 8848m)",         lat:  27.9881, lon:  86.9250 },
+                { name: "Aconcagua (S America, 6960m)",  lat: -32.6532, lon: -70.0109 },
+                { name: "Denali (N America, 6190m)",     lat:  63.0692, lon: -151.0070 },
+                { name: "Kilimanjaro (Africa, 5895m)",   lat:  -3.0674, lon:  37.3556 },
+                { name: "Elbrus (Europe, 5642m)",        lat:  43.3499, lon:  42.4395 },
+                { name: "Vinson Massif (Antarctica, 4892m)", lat: -78.5254, lon: -85.6172 },
+                { name: "Puncak Jaya (Oceania, 4884m)",  lat:  -4.0833, lon: 137.1833 },
+              ];
+              const stamp = Date.now();
+              const newPins: Pin[] = summits.map((s, i) => ({
+                id: `pin-summit-${i}-${stamp}`,
+                lat: s.lat, lon: s.lon, label: `🏔 ${s.name}`,
+                color: "#ffd66b", createdAt: stamp + i,
+              }));
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`🏔 Dropped pins for the Seven Summits — total elevation if you stacked them: 43,311 m`);
+            }},
+            { id: "pinDecadeVolcanoes", label: "🌋 Drop pins for the 16 IAVCEI Decade Volcanoes (most dangerous on Earth)", group: "Tools", icon: BookmarkPlus, run: () => {
+              const volcanoes = [
+                { name: "Vesuvius, Italy",        lat: 40.821,  lon:  14.426 },
+                { name: "Etna, Italy",            lat: 37.751,  lon:  14.993 },
+                { name: "Santorini, Greece",      lat: 36.404,  lon:  25.396 },
+                { name: "Teide, Spain",           lat: 28.272,  lon: -16.642 },
+                { name: "Nyiragongo, DRC",        lat: -1.520,  lon:  29.249 },
+                { name: "Avachinsky-Koryaksky, Russia", lat: 53.255, lon: 158.836 },
+                { name: "Sakurajima, Japan",      lat: 31.585,  lon: 130.657 },
+                { name: "Unzen, Japan",           lat: 32.761,  lon: 130.298 },
+                { name: "Mauna Loa, Hawaii",      lat: 19.475,  lon: -155.608 },
+                { name: "Mount Rainier, USA",     lat: 46.852,  lon: -121.760 },
+                { name: "Galeras, Colombia",      lat:  1.220,  lon: -77.359 },
+                { name: "Tatun, Taiwan",          lat: 25.176,  lon: 121.561 },
+                { name: "Merapi, Indonesia",      lat: -7.541,  lon: 110.446 },
+                { name: "Taal, Philippines",      lat: 14.002,  lon: 120.993 },
+                { name: "Ulawun, PNG",            lat: -5.050,  lon: 151.330 },
+                { name: "Colima, Mexico",         lat: 19.514,  lon: -103.617 },
+              ];
+              const stamp = Date.now();
+              const newPins: Pin[] = volcanoes.map((v, i) => ({
+                id: `pin-decade-volcano-${i}-${stamp}`,
+                lat: v.lat, lon: v.lon, label: `🌋 ${v.name}`,
+                color: "#ff5a5a", createdAt: stamp + i,
+              }));
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`🌋 Dropped pins for all 16 Decade Volcanoes — IAVCEI's most-dangerous-on-Earth list`);
+            }},
+            { id: "pinNewSevenWonders", label: "🏛 Drop pins for the New Seven Wonders of the World (2007)", group: "Tools", icon: BookmarkPlus, run: () => {
+              const wonders = [
+                { name: "Great Wall of China",        lat:  40.4319, lon: 116.5704 },
+                { name: "Petra, Jordan",              lat:  30.3285, lon:  35.4444 },
+                { name: "Christ the Redeemer, Brazil", lat: -22.9519, lon: -43.2105 },
+                { name: "Machu Picchu, Peru",         lat: -13.1631, lon: -72.5450 },
+                { name: "Chichén Itzá, Mexico",       lat:  20.6843, lon: -88.5678 },
+                { name: "Colosseum, Italy",           lat:  41.8902, lon:  12.4922 },
+                { name: "Taj Mahal, India",           lat:  27.1751, lon:  78.0421 },
+              ];
+              const stamp = Date.now();
+              const newPins: Pin[] = wonders.map((w, i) => ({
+                id: `pin-wonder-${i}-${stamp}`,
+                lat: w.lat, lon: w.lon, label: `🏛 ${w.name}`,
+                color: "#ff7be0", createdAt: stamp + i,
+              }));
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`🏛 Dropped pins for all 7 New Wonders (declared 2007 by New7Wonders Foundation)`);
+            }},
+            { id: "pinLongestRiverMouths", label: "🌊 Drop pins at the mouths of the world's 5 longest rivers", group: "Tools", icon: BookmarkPlus, run: () => {
+              const rivers = [
+                { name: "Nile (6,650 km) — Mediterranean",       lat:  31.466, lon:  30.293 },
+                { name: "Amazon (6,400 km) — Atlantic",          lat:  -0.232, lon: -49.890 },
+                { name: "Yangtze (6,300 km) — East China Sea",   lat:  31.469, lon: 121.802 },
+                { name: "Mississippi-Missouri (6,275 km) — Gulf",lat:  29.156, lon: -89.255 },
+                { name: "Yenisei (5,539 km) — Kara Sea",         lat:  71.500, lon:  82.700 },
+              ];
+              const stamp = Date.now();
+              const newPins: Pin[] = rivers.map((r, i) => ({
+                id: `pin-river-${i}-${stamp}`,
+                lat: r.lat, lon: r.lon, label: `🌊 ${r.name}`,
+                color: "#5cb5ff", createdAt: stamp + i,
+              }));
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`🌊 Dropped pins at the mouths of Earth's 5 longest rivers`);
+            }},
+            { id: "pinDeepestOceanTrenches", label: "🕳 Drop pins at the 5 deepest ocean trenches", group: "Tools", icon: BookmarkPlus, run: () => {
+              const trenches = [
+                { name: "Mariana Trench (Challenger Deep, -10,994m)", lat: 11.373,  lon: 142.591 },
+                { name: "Tonga Trench (-10,820m)",                    lat: -23.000, lon: -174.500 },
+                { name: "Philippine Trench (-10,540m)",               lat: 10.000,  lon: 126.500 },
+                { name: "Kuril–Kamchatka Trench (-10,500m)",          lat: 44.500,  lon: 150.000 },
+                { name: "Kermadec Trench (-10,047m)",                 lat: -30.500, lon: -177.000 },
+              ];
+              const stamp = Date.now();
+              const newPins: Pin[] = trenches.map((t, i) => ({
+                id: `pin-trench-${i}-${stamp}`,
+                lat: t.lat, lon: t.lon, label: `🕳 ${t.name}`,
+                color: "#a8a8ff", createdAt: stamp + i,
+              }));
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`🕳 Dropped pins at Earth's 5 deepest ocean trenches`);
+            }},
             // Drop pins at all preset bookmarks — bulk conversion
             ...(bookmarks.length >= 5 ? [{
               id: "bookmarksToPins" as const,
