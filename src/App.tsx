@@ -5017,6 +5017,89 @@ function App() {
               const pct = (n: number) => `${(n/total*100).toFixed(0)}%`;
               showToast(`🌐 NE ${ne} (${pct(ne)}) · NW ${nw} (${pct(nw)}) · SE ${se} (${pct(se)}) · SW ${sw} (${pct(sw)}) — total ${total.toLocaleString()}`);
             }},
+            // ===== Aircraft type / registration analytics — surfaces the
+            // shape of the global airborne fleet right now using ICAO type
+            // codes (B738, A320, etc.) and registration prefixes (N=US,
+            // C=Canada, G=UK, D=Germany, JA=Japan, etc.).
+            { id: "aircraftTopTypes", label: "🛩 Top 10 aircraft types globally (B737, A320, etc.)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const counts = new Map<string, number>();
+              for (const a of aircraftSnapshot.aircraft) {
+                if (!a.type) continue;
+                counts.set(a.type, (counts.get(a.type) ?? 0) + 1);
+              }
+              const sorted = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 10);
+              if (sorted.length === 0) { showToast("No aircraft type data available"); return; }
+              const total = sorted.reduce((s, [, n]) => s + n, 0);
+              const list = sorted.map(([t, n]) => `${t}: ${n}`).join(" · ");
+              showToast(`🛩 Top 10 types (${total} aircraft): ${list}`);
+            }},
+            { id: "aircraftCountryDist", label: "🌍 Top 10 registration-country distribution (by ICAO prefix)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              // ICAO 24-bit hex address blocks → country. Just first hex
+              // char gives a rough split. Top blocks: A=US, C=Canada,
+              // 4=several Europe, etc. We use the registration string's
+              // 1st char as a friendlier proxy: N=US, C=CA, G=UK, D=DE,
+              // F=FR, JA=JP, etc.
+              const counts = new Map<string, number>();
+              for (const a of aircraftSnapshot.aircraft) {
+                if (!a.registration) continue;
+                // Use first 1-2 chars as country prefix — N (US 1 char),
+                // C (CA 1 char), G (GB 1 char), D (DE 1 char), JA (JP 2 char), etc.
+                const reg = a.registration.toUpperCase();
+                const prefix = reg.startsWith("JA") ? "JA" : reg.startsWith("VH") ? "VH" : reg.startsWith("ZS") ? "ZS" : reg.startsWith("PR") || reg.startsWith("PT") ? "PR/PT" : reg[0];
+                counts.set(prefix, (counts.get(prefix) ?? 0) + 1);
+              }
+              const sorted = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 10);
+              if (sorted.length === 0) { showToast("No registration data available"); return; }
+              // Map prefix → friendly name
+              const names: Record<string, string> = {
+                N: "🇺🇸 US", C: "🇨🇦 CA", G: "🇬🇧 GB", D: "🇩🇪 DE", F: "🇫🇷 FR",
+                JA: "🇯🇵 JP", VH: "🇦🇺 AU", "PR/PT": "🇧🇷 BR", I: "🇮🇹 IT", EC: "🇪🇸 ES",
+                B: "🇨🇳 CN", PH: "🇳🇱 NL", LN: "🇳🇴 NO", SE: "🇸🇪 SE", OY: "🇩🇰 DK",
+                ZS: "🇿🇦 ZA", VT: "🇮🇳 IN", HL: "🇰🇷 KR",
+              };
+              const list = sorted.map(([p, n]) => `${names[p] ?? p}: ${n}`).join(" · ");
+              showToast(`🌍 Top reg countries: ${list}`);
+            }},
+            { id: "aircraftHelicopters", label: "🚁 Find helicopters airborne globally (ADS-B category A7)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const helis = aircraftSnapshot.aircraft.filter(a => a.category === "A7");
+              if (helis.length === 0) { showToast("🚁 No helicopters airborne right now"); return; }
+              const sample = helis.slice(0, 5).map(h => `${(h.callsign || h.icao24).trim()} (${h.registration || "no reg"})`).join(" · ");
+              const more = helis.length > 5 ? ` +${helis.length - 5} more` : "";
+              showToast(`🚁 ${helis.length} helicopters airborne: ${sample}${more}`);
+            }},
+            { id: "aircraftSquawkDist", label: "📡 Aircraft squawk code distribution (top 8 most-used codes)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const counts = new Map<string, number>();
+              for (const a of aircraftSnapshot.aircraft) {
+                if (!a.squawk) continue;
+                counts.set(a.squawk, (counts.get(a.squawk) ?? 0) + 1);
+              }
+              const sorted = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 8);
+              if (sorted.length === 0) { showToast("No squawk data available"); return; }
+              // Common code legend: 1200=US VFR, 7000=EU VFR, 7500=hijack,
+              // 7600=radio fail, 7700=emergency, 2000=oceanic, 4000=USAF
+              const legend: Record<string, string> = {
+                "1200": "US VFR", "7000": "EU VFR", "2000": "oceanic",
+                "7500": "🚨 HIJACK", "7600": "📻 radio-fail", "7700": "🚨 EMERGENCY",
+                "4000": "USAF", "1000": "ATC-assigned",
+              };
+              const list = sorted.map(([sq, n]) => `${sq}${legend[sq] ? ` (${legend[sq]})` : ""}: ${n}`).join(" · ");
+              showToast(`📡 ${list}`);
+            }},
+            { id: "aircraftLargestAirborne", label: "🛬 Largest aircraft airborne (heavy + super-heavy categories)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              // ADS-B emitter category A5 = heavy (>136t), A6 = high-perf,
+              // J = super-heavy (e.g. A380/B748). Combine for "biggest".
+              const big = aircraftSnapshot.aircraft.filter(a => a.category === "A5" || a.category === "J");
+              if (big.length === 0) { showToast("🛬 No heavy aircraft airborne right now"); return; }
+              // Prefer A380 (388/389) and B748 (B748 type code) when listing
+              const sample = big.slice(0, 5).map(a => `${(a.callsign || a.icao24).trim()} ${a.type ? `(${a.type})` : ""}`).join(" · ");
+              const more = big.length > 5 ? ` +${big.length - 5} more` : "";
+              showToast(`🛬 ${big.length} heavy/super-heavy: ${sample}${more}`);
+            }},
             // Decode the airline from the SELECTED aircraft's callsign
             // prefix. Useful for "what airline is this?" without leaving
             // the app to look it up.
