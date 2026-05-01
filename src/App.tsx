@@ -4893,6 +4893,74 @@ function App() {
               const pct = (longHaul.length / aircraftSnapshot.aircraft.length * 100).toFixed(1);
               showToast(`🌐 ${longHaul.length.toLocaleString()} cruising long-haul flights (${pct}% of ${aircraftSnapshot.aircraft.length.toLocaleString()} airborne)`);
             }},
+            // ===== Aircraft superlatives — fastest, slowest, best climbers
+            // and descenders. Sorted picks help answer "what's the most
+            // extreme thing happening in the air right now?"
+            { id: "aircraftTopClimbers", label: "🛫 Top 5 fastest climbers globally (highest vertical rate)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const climbers = aircraftSnapshot.aircraft
+                .filter(a => (a.verticalRateMs ?? 0) > 0 && a.altitudeM > 100)
+                .sort((a, b) => (b.verticalRateMs ?? 0) - (a.verticalRateMs ?? 0))
+                .slice(0, 5);
+              if (climbers.length === 0) { showToast("No climbing aircraft right now"); return; }
+              // m/s → ft/min: ×196.85 (~200)
+              const list = climbers.map(a => `${(a.callsign || a.icao24).trim()} +${Math.round((a.verticalRateMs ?? 0) * 196.85).toLocaleString()} ft/min`).join(" · ");
+              showToast(`🛫 Top climbers: ${list}`);
+            }},
+            { id: "aircraftTopDescenders", label: "🛬 Top 5 fastest descenders globally (lowest vertical rate)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const descenders = aircraftSnapshot.aircraft
+                .filter(a => (a.verticalRateMs ?? 0) < 0 && a.altitudeM > 100)
+                .sort((a, b) => (a.verticalRateMs ?? 0) - (b.verticalRateMs ?? 0))
+                .slice(0, 5);
+              if (descenders.length === 0) { showToast("No descending aircraft right now"); return; }
+              const list = descenders.map(a => `${(a.callsign || a.icao24).trim()} ${Math.round((a.verticalRateMs ?? 0) * 196.85).toLocaleString()} ft/min`).join(" · ");
+              showToast(`🛬 Top descenders: ${list}`);
+            }},
+            { id: "aircraftFastest", label: "⚡ Top 5 fastest aircraft globally (by ground speed)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const fastest = aircraftSnapshot.aircraft
+                .filter(a => (a.velocityMs ?? 0) > 0 && a.altitudeM > 100)
+                .sort((a, b) => (b.velocityMs ?? 0) - (a.velocityMs ?? 0))
+                .slice(0, 5);
+              if (fastest.length === 0) { showToast("No moving aircraft right now"); return; }
+              // m/s → kt: ×1.944
+              const list = fastest.map(a => `${(a.callsign || a.icao24).trim()} ${Math.round((a.velocityMs ?? 0) * 1.944)} kt`).join(" · ");
+              showToast(`⚡ Fastest: ${list}`);
+            }},
+            // Altitude histogram — count of aircraft in each 5000-ft band.
+            // 0-5k = traffic pattern, 5-10k = climb/descent corridor,
+            // 30-40k = cruise altitude band, etc.
+            { id: "aircraftAltHistogram", label: "📊 Aircraft altitude histogram (by 5,000-ft bands)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const bands = [0, 5000, 10000, 20000, 30000, 35000, 40000, 50000];
+              const counts = new Array(bands.length).fill(0);
+              for (const a of aircraftSnapshot.aircraft) {
+                const ft = a.altitudeM / 0.3048;
+                let i = bands.length - 1;
+                while (i > 0 && ft < bands[i]) i--;
+                counts[i]++;
+              }
+              const total = aircraftSnapshot.aircraft.length;
+              const labels = ["0-5k", "5-10k", "10-20k", "20-30k", "30-35k", "35-40k", "40-50k", "50k+"];
+              const parts = counts.map((n, i) => n > 0 ? `${labels[i]}: ${n} (${(n/total*100).toFixed(0)}%)` : null).filter(Boolean).join(" · ");
+              showToast(`📊 ${total.toLocaleString()} aircraft · ${parts}`);
+            }},
+            // Hemisphere split — interesting global geography stat. Uses
+            // the equator (lat 0) and prime meridian (lon 0) to slice.
+            { id: "aircraftHemisphereSplit", label: "🌐 Aircraft hemisphere split (N/S × E/W)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              let ne = 0, nw = 0, se = 0, sw = 0;
+              for (const a of aircraftSnapshot.aircraft) {
+                if (a.lat >= 0 && a.lon >= 0) ne++;
+                else if (a.lat >= 0 && a.lon < 0) nw++;
+                else if (a.lat < 0 && a.lon >= 0) se++;
+                else sw++;
+              }
+              const total = aircraftSnapshot.aircraft.length;
+              const pct = (n: number) => `${(n/total*100).toFixed(0)}%`;
+              showToast(`🌐 NE ${ne} (${pct(ne)}) · NW ${nw} (${pct(nw)}) · SE ${se} (${pct(se)}) · SW ${sw} (${pct(sw)}) — total ${total.toLocaleString()}`);
+            }},
             // Decode the airline from the SELECTED aircraft's callsign
             // prefix. Useful for "what airline is this?" without leaving
             // the app to look it up.
