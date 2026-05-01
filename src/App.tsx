@@ -4999,6 +4999,68 @@ function App() {
                 },
               }];
             })() : []),
+            // ===== "Where it's currently X" — solar-time discovery batch.
+            // Solar hour at longitude L = (utcHour + L/15) mod 24. Solving
+            // for the longitude where that equals 6/12/18/0 (sunrise/noon/
+            // sunset/midnight) gives the meridian we want to fly to.
+            // We then pick the nearest major city to that meridian for a
+            // friendlier toast — pure ocean is less interesting than
+            // "currently sunrise in Karachi".
+            { id: "whereSunrise", label: "🌅 Fly to where it's currently sunrise", group: "Tools", icon: SunIcon, run: () => {
+              const now = new Date();
+              const utcHr = now.getUTCHours() + now.getUTCMinutes() / 60;
+              // Local solar time = 6 → lon = (6 - utcHr) * 15
+              let lon = (6 - utcHr) * 15;
+              while (lon > 180) lon -= 360;
+              while (lon < -180) lon += 360;
+              // Pick nearest MAJOR_CITIES to that meridian (any latitude)
+              const nearest = [...MAJOR_CITIES].sort((a, b) => Math.abs(a.lon - lon) - Math.abs(b.lon - lon))[0];
+              setFlyTo((p) => ({ id: p.id + 1, lat: nearest.lat, lon: nearest.lon, altKm: 1500 }));
+              showToast(`🌅 Sunrise meridian — flying to ${nearest.name} (${nearest.country}) · solar lon ${lon.toFixed(1)}°`);
+            }},
+            { id: "whereNoon", label: "☀ Fly to where it's currently solar noon", group: "Tools", icon: SunIcon, run: () => {
+              const now = new Date();
+              const utcHr = now.getUTCHours() + now.getUTCMinutes() / 60;
+              let lon = (12 - utcHr) * 15;
+              while (lon > 180) lon -= 360;
+              while (lon < -180) lon += 360;
+              const nearest = [...MAJOR_CITIES].sort((a, b) => Math.abs(a.lon - lon) - Math.abs(b.lon - lon))[0];
+              setFlyTo((p) => ({ id: p.id + 1, lat: nearest.lat, lon: nearest.lon, altKm: 1500 }));
+              showToast(`☀ Solar noon — flying to ${nearest.name} (${nearest.country}) · solar lon ${lon.toFixed(1)}°`);
+            }},
+            { id: "whereSunset", label: "🌇 Fly to where it's currently sunset", group: "Tools", icon: SunIcon, run: () => {
+              const now = new Date();
+              const utcHr = now.getUTCHours() + now.getUTCMinutes() / 60;
+              let lon = (18 - utcHr) * 15;
+              while (lon > 180) lon -= 360;
+              while (lon < -180) lon += 360;
+              const nearest = [...MAJOR_CITIES].sort((a, b) => Math.abs(a.lon - lon) - Math.abs(b.lon - lon))[0];
+              setFlyTo((p) => ({ id: p.id + 1, lat: nearest.lat, lon: nearest.lon, altKm: 1500 }));
+              showToast(`🌇 Sunset meridian — flying to ${nearest.name} (${nearest.country}) · solar lon ${lon.toFixed(1)}°`);
+            }},
+            { id: "whereMidnight", label: "🌑 Fly to where it's currently midnight", group: "Tools", icon: SunIcon, run: () => {
+              const now = new Date();
+              const utcHr = now.getUTCHours() + now.getUTCMinutes() / 60;
+              // Local solar time = 0 → lon = -utcHr * 15 (or +(24-utcHr)*15 — same point)
+              let lon = -utcHr * 15;
+              while (lon > 180) lon -= 360;
+              while (lon < -180) lon += 360;
+              const nearest = [...MAJOR_CITIES].sort((a, b) => Math.abs(a.lon - lon) - Math.abs(b.lon - lon))[0];
+              setFlyTo((p) => ({ id: p.id + 1, lat: nearest.lat, lon: nearest.lon, altKm: 1500 }));
+              showToast(`🌑 Midnight meridian — flying to ${nearest.name} (${nearest.country}) · solar lon ${lon.toFixed(1)}°`);
+            }},
+            // Bonus: "Tomorrow first" — the place that already crossed
+            // into the next calendar date (just east of the dateline).
+            // Uses Kiribati's Christmas Island region (lat 1.87, lon -157)
+            // since they're UTC+14 and reach midnight first.
+            { id: "whereTomorrow", label: "📅 Fly to where it's already tomorrow (Kiribati, UTC+14)", group: "Tools", icon: SunIcon, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 1.872, lon: -157.428, altKm: 1500 }));
+              const now = new Date();
+              // Kiribati is UTC+14, which means add 14 hours to UTC for local time
+              const localTomorrow = new Date(now.getTime() + 14 * 3600_000);
+              const dateStr = localTomorrow.toISOString().slice(0, 10);
+              showToast(`📅 Kiritimati / Christmas Island, Kiribati · UTC+14 · local date ${dateStr}`);
+            }},
             { id: "exploreRandomQuake", label: earthquakes.length > 0 ? `🎲 Fly to a random recent earthquake (${earthquakes.length} loaded)` : "Fly to random earthquake (no quake data loaded — toggle Earthquakes layer first)", group: "Tools", icon: Sparkles, run: () => {
               if (earthquakes.length === 0) { showToast("Toggle Earthquakes layer first"); return; }
               const q = earthquakes[Math.floor(Math.random() * earthquakes.length)];
