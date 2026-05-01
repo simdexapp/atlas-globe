@@ -4844,6 +4844,44 @@ function App() {
               const slantKm = Math.sqrt(surfaceKm * surfaceKm + 408 * 408);
               showToast(`🛰 ISS is ${formatDistKm(slantKm, unitsImperial)} away · (${formatDistKm(surfaceKm, unitsImperial)} ground · 408 km altitude)`);
             }},
+            // Companion distance commands for Tiangong + Hubble (each
+            // satellite has different orbital altitude — Tiangong ~340km,
+            // Hubble ~538km).
+            { id: "factDistanceToTiangong", label: "🛰 Straight-line distance from current view to Tiangong (Chinese Space Station)", group: "Tools", icon: Telescope, run: () => {
+              const c = cameraStateRef.current;
+              if (!c || !tiangongPosition) { showToast(tiangongPosition ? "No camera state" : "Tiangong position not loaded yet (toggle Tiangong layer first)"); return; }
+              const surfaceKm = haversineKm(c.lat, c.lon, tiangongPosition.lat, tiangongPosition.lon);
+              const slantKm = Math.sqrt(surfaceKm * surfaceKm + 340 * 340);
+              showToast(`🛰 Tiangong is ${formatDistKm(slantKm, unitsImperial)} away · (${formatDistKm(surfaceKm, unitsImperial)} ground · 340 km altitude)`);
+            }},
+            { id: "factDistanceToHubble", label: "🔭 Straight-line distance from current view to Hubble Space Telescope", group: "Tools", icon: Telescope, run: () => {
+              const c = cameraStateRef.current;
+              if (!c || !hubblePosition) { showToast(hubblePosition ? "No camera state" : "Hubble position not loaded yet (toggle Hubble layer first)"); return; }
+              const surfaceKm = haversineKm(c.lat, c.lon, hubblePosition.lat, hubblePosition.lon);
+              const slantKm = Math.sqrt(surfaceKm * surfaceKm + 538 * 538);
+              showToast(`🔭 Hubble is ${formatDistKm(slantKm, unitsImperial)} away · (${formatDistKm(surfaceKm, unitsImperial)} ground · 538 km altitude)`);
+            }},
+            { id: "factClosestSatellite", label: "🛰 Which orbiting object is closest to current view?", group: "Tools", icon: Telescope, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const candidates: Array<{ name: string; pos: { lat: number; lon: number } | null; altKm: number }> = [
+                { name: "🛰 ISS",      pos: issPosition,      altKm: 408 },
+                { name: "🛰 Tiangong", pos: tiangongPosition, altKm: 340 },
+                { name: "🔭 Hubble",   pos: hubblePosition,   altKm: 538 },
+              ];
+              const ranked = candidates
+                .filter(c => c.pos)
+                .map(({ name, pos, altKm }) => {
+                  const surfaceKm = haversineKm(c.lat, c.lon, pos!.lat, pos!.lon);
+                  const slantKm = Math.sqrt(surfaceKm * surfaceKm + altKm * altKm);
+                  return { name, slantKm, surfaceKm };
+                })
+                .sort((a, b) => a.slantKm - b.slantKm);
+              if (ranked.length === 0) { showToast("No satellite positions loaded — toggle ISS / Tiangong / Hubble layers"); return; }
+              const closest = ranked[0];
+              const list = ranked.map(r => `${r.name} ${formatDistKm(r.slantKm, unitsImperial)}`).join(" · ");
+              showToast(`🛰 Closest: ${closest.name} (${formatDistKm(closest.slantKm, unitsImperial)}) · all loaded: ${list}`);
+            }},
             // Live-data exploration: pick interesting subjects from the
             // current snapshot and fly to them. Each makes the live
             // aircraft / earthquake / volcano data feel personal.
