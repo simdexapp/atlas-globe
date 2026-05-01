@@ -12005,6 +12005,74 @@ ${wpts}
                 showToast(`🌐 NE ${ne} (${pct(ne)}) · NW ${nw} (${pct(nw)}) · SE ${se} (${pct(se)}) · SW ${sw} (${pct(sw)})`);
               },
             }] : []),
+            // Pin span — N-S extent and E-W extent in km. Useful for
+            // 'how spread out is my collection?'
+            ...(pins.length >= 2 ? [{
+              id: "pinSpan" as const,
+              label: "📐 Pin collection span — N-S and E-W extent",
+              group: "Tools" as const,
+              icon: Compass,
+              run: () => {
+                let minLat = pins[0].lat, maxLat = pins[0].lat;
+                let minLon = pins[0].lon, maxLon = pins[0].lon;
+                for (const p of pins) {
+                  if (p.lat < minLat) minLat = p.lat;
+                  if (p.lat > maxLat) maxLat = p.lat;
+                  if (p.lon < minLon) minLon = p.lon;
+                  if (p.lon > maxLon) maxLon = p.lon;
+                }
+                const nsKm = haversineKm(minLat, (minLon+maxLon)/2, maxLat, (minLon+maxLon)/2);
+                const ewKm = haversineKm((minLat+maxLat)/2, minLon, (minLat+maxLat)/2, maxLon);
+                showToast(`📐 ${pins.length} pins span ${(maxLat-minLat).toFixed(1)}° × ${(maxLon-minLon).toFixed(1)}° (${formatDistKm(nsKm, unitsImperial)} N-S × ${formatDistKm(ewKm, unitsImperial)} E-W)`);
+              },
+            }] : []),
+            // Most-used pin color — quick way to see if you have a
+            // dominant theme color (e.g. always dropping red pins).
+            ...(pins.length >= 2 ? [{
+              id: "pinColorMost" as const,
+              label: "🎨 Most-used pin color (with breakdown)",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const counts = new Map<string, number>();
+                for (const p of pins) counts.set(p.color, (counts.get(p.color) ?? 0) + 1);
+                const sorted = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+                const top = sorted[0];
+                const breakdown = sorted.slice(0, 5).map(([c, n]) => `${c}: ${n}`).join(" · ");
+                showToast(`🎨 Most-used: ${top[0]} (${top[1]}/${pins.length}, ${(top[1]/pins.length*100).toFixed(0)}%) · top: ${breakdown}`);
+              },
+            }] : []),
+            // Notes coverage — how many pins have notes?
+            ...(pins.length >= 1 ? [{
+              id: "pinNotesCoverage" as const,
+              label: "📝 Pin notes coverage stats",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const withNote = pins.filter(p => p.note?.trim());
+                const withPhoto = pins.filter(p => p.photo);
+                const withAlt = pins.filter(p => typeof p.altitudeM === "number");
+                const totalChars = withNote.reduce((s, p) => s + (p.note?.length ?? 0), 0);
+                showToast(`📝 ${withNote.length}/${pins.length} have notes (${withNote.length > 0 ? Math.round(totalChars / withNote.length) : 0} avg chars) · ${withPhoto.length} with photos · ${withAlt.length} with altitude`);
+              },
+            }] : []),
+            // Pin creation cadence — how many pins per week / day?
+            ...(pins.length >= 5 ? [{
+              id: "pinCadence" as const,
+              label: "📅 Pin creation cadence (per day / week / month)",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const sorted = [...pins].sort((a, b) => a.createdAt - b.createdAt);
+                const spanMs = sorted[sorted.length - 1].createdAt - sorted[0].createdAt;
+                if (spanMs < 86400_000) { showToast(`📅 All ${pins.length} pins created within 24h — ${(pins.length / 24).toFixed(1)}/h`); return; }
+                const days = spanMs / 86400_000;
+                const perDay = pins.length / days;
+                const perWeek = perDay * 7;
+                const perMonth = perDay * 30.4;
+                showToast(`📅 Over ${days.toFixed(0)} days · ${perDay.toFixed(2)}/day · ${perWeek.toFixed(1)}/week · ${perMonth.toFixed(1)}/month`);
+              },
+            }] : []),
             // Pin import from GeoJSON file
             { id: "pinImport", label: "Import pins from GeoJSON file", group: "Tools", icon: BookmarkPlus, run: () => {
               const input = document.createElement("input");
