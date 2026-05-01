@@ -11815,6 +11815,52 @@ function App() {
               const mm = Math.floor((localMs % 3600_000) / 60_000);
               showToast(`Mean solar time at ${formatLat(c.lat)} ${formatLon(c.lon)}: ${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`);
             }},
+            // ===== Grid-snapping navigation commands =====
+            // Move the camera to the nearest grid intersection at various
+            // resolutions. Useful for navigators who want to align with
+            // the displayed graticule, ham radio operators who want to
+            // sit on a Maidenhead grid square, etc.
+            { id: "snapGrid1Deg", label: "🌐 Snap view to nearest 1° lat/lon intersection", group: "Tools", icon: Crosshair, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const lat = Math.round(c.lat);
+              const lon = Math.round(c.lon);
+              setFlyTo((p) => ({ id: p.id + 1, lat, lon, altKm: c.altKm }));
+              showToast(`🌐 Snapped to ${lat}°, ${lon}° (1° grid)`);
+            }},
+            { id: "snapGrid5Deg", label: "🌐 Snap view to nearest 5° lat/lon intersection", group: "Tools", icon: Crosshair, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const lat = Math.round(c.lat / 5) * 5;
+              const lon = Math.round(c.lon / 5) * 5;
+              setFlyTo((p) => ({ id: p.id + 1, lat, lon, altKm: c.altKm }));
+              showToast(`🌐 Snapped to ${lat}°, ${lon}° (5° grid)`);
+            }},
+            { id: "snapGrid10Deg", label: "🌐 Snap view to nearest 10° intersection (graticule line)", group: "Tools", icon: Crosshair, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const lat = Math.round(c.lat / 10) * 10;
+              const lon = Math.round(c.lon / 10) * 10;
+              setFlyTo((p) => ({ id: p.id + 1, lat, lon, altKm: c.altKm }));
+              showToast(`🌐 Snapped to ${lat}°, ${lon}° (10° graticule)`);
+            }},
+            { id: "snapMaidenhead", label: "📡 Snap view to nearest Maidenhead grid-square center (~5'×2.5')", group: "Tools", icon: Crosshair, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              // Maidenhead 6-char locator. Each subsquare = 5 minutes lon × 2.5 minutes lat.
+              // Snap to the center of the current subsquare.
+              const lonMin = Math.floor((c.lon + 180) / (5/60)) * (5/60) - 180 + (5/60)/2;
+              const latMin = Math.floor((c.lat + 90) / (2.5/60)) * (2.5/60) - 90 + (2.5/60)/2;
+              setFlyTo((p) => ({ id: p.id + 1, lat: latMin, lon: lonMin, altKm: c.altKm }));
+              showToast(`📡 Snapped to Maidenhead subsquare center: ${latMin.toFixed(4)}°, ${lonMin.toFixed(4)}° (~5'×2.5' cell)`);
+            }},
+            // Fly to the most-evenly-spaced point — antimeridian + equator
+            // intersection — useful as a 'reset to crosshairs' but for
+            // grid-aligned exploration starting fresh.
+            { id: "snapEquatorPrime", label: "🎯 Fly to (0°, 0°) — equator + prime meridian (Null Island)", group: "Tools", icon: Crosshair, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 0, lon: 0, altKm: 1500 }));
+              showToast(`🎯 (0°, 0°) — Gulf of Guinea, ~570 km south of Ghana. Known affectionately as 'Null Island' to GIS folks.`);
+            }},
             // ===== Calendar / time utility commands =====
             { id: "calendarToday", label: "📅 Today's day-of-year, ISO week, Julian day", group: "Tools", icon: Compass, run: () => {
               const now = new Date();
