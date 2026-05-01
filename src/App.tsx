@@ -5476,6 +5476,33 @@ function App() {
                 showToast(`🛤 Reordered ${pins.length} pins · ${formatDistKm(oldTotal, unitsImperial)} → ${formatDistKm(newTotal, unitsImperial)} (saved ${formatDistKm(saved, unitsImperial)}, ${pct}%)`);
               },
             }] : []),
+            // ===== Earth's extremes — superlatives the bookmarks file
+            // doesn't cover. Each flies to a real geographic extreme with a
+            // contextual factoid in the toast.
+            { id: "extremeChallengerDeep", label: "🌊 Extreme: Challenger Deep (deepest point on Earth, -10,994 m)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 11.373, lon: 142.591, altKm: 80 }));
+              showToast(`🌊 Challenger Deep · -10,994 m · Mariana Trench · only 3 humans have been here as of 2019`);
+            }},
+            { id: "extremePointNemo", label: "🏝 Extreme: Point Nemo (most remote ocean point, 2,688 km from land)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: -48.876, lon: -123.393, altKm: 1500 }));
+              showToast(`🏝 Point Nemo · oceanic pole of inaccessibility · nearest land is Ducie Island, ~2,688 km away`);
+            }},
+            { id: "extremeVostok", label: "🥶 Extreme: Vostok Station (coldest place on Earth, -89.2 °C)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: -78.464, lon: 106.836, altKm: 200 }));
+              showToast(`🥶 Vostok Station · coldest temperature ever recorded on Earth · -89.2 °C in July 1983`);
+            }},
+            { id: "extremeLutDesert", label: "🔥 Extreme: Lut Desert (hottest surface, 70.7 °C)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 30.733, lon: 59.000, altKm: 200 }));
+              showToast(`🔥 Lut Desert (Dasht-e Lut) · hottest land surface ever measured · 70.7 °C via MODIS satellite`);
+            }},
+            { id: "extremeDeadSea", label: "🧂 Extreme: Dead Sea shore (lowest land elevation, -430 m)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 31.502, lon: 35.500, altKm: 80 }));
+              showToast(`🧂 Dead Sea shore · -430 m below sea level · also the saltiest large body of water (~342 g/L)`);
+            }},
+            { id: "extremeMaunaKea", label: "🏔 Extreme: Mauna Kea base (tallest mountain base-to-peak, 10,210 m)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 19.821, lon: -155.468, altKm: 60 }));
+              showToast(`🏔 Mauna Kea · 4,207 m above sea level but rises 10,210 m from its underwater base — taller than Everest`);
+            }},
             // ===== Landmark discovery =====
             { id: "landmarksClosest", label: "🗺 Show 5 closest landmarks to current view", group: "Tools", icon: Sparkles, run: () => {
               const c = cameraStateRef.current;
