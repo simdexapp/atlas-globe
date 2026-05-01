@@ -4553,6 +4553,40 @@ function App() {
             // View
             { id: "reset", label: "Reset view", group: "View", icon: Crosshair, hint: "R", run: () => resetView() },
             { id: "toggleHide", label: hideUi ? "Show UI" : "Hide UI", group: "View", icon: Eye, hint: "H", run: () => setHideUi((v) => !v) },
+            // ===== Quick combo / panic commands =====
+            { id: "quickNightMode", label: "🌑 Quick night mode (dark theme + hide UI + stars on)", group: "View", icon: SunIcon, run: () => {
+              setUiTheme("oled");
+              setHideUi(true);
+              setLayers((prev) => ({ ...prev, stars: true, atmosphere: true, nightLights: true }));
+              showToast(`🌑 Night mode — dark theme + UI hidden + stars/lights on. Press H to bring UI back.`);
+            }},
+            { id: "quickClearAll", label: "❌ Clear ALL selections (pin + aircraft + measure path)", group: "Tools", icon: RotateCcw, run: () => {
+              const counts: string[] = [];
+              if (selectedPin) { setSelectedPin(null); counts.push("pin"); }
+              if (selectedAircraftId) { setSelectedAircraftId(null); counts.push("aircraft"); }
+              if (measureMode && measurePoints.length > 0) { setMeasurePoints([]); counts.push("measure path"); }
+              if (counts.length === 0) { showToast(`❌ Nothing was selected`); return; }
+              showToast(`❌ Cleared: ${counts.join(", ")}`);
+            }},
+            { id: "quickPanicReset", label: "🆘 Panic reset (close all modals + tools + selections)", group: "Tools", icon: RotateCcw, run: () => {
+              setCommandPaletteOpen(false);
+              setShowSearch(false);
+              setShowShortcuts(false);
+              setShowAbout(false);
+              setShowEmbed(false);
+              setCustomizeUiMode(false);
+              setMeasureMode(false);
+              setMeasurePoints([]);
+              setPinTool(false);
+              setSelectedPin(null);
+              setSelectedAircraftId(null);
+              setHideUi(false);
+              showToast(`🆘 Reset everything — modals closed, tools off, selections cleared, UI shown`);
+            }},
+            { id: "quickAtlasResetView", label: "🌍 Reset to default Atlas view (orbit-friendly altitude, equator)", group: "View", icon: Crosshair, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 25, lon: 0, altKm: 12000 }));
+              showToast(`🌍 Reset to default Atlas orbit position (25°N, 0°E, 12,000 km)`);
+            }},
             // Direct theme picks. The existing T shortcut cycles, these
             // jump directly so power users don't have to count taps.
             { id: "themeDark",  label: "Theme: Dark (default)",  group: "View", icon: SunIcon, run: () => setUiTheme("dark") },
