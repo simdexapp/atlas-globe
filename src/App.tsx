@@ -10924,6 +10924,59 @@ function App() {
               setSurfaceFog((v) => !v);
               showToast(`⚡ Performance mode toggled`);
             }},
+            // ===== Network / hardware diagnostic commands =====
+            { id: "networkStatus", label: "📡 Online / offline status + connection quality", group: "Tools", icon: Compass, run: () => {
+              const online = navigator.onLine;
+              const conn = (navigator as any).connection;
+              const effType = conn?.effectiveType ?? "?";
+              const downlink = conn?.downlink ? `${conn.downlink} Mbps` : "?";
+              const rtt = conn?.rtt !== undefined ? `${conn.rtt}ms` : "?";
+              const saveData = conn?.saveData ? "✓ saveData on" : "✗ saveData off";
+              showToast(`📡 ${online ? "🟢 online" : "🔴 offline"} · effective ${effType} · down ${downlink} · RTT ${rtt} · ${saveData}`);
+            }},
+            { id: "webglInfo", label: "🖥 WebGL renderer + GPU vendor info", group: "Tools", icon: Compass, run: () => {
+              const canvas = document.createElement("canvas");
+              const gl = canvas.getContext("webgl2") || canvas.getContext("webgl");
+              if (!gl) { showToast("WebGL not available"); return; }
+              const dbg = (gl as any).getExtension("WEBGL_debug_renderer_info");
+              const vendor = dbg ? gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) : gl.getParameter(gl.VENDOR);
+              const renderer = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+              const version = gl.getParameter(gl.VERSION);
+              const maxTex = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+              showToast(`🖥 ${vendor} · ${renderer} · ${version} · max tex ${maxTex}px`);
+            }},
+            { id: "perfMemory", label: "📊 Show JS heap memory snapshot (if supported)", group: "Tools", icon: Compass, run: () => {
+              const mem = (performance as any).memory;
+              if (!mem) { showToast("performance.memory not available (Chromium-only API)"); return; }
+              const usedMb = (mem.usedJSHeapSize / 1024 / 1024).toFixed(1);
+              const totalMb = (mem.totalJSHeapSize / 1024 / 1024).toFixed(1);
+              const limitMb = (mem.jsHeapSizeLimit / 1024 / 1024).toFixed(0);
+              const pct = (mem.usedJSHeapSize / mem.jsHeapSizeLimit * 100).toFixed(1);
+              showToast(`📊 JS heap: ${usedMb}MB used · ${totalMb}MB allocated · ${limitMb}MB limit (${pct}%)`);
+            }},
+            { id: "batteryStatus", label: "🔋 Show battery status (if supported)", group: "Tools", icon: Compass, run: async () => {
+              const getBat = (navigator as any).getBattery;
+              if (!getBat) { showToast("Battery API not available (often blocked for privacy on desktop browsers)"); return; }
+              try {
+                const b = await getBat.call(navigator);
+                const pct = Math.round(b.level * 100);
+                const charging = b.charging ? "🔌 charging" : "🔋 on battery";
+                const remaining = b.charging
+                  ? (b.chargingTime === Infinity ? "?" : `${Math.round(b.chargingTime / 60)} min to full`)
+                  : (b.dischargingTime === Infinity ? "?" : `${Math.round(b.dischargingTime / 60)} min remaining`);
+                showToast(`${charging} · ${pct}% · ${remaining}`);
+              } catch { showToast("Battery API call failed"); }
+            }},
+            { id: "storageQuota", label: "📊 Show storage quota + used (browser estimate)", group: "Tools", icon: Compass, run: async () => {
+              if (!navigator.storage?.estimate) { showToast("Storage estimate API not available"); return; }
+              try {
+                const est = await navigator.storage.estimate();
+                const usedMb = est.usage !== undefined ? (est.usage / 1024 / 1024).toFixed(1) : "?";
+                const quotaMb = est.quota !== undefined ? (est.quota / 1024 / 1024).toFixed(0) : "?";
+                const pct = (est.usage !== undefined && est.quota) ? (est.usage / est.quota * 100).toFixed(2) : "?";
+                showToast(`📊 Storage estimate: ${usedMb}MB used / ${quotaMb}MB quota (${pct}%)`);
+              } catch { showToast("Storage estimate call failed"); }
+            }},
             // Date / time facts
             // Browser info — useful debug info for support requests
             { id: "browserInfo", label: "Show browser / device info (toast)", group: "Tools", icon: Sparkles, run: () => {
