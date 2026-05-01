@@ -13731,37 +13731,46 @@ function CoordinatesWidget({ cameraLat, cameraLon }: { cameraLat: number; camera
     return `${aLat.toFixed(2)}°, ${aLon.toFixed(2)}°`;
   }, [cameraLat, cameraLon]);
 
+  // Click any row to copy that format to the clipboard. The values
+  // themselves are pre-formatted strings, so we copy them verbatim.
+  const copy = (text: string) => {
+    navigator.clipboard?.writeText(text).then(
+      () => { /* the parent's toast hook is out of scope; the click feedback is the brief flash on the row */ },
+      () => { /* ignore — clipboard might be blocked in iframe etc. */ }
+    );
+  };
+  const ddText = `${cameraLat.toFixed(4)}°, ${cameraLon.toFixed(4)}°`;
   return (
     <div
       className="atlasCoordinatesWidget"
       role="status"
-      aria-label="Coordinates of current view in multiple formats: decimal, DMS, Maidenhead grid, Mercator pixel, antipode"
+      aria-label="Coordinates of current view in multiple formats: decimal, DMS, Maidenhead grid, Mercator pixel, antipode. Click any row to copy."
     >
       <div className="atlasCoordinatesHead">
         <Compass size={11} />
-        <span>Coordinates</span>
+        <span>Coordinates · click row to copy</span>
       </div>
       <div className="atlasCoordinatesGrid">
-        <div className="atlasCoordRow">
+        <button type="button" className="atlasCoordRow" onClick={() => copy(ddText)} title="Click to copy decimal degrees">
           <span className="atlasCoordLabel">DD</span>
-          <span className="atlasCoordValue">{cameraLat.toFixed(4)}°, {cameraLon.toFixed(4)}°</span>
-        </div>
-        <div className="atlasCoordRow">
+          <span className="atlasCoordValue">{ddText}</span>
+        </button>
+        <button type="button" className="atlasCoordRow" onClick={() => copy(dms)} title="Click to copy degrees/minutes/seconds">
           <span className="atlasCoordLabel">DMS</span>
           <span className="atlasCoordValue">{dms}</span>
-        </div>
-        <div className="atlasCoordRow">
+        </button>
+        <button type="button" className="atlasCoordRow" onClick={() => copy(maidenhead)} title="Click to copy Maidenhead grid (ham radio)">
           <span className="atlasCoordLabel">Grid</span>
-          <span className="atlasCoordValue" title="Maidenhead grid locator (ham radio)">{maidenhead}</span>
-        </div>
-        <div className="atlasCoordRow">
+          <span className="atlasCoordValue">{maidenhead}</span>
+        </button>
+        <button type="button" className="atlasCoordRow" onClick={() => copy(mercator)} title="Click to copy Web Mercator pixel position at zoom 0">
           <span className="atlasCoordLabel">XY</span>
-          <span className="atlasCoordValue" title="Web Mercator pixel position at zoom 0">{mercator}</span>
-        </div>
-        <div className="atlasCoordRow">
+          <span className="atlasCoordValue">{mercator}</span>
+        </button>
+        <button type="button" className="atlasCoordRow" onClick={() => copy(antipode)} title="Click to copy antipode coordinates">
           <span className="atlasCoordLabel">Anti</span>
-          <span className="atlasCoordValue" title="Antipode — diametrically opposite point">{antipode}</span>
-        </div>
+          <span className="atlasCoordValue">{antipode}</span>
+        </button>
       </div>
     </div>
   );

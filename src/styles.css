@@ -417,6 +417,22 @@ input:focus-visible,
   border-radius: 4px;
   background: var(--gray-1);
   font-size: 10.5px;
+  /* Button-specific resets so it looks identical to the prior <div> */
+  border: 1px solid transparent;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  cursor: copy;
+  transition: border-color 120ms, background 120ms;
+  width: 100%;
+}
+button.atlasCoordRow:hover {
+  border-color: color-mix(in srgb, var(--accent), transparent 60%);
+  background: color-mix(in srgb, var(--accent), transparent 92%);
+}
+button.atlasCoordRow:active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent), transparent 80%);
 }
 .atlasCoordLabel {
   color: var(--gray-9);
