@@ -6327,6 +6327,34 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: 19.821, lon: -155.468, altKm: 60 }));
               showToast(`🏔 Mauna Kea · 4,207 m above sea level but rises 10,210 m from its underwater base — taller than Everest`);
             }},
+            // ===== Specific notable coordinates — geophysical / geodetic
+            // landmarks that don't fit cleanly in landmarks.ts but are
+            // worth a one-click fly-to.
+            { id: "flyGreenwichObservatory", label: "🔭 Fly to Royal Observatory Greenwich (origin of the prime meridian)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 51.4769, lon: -0.0005, altKm: 5 }));
+              showToast(`🔭 Royal Observatory Greenwich · 51.4769°N, 0.0005°W — the origin point that defines longitude 0°. Adopted internationally in 1884.`);
+            }},
+            { id: "flyGeomagneticNorth", label: "🧲 Fly to current geomagnetic North Pole (~85.84°N, 138.4°W)", group: "View", icon: Globe2, run: () => {
+              // 2024 epoch: geomagnetic north pole at approximately 85.84°N, 138.4°W
+              setFlyTo((p) => ({ id: p.id + 1, lat: 85.84, lon: -138.4, altKm: 800 }));
+              showToast(`🧲 Geomagnetic North Pole · ~85.84°N, 138.4°W (2024). Drifts ~50 km/year toward Siberia. NOT the same as the geographic pole.`);
+            }},
+            { id: "flyGeomagneticSouth", label: "🧲 Fly to current geomagnetic South Pole (~64.07°S, 135.88°E)", group: "View", icon: Globe2, run: () => {
+              // 2024 epoch: geomagnetic south pole at approximately 64.07°S, 135.88°E (off coast of Antarctica)
+              setFlyTo((p) => ({ id: p.id + 1, lat: -64.07, lon: 135.88, altKm: 800 }));
+              showToast(`🧲 Geomagnetic South Pole · ~64.07°S, 135.88°E (2024). Off the coast of Antarctica — NOT at the geographic south pole.`);
+            }},
+            { id: "flyContinentalPoleInacc", label: "🏔 Fly to continental Pole of Inaccessibility (Eurasia, most landlocked point on Earth)", group: "View", icon: Globe2, run: () => {
+              // ~46.28°N, 86.67°E in Xinjiang, China — 2,645 km from any coast
+              setFlyTo((p) => ({ id: p.id + 1, lat: 46.28, lon: 86.67, altKm: 800 }));
+              showToast(`🏔 Eurasian Pole of Inaccessibility · 46.28°N, 86.67°E in Xinjiang. Most landlocked point on any continent — 2,645 km from any coast.`);
+            }},
+            { id: "flyGeographicCenterLand", label: "🌍 Fly to the geographic center of Earth's land mass (~Turkey, Lake Tuz region)", group: "View", icon: Globe2, run: () => {
+              // Per the most-cited calculation (Holder & Holder, 2003): ~39.83°N, 34.51°E
+              // near Lake Tuz in central Turkey
+              setFlyTo((p) => ({ id: p.id + 1, lat: 39.83, lon: 34.51, altKm: 1500 }));
+              showToast(`🌍 Geographic center of land · ~39.83°N, 34.51°E in central Turkey near Lake Tuz. The point that minimizes total distance to all land surface.`);
+            }},
             // ===== Landmark discovery =====
             { id: "landmarksClosest", label: "🗺 Show 5 closest landmarks to current view", group: "Tools", icon: Sparkles, run: () => {
               const c = cameraStateRef.current;
