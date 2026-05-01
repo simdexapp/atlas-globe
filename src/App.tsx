@@ -10514,6 +10514,75 @@ function App() {
                 const newName = window.prompt("New pin name:", p.label);
                 if (newName && newName.trim()) updatePin(selectedPin, { label: newName.trim() });
               },
+            }, {
+              id: "pinDuplicate" as const,
+              label: "🔁 Duplicate selected pin (clone with same coords)",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const p = pins.find((x) => x.id === selectedPin);
+                if (!p) return;
+                const clone: Pin = {
+                  ...p,
+                  id: `pin-clone-${Date.now()}`,
+                  label: `${p.label} (copy)`,
+                  createdAt: Date.now(),
+                };
+                setPins((prev) => [...prev, clone]);
+                setSelectedPin(clone.id);
+                showToast(`🔁 Duplicated → "${clone.label}"`);
+              },
+            }, {
+              id: "pinMoveToView" as const,
+              label: "📍 Move selected pin to current view position",
+              group: "Tools" as const,
+              icon: Navigation,
+              run: () => {
+                const p = pins.find((x) => x.id === selectedPin);
+                const c = cameraStateRef.current;
+                if (!p || !c) return;
+                const oldKm = haversineKm(p.lat, p.lon, c.lat, c.lon);
+                if (!window.confirm(`Move "${p.label}" from ${formatLat(p.lat)} ${formatLon(p.lat)} to ${formatLat(c.lat)} ${formatLon(c.lon)} (${formatDistKm(oldKm, unitsImperial)} away)?`)) return;
+                updatePin(selectedPin, { lat: c.lat, lon: c.lon });
+                showToast(`📍 Moved "${p.label}" by ${formatDistKm(oldKm, unitsImperial)}`);
+              },
+            }, {
+              id: "pinCopyJson" as const,
+              label: "📋 Copy selected pin as JSON",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const p = pins.find((x) => x.id === selectedPin);
+                if (!p) return;
+                const json = JSON.stringify(p, null, 2);
+                navigator.clipboard?.writeText(json).then(
+                  () => showToast(`📋 Copied pin JSON (${json.length} chars)`),
+                  () => showToast(`📋 ${json.slice(0, 80)}…`)
+                );
+              },
+            }, {
+              id: "pinShowMetadata" as const,
+              label: "ℹ Show full metadata for selected pin",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const p = pins.find((x) => x.id === selectedPin);
+                if (!p) return;
+                const ageDays = (Date.now() - p.createdAt) / 86400_000;
+                const c = cameraStateRef.current;
+                const distFromView = c ? haversineKm(c.lat, c.lon, p.lat, p.lon) : null;
+                const parts: string[] = [
+                  `"${p.label}"`,
+                  `${formatLat(p.lat)} ${formatLon(p.lon)}`,
+                  `${ageDays < 1 ? `${(ageDays * 24).toFixed(1)}h` : `${ageDays.toFixed(0)}d`} old`,
+                  `color ${p.color}`,
+                ];
+                if (typeof p.altitudeM === "number") parts.push(`alt ${p.altitudeM.toLocaleString()}m`);
+                if (p.note) parts.push(`📝 ${p.note.slice(0, 30)}${p.note.length > 30 ? "…" : ""}`);
+                if (p.photo) parts.push(`📷 has photo`);
+                if (distFromView !== null) parts.push(`${formatDistKm(distFromView, unitsImperial)} from view`);
+                showToast(`ℹ ${parts.join(" · ")}`);
+              },
             }] : []),
             { id: "solarZenithHere", label: "Show solar zenith time (sun directly overhead) for this view", group: "Tools", icon: SunIcon, run: () => {
               const c = cameraStateRef.current;
