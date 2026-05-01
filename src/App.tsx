@@ -12225,6 +12225,64 @@ function App() {
               URL.revokeObjectURL(url);
               showToast(`📊 Exported ${pins.length} pin${pins.length === 1 ? "" : "s"} as CSV`);
             }},
+            // ===== Live-data CSV exports — snapshot the current state of
+            // each polled data layer to a downloadable CSV.
+            { id: "aircraftExportCsv", label: aircraftSnapshot && aircraftSnapshot.aircraft.length > 0 ? `📊 Export ${aircraftSnapshot.aircraft.length} live aircraft as CSV (snapshot)` : "Export live aircraft as CSV (no aircraft loaded)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const escape = (s: string) => `"${(s || "").replace(/"/g, '""')}"`;
+              const header = "icao24,callsign,country,registration,type,category,lat,lon,altitudeM,velocityMs,headingDeg,verticalRateMs,onGround,squawk,lastContact\n";
+              const rows = aircraftSnapshot.aircraft.map(a => [
+                a.icao24, escape(a.callsign), escape(a.country), escape(a.registration), escape(a.type), a.category,
+                a.lat.toFixed(6), a.lon.toFixed(6), a.altitudeM.toFixed(1),
+                a.velocityMs.toFixed(2), a.headingDeg.toFixed(1), a.verticalRateMs.toFixed(2),
+                a.onGround ? "true" : "false", a.squawk, a.lastContact,
+              ].join(",")).join("\n");
+              const blob = new Blob([header + rows], { type: "text/csv;charset=utf-8" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `atlas-aircraft-${new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-")}.csv`;
+              a.click();
+              setTimeout(() => URL.revokeObjectURL(url), 500);
+              showToast(`📊 Exported ${aircraftSnapshot.aircraft.length} aircraft snapshot to CSV`);
+            }},
+            { id: "earthquakesExportCsv", label: earthquakes.length > 0 ? `📊 Export ${earthquakes.length} earthquakes as CSV (24h USGS)` : "Export earthquakes as CSV (none loaded — toggle layer)", group: "Tools", icon: Sparkles, run: () => {
+              if (earthquakes.length === 0) { showToast("Earthquakes layer not loaded"); return; }
+              const escape = (s: string) => `"${(s || "").replace(/"/g, '""')}"`;
+              const header = "id,mag,place,lat,lon,depthKm,timeUtc\n";
+              const rows = earthquakes.map(q => [
+                q.id, q.mag.toFixed(2), escape(q.place),
+                q.lat.toFixed(6), q.lon.toFixed(6), q.depth.toFixed(1),
+                new Date(q.time).toISOString(),
+              ].join(",")).join("\n");
+              const blob = new Blob([header + rows], { type: "text/csv;charset=utf-8" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `atlas-earthquakes-${new Date().toISOString().slice(0, 10)}.csv`;
+              a.click();
+              setTimeout(() => URL.revokeObjectURL(url), 500);
+              showToast(`📊 Exported ${earthquakes.length} earthquakes to CSV`);
+            }},
+            { id: "pinDistanceMatrixCsv", label: pins.length >= 2 ? `📊 Export pin-pair distance matrix CSV (${pins.length}×${pins.length})` : "Distance matrix CSV (need ≥2 pins)", group: "Tools", icon: BookmarkPlus, run: () => {
+              if (pins.length < 2) { showToast("Need at least 2 pins for a distance matrix"); return; }
+              const escape = (s: string) => `"${(s || "").replace(/"/g, '""')}"`;
+              // Header row: empty cell + each pin's label
+              const header = "," + pins.map(p => escape(p.label)).join(",") + "\n";
+              // Each row: pin label + distance to every other pin (in km)
+              const rows = pins.map(a =>
+                escape(a.label) + "," +
+                pins.map(b => a.id === b.id ? "0" : haversineKm(a.lat, a.lon, b.lat, b.lon).toFixed(2)).join(",")
+              ).join("\n");
+              const blob = new Blob([header + rows], { type: "text/csv;charset=utf-8" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `atlas-pin-distance-matrix-${new Date().toISOString().slice(0, 10)}.csv`;
+              a.click();
+              setTimeout(() => URL.revokeObjectURL(url), 500);
+              showToast(`📊 Exported ${pins.length}×${pins.length} pin distance matrix (km) to CSV`);
+            }},
             // GPX — for hiking/cycling GPS devices and apps (Garmin, Strava, etc).
             { id: "pinExportGpx", label: pins.length > 0 ? `Export all ${pins.length} pin${pins.length === 1 ? "" : "s"} as GPX (GPS / hiking apps)` : "Export pins as GPX (no pins yet)", group: "Tools", icon: BookmarkPlus, run: () => {
               if (pins.length === 0) { showToast("No pins to export"); return; }
