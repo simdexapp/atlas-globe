@@ -5145,6 +5145,18 @@ function App() {
               } catch { /* ignore */ }
               showToast(`📊 ${pins.length} pins · ${userBmks} user bookmarks · ${savedMeasurements} measurements · ${widgetPos} widget positions · ${homeLocation ? "home set" : "no home"}`);
             }},
+            // Hard reload — bypasses browser cache (Ctrl+F5 equivalent
+            // for users who don't know the shortcut). Useful after the
+            // user updates client-side localStorage state and wants
+            // a clean re-mount.
+            { id: "hardReload", label: "🔄 Hard reload (bypass browser cache)", group: "Tools", icon: RotateCcw, run: () => {
+              window.location.reload();
+            }},
+            // Show URL hash — useful for debugging deep-link encoding.
+            { id: "showHash", label: "🔍 Show URL hash (debug — see encoded camera state)", group: "Tools", icon: Compass, run: () => {
+              const hash = window.location.hash || "(no hash)";
+              showToast(`🔍 ${hash.slice(0, 200)}`);
+            }},
             // Toggle ALL data layers ON at once — maximum-info view.
             // Useful for showcasing the app or seeing everything at once.
             { id: "allLayersOn", label: "🌐 Turn ALL data layers ON (max-info mode)", group: "View", icon: Sparkles, run: () => {
