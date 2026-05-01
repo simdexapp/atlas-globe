@@ -5254,6 +5254,79 @@ function App() {
               const fractionEarth = horizonKm / (Math.PI * EARTH_RADIUS_KM);
               showToast(`↻ From ${formatDistKm(h, unitsImperial)} altitude, horizon is ${formatDistKm(horizonKm, unitsImperial)} away — ${(fractionEarth * 100).toFixed(1)}% of the way around Earth`);
             }},
+            // ===== Earth-trivia / physics-fact commands =====
+            { id: "factEarthSpinSpeed", label: "🌀 Earth's surface speed at this latitude (rotation)", group: "Tools", icon: Compass, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              // Equator surface speed = 2π × R / 24h ≈ 1670 km/h
+              // At latitude φ: speed = equatorial × cos(φ)
+              const equatorial = 2 * Math.PI * EARTH_RADIUS_KM / 24;
+              const speed = equatorial * Math.cos(c.lat * Math.PI / 180);
+              const mph = speed / 1.609344;
+              const pctEquator = (speed / equatorial * 100).toFixed(0);
+              showToast(`🌀 At ${formatLat(c.lat)}: rotating at ${speed.toFixed(0)} km/h (${mph.toFixed(0)} mph) eastward — ${pctEquator}% of equatorial 1670 km/h`);
+            }},
+            { id: "factWalkAroundLatitude", label: "🚶 How long to walk around the world at this latitude?", group: "Tools", icon: Compass, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const equatorial = 2 * Math.PI * EARTH_RADIUS_KM;
+              const circAtLat = equatorial * Math.cos(c.lat * Math.PI / 180);
+              if (circAtLat < 1) { showToast(`🚶 At ${formatLat(c.lat)} you're at the pole — could 'walk around' in seconds`); return; }
+              const walkHours = circAtLat / 5;       // 5 km/h walking pace
+              const walkDays = walkHours / 24;
+              const walkYears = walkDays / 365.25;
+              showToast(`🚶 Circle at ${formatLat(c.lat)}: ${formatDistKm(circAtLat, unitsImperial)}. Walk @ 5 km/h: ${walkDays.toFixed(0)} days non-stop (${walkYears.toFixed(2)} years)`);
+            }},
+            { id: "factEarthFitsInSun", label: "☀ How many Earths fit inside the Sun?", group: "Tools", icon: SunIcon, run: () => {
+              // Volumetrically: Sun ≈ 1.41×10^18 km³, Earth ≈ 1.083×10^12 km³
+              const sunVol = 1.41e18;
+              const earthVol = 1.083e12;
+              const ratio = Math.round(sunVol / earthVol);
+              showToast(`☀ ${ratio.toLocaleString()} Earths fit inside the Sun (volumetrically). The Sun's diameter is 109× Earth's.`);
+            }},
+            { id: "factOrbitalSpeed", label: "🪐 Earth's current orbital speed around the Sun", group: "Tools", icon: SunIcon, run: () => {
+              // Average orbital speed ≈ 29.78 km/s. Varies ±0.5 km/s due to
+              // elliptical orbit (max at perihelion ~Jan 4, min at aphelion ~Jul 4).
+              const now = new Date();
+              const start = Date.UTC(now.getUTCFullYear(), 0, 1);
+              const doy = Math.floor((now.getTime() - start) / 86400_000);
+              // Perihelion approx Jan 4 (DoY 4), aphelion Jul 4 (DoY 185)
+              // Simple cosine model: speed = avg + amp × cos(2π × (doy - 4) / 365)
+              const speed = 29.78 + 0.50 * Math.cos(2 * Math.PI * (doy - 4) / 365);
+              const speedKmH = speed * 3600;
+              const speedMph = speedKmH / 1.609344;
+              showToast(`🪐 Earth is currently moving ~${speed.toFixed(2)} km/s around the Sun (${speedKmH.toFixed(0)} km/h, ${speedMph.toFixed(0)} mph)`);
+            }},
+            { id: "factEarthFact", label: "🌍 Random Earth fact (rotates daily)", group: "Tools", icon: Sparkles, run: () => {
+              const facts = [
+                "🌍 Earth's rotation is slowing by ~1.78ms per century — the Moon's tidal pull is gradually braking us.",
+                "🌊 The Pacific Ocean covers 32% of Earth's surface — larger than ALL continents combined.",
+                "❄ Antarctica holds 60% of Earth's freshwater locked in ice. If it melted, sea level would rise 60 m.",
+                "🔥 The Earth's core is ~5,400°C — about as hot as the Sun's surface.",
+                "💨 The atmosphere weighs ~5.15 quintillion kg, but it's all held by gravity in a thin 100km layer.",
+                "🌋 There are ~1,500 active volcanoes; ~50 erupt every year. Most are along the Pacific Ring of Fire.",
+                "⛰ Mt. Everest grows ~4mm per year as the Indian plate keeps shoving Asia upward.",
+                "🌳 The Amazon produces 6-9% of the world's oxygen — but its real value is biodiversity (10% of all known species).",
+                "🌪 Tornado Alley (USA) sees ~1,200 tornadoes per year — more than any other region on Earth.",
+                "🏔 K2 has a death rate of ~25% for summit attempts vs Everest's 4% — much steeper, weather, technical climbing.",
+                "🌏 Earth is not a perfect sphere — it bulges 21km wider at the equator due to rotation.",
+                "🧲 Earth's magnetic poles wander ~50km/year currently — the magnetic North Pole is racing toward Siberia.",
+                "🌊 The Mariana Trench (-10,994 m) is deeper than Mt. Everest is tall (8,849 m) by 2,145 m.",
+                "🌑 Without the Moon, Earth's day would be ~6-8 hours; the Moon's drag has slowed us over billions of years.",
+                "🛰 The ISS travels at ~7.66 km/s and orbits Earth every 92 minutes — astronauts see ~16 sunrises per day.",
+                "🧊 The 2023 minimum Arctic sea ice extent was 4.23 million km² — among the lowest on record.",
+                "🌍 Earth has 7+ trillion m³ of fresh groundwater — most is hard to access (deep aquifers, fossil water).",
+                "🐋 Blue whales are bigger than any known dinosaur. Their hearts weigh ~180 kg.",
+                "🌑 New Moon happens roughly every 29.53 days (the synodic month). The sidereal month (vs stars) is 27.32 days.",
+                "🌋 Yellowstone's caldera is one of the largest 'supervolcanoes' on Earth. Last major eruption was 640,000 years ago.",
+              ];
+              // Pick deterministically by day-of-year so it 'feels' daily
+              const now = new Date();
+              const start = Date.UTC(now.getUTCFullYear(), 0, 1);
+              const doy = Math.floor((now.getTime() - start) / 86400_000);
+              const fact = facts[doy % facts.length];
+              showToast(fact);
+            }},
             // ===== Discovery / preset adventures =====
             // Drop pins at the 7 continents — a curated starter set so
             // new users have an immediate visual sense of pin coverage
