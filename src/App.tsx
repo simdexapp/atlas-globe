@@ -11709,6 +11709,164 @@ ${wpts}
               };
               input.click();
             }},
+            // ===== Additional pin import formats — CSV, KML, GPX, plus
+            // a paste-from-clipboard variant. Round-trip with the existing
+            // export commands above (lines ~10337–10377).
+            { id: "pinImportCsv", label: "Import pins from CSV (lat,lon,label,...) file", group: "Tools", icon: BookmarkPlus, run: () => {
+              const input = document.createElement("input");
+              input.type = "file";
+              input.accept = "text/csv,.csv,.txt";
+              input.onchange = async () => {
+                const file = input.files?.[0];
+                if (!file) return;
+                try {
+                  const text = await file.text();
+                  // Accept either our own export format (id,label,lat,lon,...)
+                  // or a generic 'lat,lon[,label][,note]' minimum.
+                  const lines = text.split(/\r?\n/).filter(l => l.trim());
+                  if (lines.length === 0) { showToast("CSV is empty"); return; }
+                  // Parse header to figure out column positions
+                  const header = lines[0].split(",").map(h => h.trim().toLowerCase().replace(/^"|"$/g, ""));
+                  const latIdx = header.findIndex(h => h === "lat" || h === "latitude");
+                  const lonIdx = header.findIndex(h => h === "lon" || h === "longitude" || h === "lng");
+                  const labelIdx = header.findIndex(h => h === "label" || h === "name");
+                  const noteIdx = header.findIndex(h => h === "note" || h === "description" || h === "desc");
+                  const colorIdx = header.findIndex(h => h === "color");
+                  if (latIdx < 0 || lonIdx < 0) { showToast("CSV header must include 'lat' and 'lon' (or latitude/longitude)"); return; }
+                  const imported: Pin[] = [];
+                  for (let i = 1; i < lines.length; i++) {
+                    // Naive CSV split — doesn't handle commas inside quoted fields.
+                    // For our exports it's sufficient since labels rarely contain commas.
+                    const parts = lines[i].match(/("([^"]|"")*"|[^,]*)(?=,|$)/g)?.map(s => s.replace(/^"|"$/g, "").replace(/""/g, '"')) ?? lines[i].split(",");
+                    const lat = parseFloat(parts[latIdx]);
+                    const lon = parseFloat(parts[lonIdx]);
+                    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+                    if (Math.abs(lat) > 90 || Math.abs(lon) > 180) continue;
+                    imported.push({
+                      id: `pin-csv-${Date.now()}-${i}`,
+                      lat, lon,
+                      label: (labelIdx >= 0 && parts[labelIdx]?.trim()) || `Imported ${imported.length + 1}`,
+                      color: (colorIdx >= 0 && /^#[0-9a-f]{6}$/i.test(parts[colorIdx])) ? parts[colorIdx] : PIN_COLORS[Math.floor(Math.random() * PIN_COLORS.length)],
+                      note: noteIdx >= 0 && parts[noteIdx]?.trim() ? parts[noteIdx].trim() : undefined,
+                      createdAt: Date.now(),
+                    });
+                  }
+                  if (imported.length === 0) { showToast("No valid lat/lon rows in CSV"); return; }
+                  setPins((prev) => [...prev, ...imported]);
+                  showToast(`📊 Imported ${imported.length} pin${imported.length === 1 ? "" : "s"} from CSV`);
+                } catch { showToast("Invalid CSV file"); }
+              };
+              input.click();
+            }},
+            { id: "pinImportKml", label: "Import pins from KML (Google Earth) file", group: "Tools", icon: BookmarkPlus, run: () => {
+              const input = document.createElement("input");
+              input.type = "file";
+              input.accept = ".kml,application/vnd.google-earth.kml+xml,application/xml,text/xml";
+              input.onchange = async () => {
+                const file = input.files?.[0];
+                if (!file) return;
+                try {
+                  const text = await file.text();
+                  const doc = new DOMParser().parseFromString(text, "text/xml");
+                  if (doc.querySelector("parsererror")) { showToast("KML parse error"); return; }
+                  const placemarks = Array.from(doc.querySelectorAll("Placemark"));
+                  const imported: Pin[] = [];
+                  for (const pm of placemarks) {
+                    const coordsText = pm.querySelector("Point > coordinates")?.textContent?.trim();
+                    if (!coordsText) continue;
+                    // KML coords are "lon,lat[,alt]"
+                    const [lonStr, latStr, altStr] = coordsText.split(",");
+                    const lat = parseFloat(latStr);
+                    const lon = parseFloat(lonStr);
+                    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+                    if (Math.abs(lat) > 90 || Math.abs(lon) > 180) continue;
+                    const altitudeM = altStr ? parseFloat(altStr) : undefined;
+                    const name = pm.querySelector("name")?.textContent?.trim() || `Imported ${imported.length + 1}`;
+                    const desc = pm.querySelector("description")?.textContent?.trim() || undefined;
+                    imported.push({
+                      id: `pin-kml-${Date.now()}-${imported.length}`,
+                      lat, lon,
+                      label: name,
+                      note: desc,
+                      altitudeM: typeof altitudeM === "number" && Number.isFinite(altitudeM) && altitudeM !== 0 ? altitudeM : undefined,
+                      color: PIN_COLORS[Math.floor(Math.random() * PIN_COLORS.length)],
+                      createdAt: Date.now(),
+                    });
+                  }
+                  if (imported.length === 0) { showToast("No Placemark Point features in KML"); return; }
+                  setPins((prev) => [...prev, ...imported]);
+                  showToast(`🌍 Imported ${imported.length} pin${imported.length === 1 ? "" : "s"} from KML`);
+                } catch { showToast("Invalid KML file"); }
+              };
+              input.click();
+            }},
+            { id: "pinImportGpx", label: "Import pins from GPX (GPS / hiking app) file", group: "Tools", icon: BookmarkPlus, run: () => {
+              const input = document.createElement("input");
+              input.type = "file";
+              input.accept = ".gpx,application/gpx+xml,application/xml,text/xml";
+              input.onchange = async () => {
+                const file = input.files?.[0];
+                if (!file) return;
+                try {
+                  const text = await file.text();
+                  const doc = new DOMParser().parseFromString(text, "text/xml");
+                  if (doc.querySelector("parsererror")) { showToast("GPX parse error"); return; }
+                  // GPX puts waypoints in <wpt lat="..." lon="...">
+                  const wpts = Array.from(doc.querySelectorAll("wpt"));
+                  const imported: Pin[] = [];
+                  for (const wpt of wpts) {
+                    const lat = parseFloat(wpt.getAttribute("lat") ?? "NaN");
+                    const lon = parseFloat(wpt.getAttribute("lon") ?? "NaN");
+                    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+                    if (Math.abs(lat) > 90 || Math.abs(lon) > 180) continue;
+                    const name = wpt.querySelector("name")?.textContent?.trim() || `Imported ${imported.length + 1}`;
+                    const desc = wpt.querySelector("desc")?.textContent?.trim() || undefined;
+                    const eleStr = wpt.querySelector("ele")?.textContent?.trim();
+                    const altitudeM = eleStr ? parseFloat(eleStr) : undefined;
+                    imported.push({
+                      id: `pin-gpx-${Date.now()}-${imported.length}`,
+                      lat, lon,
+                      label: name,
+                      note: desc,
+                      altitudeM: typeof altitudeM === "number" && Number.isFinite(altitudeM) ? altitudeM : undefined,
+                      color: PIN_COLORS[Math.floor(Math.random() * PIN_COLORS.length)],
+                      createdAt: Date.now(),
+                    });
+                  }
+                  if (imported.length === 0) { showToast("No waypoints in GPX (file may be tracks-only)"); return; }
+                  setPins((prev) => [...prev, ...imported]);
+                  showToast(`📍 Imported ${imported.length} waypoint${imported.length === 1 ? "" : "s"} from GPX`);
+                } catch { showToast("Invalid GPX file"); }
+              };
+              input.click();
+            }},
+            { id: "pinImportClipboard", label: "📋 Import pins from clipboard (paste lat,lon[,label] per line)", group: "Tools", icon: BookmarkPlus, run: async () => {
+              try {
+                const text = (await navigator.clipboard?.readText()) ?? "";
+                if (!text.trim()) { showToast("Clipboard is empty"); return; }
+                const imported: Pin[] = [];
+                const lines = text.split(/\r?\n/).filter(l => l.trim());
+                for (const line of lines) {
+                  // Accept "lat,lon" or "lat,lon,label" or "lat lon" etc.
+                  const m = line.match(/^\s*(-?\d+(?:\.\d+)?)\s*[,\s]\s*(-?\d+(?:\.\d+)?)(?:\s*[,\s]\s*(.+))?$/);
+                  if (!m) continue;
+                  const lat = parseFloat(m[1]);
+                  const lon = parseFloat(m[2]);
+                  if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+                  if (Math.abs(lat) > 90 || Math.abs(lon) > 180) continue;
+                  imported.push({
+                    id: `pin-clip-${Date.now()}-${imported.length}`,
+                    lat, lon,
+                    label: m[3]?.trim() || `Pasted ${imported.length + 1}`,
+                    color: PIN_COLORS[Math.floor(Math.random() * PIN_COLORS.length)],
+                    createdAt: Date.now(),
+                  });
+                }
+                if (imported.length === 0) { showToast("No valid 'lat,lon' lines found in clipboard"); return; }
+                setPins((prev) => [...prev, ...imported]);
+                showToast(`📋 Imported ${imported.length} pin${imported.length === 1 ? "" : "s"} from clipboard`);
+              } catch { showToast("Couldn't read clipboard"); }
+            }},
             { id: "shareView", label: "Copy share-link to current view", group: "Tools", icon: Bookmark, run: () => {
               const c = cameraStateRef.current;
               if (!c) { showToast("Camera position unknown"); return; }
