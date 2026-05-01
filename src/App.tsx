@@ -5476,6 +5476,56 @@ function App() {
                 showToast(`🛤 Reordered ${pins.length} pins · ${formatDistKm(oldTotal, unitsImperial)} → ${formatDistKm(newTotal, unitsImperial)} (saved ${formatDistKm(saved, unitsImperial)}, ${pct}%)`);
               },
             }] : []),
+            // ===== Time-at-pins commands =====
+            ...(pins.length >= 2 ? [{
+              id: "pinsTimes" as const,
+              label: `⏰ Show local solar time at all ${pins.length} pins (sorted by time)`,
+              group: "Tools" as const,
+              icon: SunIcon,
+              run: () => {
+                const utcHr = new Date().getUTCHours() + new Date().getUTCMinutes() / 60;
+                const sorted = pins.map(p => {
+                  const localHr = ((utcHr + p.lon / 15 + 24) % 24);
+                  const lh = Math.floor(localHr);
+                  const lm = Math.round((localHr - lh) * 60);
+                  return { name: p.label, time: `${String(lh).padStart(2,"0")}:${String(lm).padStart(2,"0")}`, hour: localHr };
+                }).sort((a, b) => a.hour - b.hour);
+                const top = sorted.slice(0, 6).map(x => `${x.name} ${x.time}`).join(" · ");
+                showToast(`⏰ Pin times (sorted): ${top}${sorted.length > 6 ? ` · +${sorted.length - 6} more` : ""}`);
+              },
+            }] : []),
+            ...(pins.length >= 2 ? [{
+              id: "pinsDaytime" as const,
+              label: `☀ Find pins where it's currently daytime`,
+              group: "Tools" as const,
+              icon: SunIcon,
+              run: () => {
+                const utcHr = new Date().getUTCHours() + new Date().getUTCMinutes() / 60;
+                const day = pins.filter(p => {
+                  const localHr = ((utcHr + p.lon / 15 + 24) % 24);
+                  return localHr >= 6 && localHr < 18;
+                });
+                if (day.length === 0) { showToast("☀ No pins currently in daytime"); return; }
+                const list = day.slice(0, 8).map(p => p.label).join(", ");
+                showToast(`☀ Daytime at ${day.length}/${pins.length} pins: ${list}${day.length > 8 ? "…" : ""}`);
+              },
+            }] : []),
+            ...(pins.length >= 2 ? [{
+              id: "pinsNighttime" as const,
+              label: `🌙 Find pins where it's currently nighttime`,
+              group: "Tools" as const,
+              icon: SunIcon,
+              run: () => {
+                const utcHr = new Date().getUTCHours() + new Date().getUTCMinutes() / 60;
+                const night = pins.filter(p => {
+                  const localHr = ((utcHr + p.lon / 15 + 24) % 24);
+                  return localHr < 6 || localHr >= 18;
+                });
+                if (night.length === 0) { showToast("🌙 No pins currently in nighttime"); return; }
+                const list = night.slice(0, 8).map(p => p.label).join(", ");
+                showToast(`🌙 Nighttime at ${night.length}/${pins.length} pins: ${list}${night.length > 8 ? "…" : ""}`);
+              },
+            }] : []),
             // ===== Pin trip-planning commands =====
             // Trip cost estimate — flight cost + accommodation. Crude
             // heuristic but useful for sanity-checking trip planning.
