@@ -4717,6 +4717,68 @@ function App() {
               });
               showToast(`🎲 Random 5: ${samples.join(" · ")}`);
             }},
+            // Track an aircraft by typing its callsign — useful when you
+            // know the flight number (e.g. "UAL2402") and want to find it.
+            { id: "aircraftFindCallsign", label: "📡 Find aircraft by callsign…", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const query = window.prompt("Aircraft callsign or ICAO24 (e.g. UAL2402, BAW117, A1B2C3):");
+              if (!query) return;
+              const q = query.trim().toUpperCase();
+              const match = aircraftSnapshot.aircraft.find(a =>
+                a.callsign?.trim().toUpperCase() === q ||
+                a.icao24.toUpperCase() === q
+              );
+              if (!match) {
+                // Substring fallback
+                const partial = aircraftSnapshot.aircraft.find(a =>
+                  a.callsign?.trim().toUpperCase().includes(q) ||
+                  a.icao24.toUpperCase().includes(q)
+                );
+                if (!partial) { showToast(`📡 No aircraft matching "${q}"`); return; }
+                setSelectedAircraftId(partial.icao24);
+                setFlyTo((c) => ({ id: c.id + 1, lat: partial.lat, lon: partial.lon, altKm: 50 }));
+                showToast(`📡 Partial match: ${partial.callsign?.trim() || partial.icao24} · ${Math.round(partial.altitudeM / 0.3048).toLocaleString()} ft`);
+                return;
+              }
+              setSelectedAircraftId(match.icao24);
+              setFlyTo((c) => ({ id: c.id + 1, lat: match.lat, lon: match.lon, altKm: 50 }));
+              showToast(`📡 ${match.callsign?.trim() || match.icao24} · ${Math.round(match.altitudeM / 0.3048).toLocaleString()} ft · ${Math.round((match.velocityMs || 0) * 1.94384)} kt`);
+            }},
+            // Aircraft on approach — low altitude + descending
+            { id: "aircraftOnApproach", label: "🛬 Aircraft on final approach right now (top 5)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              // < 5000 ft AND descending > 1.5 m/s = on approach
+              const onApproach = aircraftSnapshot.aircraft.filter(a => {
+                const altFt = a.altitudeM / 0.3048;
+                return altFt > 100 && altFt < 5000 && (a.verticalRateMs ?? 0) < -1.5;
+              });
+              if (onApproach.length === 0) { showToast("🛬 No aircraft currently on approach"); return; }
+              // Sort by altitude (lowest first — closest to landing)
+              onApproach.sort((a, b) => a.altitudeM - b.altitudeM);
+              const top5 = onApproach.slice(0, 5);
+              const summary = top5.map(a => `${a.callsign?.trim() || a.icao24} (${Math.round(a.altitudeM / 0.3048).toLocaleString()}ft)`).join(", ");
+              showToast(`🛬 ${onApproach.length} on approach · top 5 by altitude: ${summary}`);
+            }},
+            // Top 5 aircraft heading directly toward camera location
+            { id: "aircraftHeadingHere", label: "🎯 Top 5 aircraft heading toward current view", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const c = cameraStateRef.current;
+              if (!c) return;
+              // For each aircraft, compute bearing TO camera, then compare
+              // to its heading. Smaller angle diff = more directly toward.
+              const ranked = aircraftSnapshot.aircraft.map(a => {
+                const bearingToHere = bearingDeg(a.lat, a.lon, c.lat, c.lon);
+                const headingDiff = Math.abs(((a.headingDeg || 0) - bearingToHere + 540) % 360 - 180);
+                const km = haversineKm(a.lat, a.lon, c.lat, c.lon);
+                return { a, headingDiff, km };
+              })
+              .filter(x => x.headingDiff < 30 && x.km < 2000)  // within 30° of straight + within 2000km
+              .sort((a, b) => a.km - b.km)
+              .slice(0, 5);
+              if (ranked.length === 0) { showToast("🎯 No aircraft heading directly toward this view"); return; }
+              const summary = ranked.map(({ a, km }) => `${a.callsign?.trim() || a.icao24} (${formatDistKm(km, unitsImperial)})`).join(", ");
+              showToast(`🎯 Heading toward you: ${summary}`);
+            }},
             // Vertical-rate distribution — climbing / cruising / descending
             // counts give a sense of how "settled" the air traffic is.
             { id: "aircraftVerticalRate", label: "🛫🛬 Climbing / cruising / descending breakdown", group: "Tools", icon: Plane, run: () => {
