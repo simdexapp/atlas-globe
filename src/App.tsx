@@ -788,6 +788,29 @@ function App() {
   const [hideUi, setHideUi] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  // Recent commands: most-recent-first array of command IDs, persisted to
+  // localStorage. The CommandPalette renders these at the top under a
+  // 'Recent' group when no query is typed, so the user's most-used
+  // commands are always one-arrow-press away.
+  const [recentCommandIds, setRecentCommandIds] = useState<string[]>(() => {
+    try {
+      const raw = window.localStorage.getItem("atlas-recent-commands");
+      if (raw) {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) return arr.filter((x): x is string => typeof x === "string").slice(0, 20);
+      }
+    } catch { /* ignore */ }
+    return [];
+  });
+  const recordRecentCommand = useCallback((id: string) => {
+    if (!id || id === "geocode") return;       // skip the synthetic geocode item
+    setRecentCommandIds((prev) => {
+      // Move id to the front; cap at 20.
+      const next = [id, ...prev.filter(x => x !== id)].slice(0, 20);
+      try { window.localStorage.setItem("atlas-recent-commands", JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
   const [showAbout, setShowAbout] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -4467,6 +4490,8 @@ function App() {
 
       {commandPaletteOpen && (
         <CommandPalette
+          recentIds={recentCommandIds}
+          onRecord={recordRecentCommand}
           onClose={() => setCommandPaletteOpen(false)}
           onGeocodeAndFly={async (q) => {
             // Coordinate-direct fast path: if the query parses as 'lat,lon'
@@ -14611,6 +14636,8 @@ function CommandPalette({
   items,
   onClose,
   onGeocodeAndFly,
+  recentIds,
+  onRecord,
 }: {
   items: CommandItem[];
   onClose: () => void;
@@ -14619,6 +14646,11 @@ function CommandPalette({
   // type an address ("Brooklyn Bridge", "1600 Pennsylvania Ave") and
   // pick a synthetic "Fly to X" item at the bottom of the list.
   onGeocodeAndFly?: (query: string) => void;
+  // Recent commands (most-recent-first IDs). When the palette opens with
+  // no query, recent commands are shown at the top in a 'Recent' group
+  // for fast re-access. onRecord persists the run ID to localStorage.
+  recentIds?: string[];
+  onRecord?: (id: string) => void;
 }) {
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
@@ -14643,7 +14675,24 @@ function CommandPalette({
     const q = query.trim().toLowerCase();
     let matches: CommandItem[];
     if (!q) {
-      matches = items.slice(0, VISIBLE_NO_QUERY);
+      // No query: prepend up to 5 recent commands (re-grouped to "Recent")
+      // followed by the regular default list. Recent items are deduped
+      // out of the regular list so they don't appear twice — the next
+      // dedup pass handles that during display.
+      let recentBlock: CommandItem[] = [];
+      if (recentIds && recentIds.length > 0) {
+        const byId = new Map(items.map(it => [it.id, it]));
+        for (const id of recentIds.slice(0, 5)) {
+          const found = byId.get(id);
+          if (found) {
+            // Re-tag with "Recent" group so they appear under that header
+            recentBlock.push({ ...found, group: "Recent" });
+          }
+        }
+      }
+      const recentIdsSet = new Set(recentBlock.map(it => it.id));
+      const restBlock = items.filter(it => !recentIdsSet.has(it.id)).slice(0, VISIBLE_NO_QUERY);
+      matches = [...recentBlock, ...restBlock];
     } else {
       // Tokenize query on whitespace and require ALL words appear
       // somewhere in the label/group/hint, in any order. So 'daily
@@ -14674,7 +14723,7 @@ function CommandPalette({
       matches = [...matches, geocodeItem];
     }
     return matches;
-  }, [items, query, onGeocodeAndFly]);
+  }, [items, query, onGeocodeAndFly, recentIds]);
   // For the "X more — keep typing" footer when there's no query.
   const totalCommands = items.length;
   const showMoreHint = !query.trim() && totalCommands > VISIBLE_NO_QUERY;
@@ -14702,7 +14751,12 @@ function CommandPalette({
     } else if (e.key === "Enter") {
       e.preventDefault();
       const it = filtered[activeIndex];
-      if (it) { it.run(); onClose(); }
+      if (it) {
+        // Record before run so async run() doesn't matter for ordering
+        onRecord?.(it.id);
+        it.run();
+        onClose();
+      }
     }
   };
 
@@ -14759,7 +14813,7 @@ function CommandPalette({
                         // screen readers announce it as the next-Enter target.
                         aria-current={isActive ? "true" : undefined}
                         onMouseEnter={() => setActiveIndex(idx)}
-                        onClick={() => { it.run(); onClose(); }}
+                        onClick={() => { onRecord?.(it.id); it.run(); onClose(); }}
                       >
                         <Icon size={14} aria-hidden="true" />
                         <span>{it.label}</span>
