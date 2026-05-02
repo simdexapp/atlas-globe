@@ -6847,6 +6847,23 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: 42.943, lon: -122.108, altKm: 30 }));
               showToast(`🌋 Crater Lake · 594m deep (deepest in USA, 9th deepest in world) · formed ~7,700 ya when Mt. Mazama collapsed · no inflows or outflows · pristine water clarity`);
             }},
+            // ===== Sacred / pilgrimage sites =====
+            { id: "flyBagan", label: "🛕 Fly to Bagan (Myanmar — 2,200+ Buddhist temples on a single plain)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 21.1717, lon: 94.8585, altKm: 15 }));
+              showToast(`🛕 Bagan · 2,200+ surviving temples and pagodas · once 10,000+ during 11-13th century Pagan Kingdom · UNESCO 2019 · iconic hot-air balloon sunrise vistas`);
+            }},
+            { id: "flyLalibela", label: "⛪ Fly to Lalibela (Ethiopia — 11 rock-hewn monolithic churches, 12th c.)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 12.0314, lon: 39.0473, altKm: 4 }));
+              showToast(`⛪ Lalibela · 11 churches carved DOWN INTO bedrock from a single piece of stone · King Lalibela ~1200 CE · Ethiopian Orthodox pilgrimage site · UNESCO 1978`);
+            }},
+            { id: "flyKailash", label: "🏔 Fly to Mount Kailash (Tibet — sacred to four religions)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 31.0673, lon: 81.3119, altKm: 60 }));
+              showToast(`🏔 Mount Kailash · 6,638m · sacred in Hinduism / Buddhism / Jainism / Bön · never climbed · 52 km kora (pilgrimage circumambulation) takes 3 days at altitude`);
+            }},
+            { id: "flyWesternWall", label: "🕊 Fly to Western Wall (Jerusalem — holiest Jewish prayer site)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 31.7767, lon: 35.2345, altKm: 1.5 }));
+              showToast(`🕊 Western Wall (Kotel) · last remnant of the Second Temple's retaining wall · Herod the Great ~19 BCE · holiest accessible Jewish prayer site · adjacent to Temple Mount / Dome of the Rock`);
+            }},
             // ===== Landmark discovery =====
             { id: "landmarksClosest", label: "🗺 Show 5 closest landmarks to current view", group: "Tools", icon: Sparkles, run: () => {
               const c = cameraStateRef.current;
