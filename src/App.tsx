@@ -12644,6 +12644,45 @@ ${trkpts}
                 if (distFromView !== null) parts.push(`${formatDistKm(distFromView, unitsImperial)} from view`);
                 showToast(`ℹ ${parts.join(" · ")}`);
               },
+            }, {
+              id: "pinNearestLandmark" as const,
+              label: "🏛 Selected: nearest landmark to this pin",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const p = pins.find(x => x.id === selectedPin);
+                if (!p) return;
+                const nearest = LANDMARKS
+                  .map(l => ({ l, km: haversineKm(p.lat, p.lon, l.lat, l.lon) }))
+                  .sort((a, b) => a.km - b.km)[0];
+                showToast(`🏛 "${p.label}" → nearest landmark: ${nearest.l.emoji} ${nearest.l.name} (${formatDistKm(nearest.km, unitsImperial)})`);
+              },
+            }, {
+              id: "pinNearestAirport" as const,
+              label: "🛬 Selected: nearest major airport to this pin",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const p = pins.find(x => x.id === selectedPin);
+                if (!p) return;
+                const nearest = AIRPORTS
+                  .map(a => ({ a, km: haversineKm(p.lat, p.lon, a.lat, a.lon) }))
+                  .sort((x, y) => x.km - y.km)[0];
+                showToast(`🛬 "${p.label}" → nearest airport: ${nearest.a.iata} (${nearest.a.city}, ${formatDistKm(nearest.km, unitsImperial)})`);
+              },
+            }, {
+              id: "pinNearestCity" as const,
+              label: "🏙 Selected: nearest major city to this pin",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const p = pins.find(x => x.id === selectedPin);
+                if (!p) return;
+                const nearest = MAJOR_CITIES
+                  .map(c => ({ c, km: haversineKm(p.lat, p.lon, c.lat, c.lon) }))
+                  .sort((x, y) => x.km - y.km)[0];
+                showToast(`🏙 "${p.label}" → nearest major city: ${nearest.c.name}, ${nearest.c.country} (${formatDistKm(nearest.km, unitsImperial)})`);
+              },
             }] : []),
             { id: "solarZenithHere", label: "Show solar zenith time (sun directly overhead) for this view", group: "Tools", icon: SunIcon, run: () => {
               const c = cameraStateRef.current;
