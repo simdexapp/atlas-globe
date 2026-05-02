@@ -6179,6 +6179,11 @@ function App() {
             { id: "hardReload", label: "🔄 Hard reload (bypass browser cache)", group: "Tools", icon: RotateCcw, run: () => {
               window.location.reload();
             }},
+            // ===== Screenshot / capture commands =====
+            { id: "captureScreen1x", label: "📸 Capture screenshot at 1× (current resolution PNG)", group: "Tools", icon: Camera, run: () => captureAtScale(1) },
+            { id: "captureScreen2x", label: "📸 Capture screenshot at 2× (high-DPI, ~4× pixels)", group: "Tools", icon: Camera, run: () => captureAtScale(2) },
+            { id: "captureScreen4x", label: "📸 Capture screenshot at 4× (print-quality, ~16× pixels)", group: "Tools", icon: Camera, run: () => captureAtScale(4) },
+            { id: "captureScreenJpg", label: "📸 Capture screenshot as JPG (smaller file, lossy)", group: "Tools", icon: Camera, run: () => captureJpg() },
             // Show URL hash — useful for debugging deep-link encoding.
             { id: "showHash", label: "🔍 Show URL hash (debug — see encoded camera state)", group: "Tools", icon: Compass, run: () => {
               const hash = window.location.hash || "(no hash)";
