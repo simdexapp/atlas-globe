@@ -6743,6 +6743,23 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: 53.694, lon: -6.475, altKm: 3 }));
               showToast(`🌅 Newgrange · ~3200 BCE · older than Stonehenge AND the Egyptian pyramids · winter-solstice sunrise illuminates the inner chamber for 17 minutes`);
             }},
+            // ===== Historical battlefield / war memorial sites =====
+            { id: "flyNormandy", label: "🪖 Fly to Normandy beaches (D-Day landings, 6 June 1944)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 49.357, lon: -0.873, altKm: 30 }));
+              showToast(`🪖 Normandy · D-Day · 6 June 1944 · 156,000 Allied troops landed across 5 beaches (Utah/Omaha/Gold/Juno/Sword) · turning point of WWII in Europe`);
+            }},
+            { id: "flyPearlHarbor", label: "⚓ Fly to Pearl Harbor (Hawaii — 7 Dec 1941 attack)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 21.365, lon: -157.953, altKm: 8 }));
+              showToast(`⚓ Pearl Harbor · 7 Dec 1941 · surprise Japanese attack · 2,403 Americans killed · 19 ships damaged · brought US into WWII`);
+            }},
+            { id: "flyHiroshima", label: "☮ Fly to Hiroshima Peace Memorial (atomic bombing, 6 Aug 1945)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 34.395, lon: 132.453, altKm: 5 }));
+              showToast(`☮ Hiroshima Peace Memorial Park · 6 Aug 1945 · first atomic bombing in war · ~140,000 dead by end of 1945 · UNESCO World Heritage Site`);
+            }},
+            { id: "flyVolgograd", label: "🪖 Fly to Volgograd / Stalingrad (Battle of Stalingrad, 1942-43)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 48.708, lon: 44.514, altKm: 30 }));
+              showToast(`🪖 Stalingrad · Aug 1942 – Feb 1943 · ~2 million casualties (deadliest battle in human history) · turning point of WWII Eastern Front`);
+            }},
             // ===== Landmark discovery =====
             { id: "landmarksClosest", label: "🗺 Show 5 closest landmarks to current view", group: "Tools", icon: Sparkles, run: () => {
               const c = cameraStateRef.current;
