@@ -2182,8 +2182,12 @@ function App() {
     try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload)); } catch {}
   }, [layers, globe, bookmarks, uiTheme, imagery, pins, unitsImperial]);
 
+  // Toast history — last 50 toasts, ref-based to avoid re-renders.
+  // Surfaced via palette commands ('Copy last toast', 'Show history').
+  const toastHistoryRef = useRef<Array<{ ts: number; text: string }>>([]);
   const showToast = useCallback((text: string) => {
     setToast({ id: Date.now() + Math.random(), text });
+    toastHistoryRef.current = [{ ts: Date.now(), text }, ...toastHistoryRef.current].slice(0, 50);
   }, []);
 
   useEffect(() => {
@@ -7039,6 +7043,38 @@ function App() {
               const keys = Object.keys(localStorage).filter(k => k.startsWith("atlas-cache:"));
               keys.forEach(k => localStorage.removeItem(k));
               showToast(`🧹 Cleared ${keys.length} cached network result${keys.length === 1 ? "" : "s"}`);
+            }},
+            // ===== Toast history commands =====
+            // Tracks last 50 toasts (in a ref so the dashboard isn't
+            // re-rendered on every showToast). Useful for catching the
+            // text of a toast that auto-dismissed before you could read.
+            { id: "toastCopyLast", label: "📋 Copy last toast text to clipboard", group: "Tools", icon: Share2, run: () => {
+              const last = toastHistoryRef.current[0];
+              if (!last) { showToast("No toasts have fired yet this session"); return; }
+              navigator.clipboard?.writeText(last.text).then(
+                () => showToast(`📋 Copied last toast (from ${Math.round((Date.now() - last.ts) / 1000)}s ago)`),
+                () => showToast(last.text)
+              );
+            }},
+            { id: "toastShowHistory", label: "📜 Show toast history (last 50) in console", group: "Tools", icon: Compass, run: () => {
+              const hist = toastHistoryRef.current;
+              if (hist.length === 0) { showToast("No toasts have fired yet this session"); return; }
+              const lines = hist.map(t => `[${new Date(t.ts).toISOString().slice(11, 19)}] ${t.text}`).join("\n");
+              console.log(`📜 Toast history (${hist.length} entries):\n${lines}`);
+              showToast(`📜 Logged ${hist.length} toast${hist.length === 1 ? "" : "s"} to console (open DevTools to read)`);
+            }},
+            { id: "toastClearHistory", label: "🗑 Clear toast history", group: "Tools", icon: Trash2, run: () => {
+              const n = toastHistoryRef.current.length;
+              toastHistoryRef.current = [];
+              showToast(`🗑 Cleared ${n} toast history ${n === 1 ? "entry" : "entries"}`);
+            }},
+            { id: "toastRecent", label: "📜 Show last 5 toasts inline (re-display in toast queue)", group: "Tools", icon: Compass, run: () => {
+              const recent = toastHistoryRef.current.slice(0, 5);
+              if (recent.length === 0) { showToast("No toasts have fired yet this session"); return; }
+              // Re-display each with 2.5s delay so they fly past
+              recent.reverse().forEach((t, i) => {
+                setTimeout(() => showToast(`📜 ${t.text}`), i * 2500);
+              });
             }},
             // ===== State / storage management commands =====
             { id: "localStorageStats", label: "📊 Show localStorage usage breakdown by key prefix", group: "Tools", icon: Compass, run: () => {
