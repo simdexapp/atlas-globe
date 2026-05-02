@@ -13946,6 +13946,62 @@ ${wpts}
               icon: Plane,
               run: () => setAircraftCameraMode((m) => m === "wing" ? "off" : "wing"),
             }] : []),
+            // ===== Aircraft trail commands — operate on the per-aircraft
+            // trail history accumulated by the polling loop.
+            ...(selectedAircraftId ? [{
+              id: "aircraftTrailStats" as const,
+              label: "🎬 Show selected aircraft's trail length + age",
+              group: "Tools" as const,
+              icon: Plane,
+              run: () => {
+                const trail = aircraftHistoryRef.current.get(selectedAircraftId);
+                if (!trail || trail.length === 0) { showToast("No trail data for selected aircraft yet — wait for next poll"); return; }
+                const oldest = trail[0];
+                const newest = trail[trail.length - 1];
+                const ageSec = Math.round((newest.t - oldest.t) / 1000);
+                let totalKm = 0;
+                for (let i = 1; i < trail.length; i++) {
+                  totalKm += haversineKm(trail[i-1].lat, trail[i-1].lon, trail[i].lat, trail[i].lon);
+                }
+                showToast(`🎬 ${trail.length} positions over ${ageSec}s · ${formatDistKm(totalKm, unitsImperial)} ground track · ${trail.length > 1 ? `avg speed ${(totalKm / (ageSec / 3600)).toFixed(0)} km/h` : ""}`);
+              },
+            }, {
+              id: "aircraftTrailExportCsv" as const,
+              label: "📊 Export selected aircraft's trail as CSV",
+              group: "Tools" as const,
+              icon: Share2,
+              run: () => {
+                const trail = aircraftHistoryRef.current.get(selectedAircraftId);
+                if (!trail || trail.length === 0) { showToast("No trail data for selected aircraft yet"); return; }
+                const header = "t,lat,lon,altitudeM\n";
+                const rows = trail.map(p => `${new Date(p.t).toISOString()},${p.lat.toFixed(6)},${p.lon.toFixed(6)},${p.alt.toFixed(1)}`).join("\n");
+                const blob = new Blob([header + rows], { type: "text/csv;charset=utf-8" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `atlas-trail-${selectedAircraftId}-${new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-")}.csv`;
+                a.click();
+                setTimeout(() => URL.revokeObjectURL(url), 500);
+                showToast(`📊 Exported ${trail.length} trail positions to CSV`);
+              },
+            }] : []),
+            { id: "aircraftTrailGlobalStats", label: "📊 Show global aircraft trail stats (count + total positions tracked)", group: "Tools", icon: Compass, run: () => {
+              const all = aircraftHistoryRef.current;
+              if (all.size === 0) { showToast("No aircraft trails being tracked yet"); return; }
+              let totalPositions = 0;
+              let maxLen = 0, maxIcao = "";
+              for (const [icao, trail] of all.entries()) {
+                totalPositions += trail.length;
+                if (trail.length > maxLen) { maxLen = trail.length; maxIcao = icao; }
+              }
+              showToast(`📊 Tracking ${all.size} aircraft trails · ${totalPositions} total positions · longest: ${maxIcao} (${maxLen} positions)`);
+            }},
+            { id: "aircraftTrailClear", label: "🗑 Clear all aircraft trail history", group: "Tools", icon: Trash2, run: () => {
+              const n = aircraftHistoryRef.current.size;
+              if (n === 0) { showToast("No trails to clear"); return; }
+              aircraftHistoryRef.current.clear();
+              showToast(`🗑 Cleared ${n} aircraft trail${n === 1 ? "" : "s"}`);
+            }},
             { id: "timeRealTime", label: "Surface clock: real-time UTC", group: "Imagery", icon: SunIcon, run: () => { updateGlobe({ realTimeSun: true }); setSurfaceManualHour(null); } },
             { id: "time06", label: "Surface clock: 06:00 UTC (sunrise over Greenwich)", group: "Imagery", icon: SunIcon, run: () => { updateGlobe({ realTimeSun: false }); setSurfaceManualHour(6); } },
             { id: "time12", label: "Surface clock: 12:00 UTC (noon Greenwich)", group: "Imagery", icon: SunIcon, run: () => { updateGlobe({ realTimeSun: false }); setSurfaceManualHour(12); } },
