@@ -12678,6 +12678,74 @@ ${trkpts}
               const mm = Math.floor((localMs % 3600_000) / 60_000);
               showToast(`Mean solar time at ${formatLat(c.lat)} ${formatLon(c.lon)}: ${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`);
             }},
+            // ===== Timezone-aware time conversion commands =====
+            { id: "timeAtViewIn", label: "🕐 What time will it be at view in N hours? (prompt)", group: "Tools", icon: Compass, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const input = window.prompt("How many hours from now? (negative for past, e.g. -3)", "6");
+              if (input === null) return;
+              const hrs = parseFloat(input);
+              if (!Number.isFinite(hrs)) { showToast("Invalid number"); return; }
+              const future = new Date(Date.now() + hrs * 3600_000);
+              const utcMs = future.getUTCHours() * 3600_000 + future.getUTCMinutes() * 60_000;
+              const localMs = (utcMs + c.lon / 15 * 3600_000 + 86400_000) % 86400_000;
+              const hh = Math.floor(localMs / 3600_000);
+              const mm = Math.floor((localMs % 3600_000) / 60_000);
+              const sign = hrs >= 0 ? "+" : "";
+              showToast(`🕐 At ${formatLat(c.lat)} ${formatLon(c.lon)} in ${sign}${hrs}h: ${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")} (mean solar)`);
+            }},
+            { id: "timeInCapitals", label: "🕐 Show current local time in 8 major financial capitals", group: "Tools", icon: Compass, run: () => {
+              // 8 major financial centers, ordered W to E by longitude
+              const cities: Array<{ name: string; lon: number }> = [
+                { name: "LA",        lon: -118.2 },
+                { name: "NYC",       lon: -74.0 },
+                { name: "São Paulo", lon: -46.6 },
+                { name: "London",    lon:  -0.1 },
+                { name: "Frankfurt", lon:   8.7 },
+                { name: "Dubai",     lon:  55.3 },
+                { name: "Mumbai",    lon:  72.9 },
+                { name: "Singapore", lon: 103.8 },
+                { name: "Tokyo",     lon: 139.7 },
+                { name: "Sydney",    lon: 151.2 },
+              ];
+              const now = new Date();
+              const utcMs = now.getUTCHours() * 3600_000 + now.getUTCMinutes() * 60_000;
+              const formatted = cities.map(({ name, lon }) => {
+                const localMs = (utcMs + lon / 15 * 3600_000 + 86400_000) % 86400_000;
+                const hh = Math.floor(localMs / 3600_000);
+                const mm = Math.floor((localMs % 3600_000) / 60_000);
+                return `${name} ${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+              }).join(" · ");
+              showToast(`🕐 ${formatted}`);
+            }},
+            { id: "timeDifferenceWithUtc", label: "🕐 Time difference between current view and UTC", group: "Tools", icon: Compass, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const offsetH = c.lon / 15;
+              const wholeH = Math.floor(Math.abs(offsetH));
+              const minutes = Math.round((Math.abs(offsetH) - wholeH) * 60);
+              const sign = offsetH >= 0 ? "+" : "−";
+              const ahead = offsetH >= 0 ? "ahead of" : "behind";
+              showToast(`🕐 ${formatLat(c.lat)} ${formatLon(c.lon)} is ${sign}${wholeH}h ${minutes}m UTC · ${ahead} UTC by ${Math.abs(offsetH).toFixed(1)}h (mean solar — political TZ may differ)`);
+            }},
+            { id: "timeBusinessHours", label: "🕐 Is current view in business hours? (9am–5pm local solar)", group: "Tools", icon: Compass, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const now = new Date();
+              const utcMs = now.getUTCHours() * 3600_000 + now.getUTCMinutes() * 60_000;
+              const localMs = (utcMs + c.lon / 15 * 3600_000 + 86400_000) % 86400_000;
+              const hh = Math.floor(localMs / 3600_000);
+              const dayOfWeek = new Date(now.getTime() + c.lon / 15 * 3600_000).getUTCDay();
+              const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
+              const isBusiness = isWeekday && hh >= 9 && hh < 17;
+              const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+              if (isBusiness) {
+                showToast(`🕐 ✓ ${dayNames[dayOfWeek]} ${String(hh).padStart(2, "0")}:00 local — business hours at ${formatLat(c.lat)} ${formatLon(c.lon)}`);
+              } else {
+                const reason = !isWeekday ? "weekend" : hh < 9 ? `pre-business (${hh}:00 local)` : `after-hours (${hh}:00 local)`;
+                showToast(`🕐 ✗ ${dayNames[dayOfWeek]} — ${reason} at ${formatLat(c.lat)} ${formatLon(c.lon)}`);
+              }
+            }},
             // ===== Grid-snapping navigation commands =====
             // Move the camera to the nearest grid intersection at various
             // resolutions. Useful for navigators who want to align with
