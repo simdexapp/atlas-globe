@@ -11186,6 +11186,65 @@ ${trkpts}
                 }, h * 170);
               }
             }},
+            // ===== Camera animation commands =====
+            { id: "animSpin360", label: "🎬 Animate full 360° spin around Earth (~10s, longitude sweep)", group: "View", icon: Play, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              showToast("🎬 Spinning 360° eastward — ~10s");
+              const steps = 60;
+              const startLon = c.lon;
+              for (let i = 1; i <= steps; i++) {
+                setTimeout(() => {
+                  let lon = startLon + (360 * i / steps);
+                  while (lon > 180) lon -= 360;
+                  while (lon < -180) lon += 360;
+                  setFlyTo((p) => ({ id: p.id + 1, lat: c.lat, lon, altKm: c.altKm }));
+                }, i * 167);
+              }
+            }},
+            { id: "animPoleSweep", label: "🎬 Animate pole-to-pole sweep (~8s, latitude sweep)", group: "View", icon: Play, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              showToast("🎬 Pole-to-pole sweep — 90°N → 90°S over 8s");
+              const steps = 40;
+              for (let i = 0; i <= steps; i++) {
+                setTimeout(() => {
+                  const lat = 88 - (176 * i / steps);       // 88 → -88 (avoid singularities at exact pole)
+                  setFlyTo((p) => ({ id: p.id + 1, lat, lon: c.lon, altKm: c.altKm }));
+                }, i * 200);
+              }
+            }},
+            { id: "animZoomIn", label: "🎬 Animate dramatic zoom-in (current → 5km altitude in 4s)", group: "View", icon: Play, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              if (c.altKm <= 10) { showToast("🎬 Already at low altitude — try zoom-out instead"); return; }
+              showToast(`🎬 Zooming in from ${c.altKm.toFixed(0)} km → 5 km`);
+              const steps = 24;
+              const startAlt = c.altKm;
+              for (let i = 1; i <= steps; i++) {
+                setTimeout(() => {
+                  // Logarithmic interpolation feels more natural at extreme zoom ranges
+                  const t = i / steps;
+                  const altKm = Math.exp(Math.log(startAlt) * (1 - t) + Math.log(5) * t);
+                  setFlyTo((p) => ({ id: p.id + 1, lat: c.lat, lon: c.lon, altKm }));
+                }, i * 167);
+              }
+            }},
+            { id: "animZoomOut", label: "🎬 Animate dramatic zoom-out (current → 12000km altitude in 4s)", group: "View", icon: Play, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              if (c.altKm >= 8000) { showToast("🎬 Already at high altitude — try zoom-in instead"); return; }
+              showToast(`🎬 Zooming out from ${c.altKm.toFixed(0)} km → 12,000 km`);
+              const steps = 24;
+              const startAlt = c.altKm;
+              for (let i = 1; i <= steps; i++) {
+                setTimeout(() => {
+                  const t = i / steps;
+                  const altKm = Math.exp(Math.log(startAlt) * (1 - t) + Math.log(12000) * t);
+                  setFlyTo((p) => ({ id: p.id + 1, lat: c.lat, lon: c.lon, altKm }));
+                }, i * 167);
+              }
+            }},
             // Solar zenith — sun directly overhead at this point exactly
             // when (today). Useful for "what time will the sun be over my
             // head" questions.
