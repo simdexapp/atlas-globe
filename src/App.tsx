@@ -6811,6 +6811,25 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: -26.704, lon: 15.234, altKm: 6 }));
               showToast(`🏜 Kolmanskop · German diamond mining town in Namib Desert · founded 1908 · abandoned 1956 · houses now half-buried in sand dunes encroaching from the Atlantic`);
             }},
+            // ===== Mysterious / unexplained phenomenon sites =====
+            { id: "flyBermudaTriangle", label: "🔺 Fly to Bermuda Triangle (Atlantic — folklore disappearance zone)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 26.0, lon: -71.0, altKm: 1500 }));
+              showToast(`🔺 Bermuda Triangle · vertices at Miami / Bermuda / San Juan · folklore-rich vessel/aircraft disappearance zone · USCG/NOAA found no statistical anomaly`);
+            }},
+            { id: "flyYonaguni", label: "🌊 Fly to Yonaguni Monument (Japan — underwater stone formation)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 24.434, lon: 122.945, altKm: 6 }));
+              showToast(`🌊 Yonaguni Monument · submerged sandstone formation off Japan · discovered 1986 · debate: natural geology vs lost-civilization ruins (~10,000 yo)`);
+            }},
+            { id: "flyMarfaLights", label: "💡 Fly to Marfa Lights viewing area (Texas — unexplained light phenomena)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 30.310, lon: -104.020, altKm: 4 }));
+              showToast(`💡 Marfa Lights, Texas · mysterious lights near Mitchell Flat · documented since 1883 · likely atmospheric reflection of car headlights, but unconfirmed`);
+            }},
+            { id: "flyTunguskaImpactCenter", label: "💥 Fly to Tunguska epicenter (Stony Tunguska River, Siberia)", group: "View", icon: Globe2, run: () => {
+              // Slightly different landing point than the existing Tunguska command
+              // — Vanavara settlement is the closest inhabited place to the actual airburst.
+              setFlyTo((p) => ({ id: p.id + 1, lat: 60.35, lon: 102.27, altKm: 30 }));
+              showToast(`💥 Vanavara · 65 km SE of Tunguska airburst (Jun 30 1908) · only inhabited area to witness it · still subject of impact research expeditions`);
+            }},
             // ===== Landmark discovery =====
             { id: "landmarksClosest", label: "🗺 Show 5 closest landmarks to current view", group: "Tools", icon: Sparkles, run: () => {
               const c = cameraStateRef.current;
