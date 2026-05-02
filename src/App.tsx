@@ -8926,6 +8926,130 @@ ${trkpts}
                 showToast(`🔭 Vertex ${furthestIdx+1} is ${formatDistKm(furthestKm, unitsImperial)} from start · bearing ${bearing.toFixed(0)}° (${compassDir(bearing)})`);
               },
             }] : []),
+            // Ramer-Douglas-Peucker simplification — removes vertices
+            // whose perpendicular distance from the line between their
+            // neighbors is below epsilon. Useful for decluttering hand-
+            // drawn / GPS-noisy paths to a much smaller polyline.
+            ...(measureMode && measurePoints.length >= 4 ? [{
+              id: "measureSimplify" as const,
+              label: `📐 Simplify path (Ramer-Douglas-Peucker, prompts for tolerance in km)`,
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                const input = window.prompt("Tolerance in km (smaller = more vertices kept; try 5):", "5");
+                if (!input) return;
+                const eps = parseFloat(input);
+                if (!Number.isFinite(eps) || eps <= 0) { showToast("Enter a positive km value"); return; }
+                // Perpendicular distance from point P to line A-B in km.
+                // Approximation: use planar distance after equirectangular
+                // scaling. Good enough at typical measure-tool scales.
+                const perpKm = (a: {lat:number;lon:number}, b: {lat:number;lon:number}, p: {lat:number;lon:number}): number => {
+                  const cosLat = Math.cos((a.lat + b.lat) * Math.PI / 360);
+                  const ax = a.lon * cosLat, ay = a.lat;
+                  const bx = b.lon * cosLat, by = b.lat;
+                  const px = p.lon * cosLat, py = p.lat;
+                  const dx = bx - ax, dy = by - ay;
+                  const len2 = dx*dx + dy*dy;
+                  if (len2 === 0) return haversineKm(a.lat, a.lon, p.lat, p.lon);
+                  const t = ((px - ax) * dx + (py - ay) * dy) / len2;
+                  const tc = Math.max(0, Math.min(1, t));
+                  const closestLon = (ax + tc * dx) / cosLat;
+                  const closestLat = ay + tc * dy;
+                  return haversineKm(closestLat, closestLon, p.lat, p.lon);
+                };
+                const rdp = (pts: typeof measurePoints, epsilon: number): typeof measurePoints => {
+                  if (pts.length < 3) return pts;
+                  let dmax = 0;
+                  let index = 0;
+                  for (let i = 1; i < pts.length - 1; i++) {
+                    const d = perpKm(pts[0], pts[pts.length - 1], pts[i]);
+                    if (d > dmax) { dmax = d; index = i; }
+                  }
+                  if (dmax > epsilon) {
+                    const left = rdp(pts.slice(0, index + 1), epsilon);
+                    const right = rdp(pts.slice(index), epsilon);
+                    return left.slice(0, -1).concat(right);
+                  }
+                  return [pts[0], pts[pts.length - 1]];
+                };
+                const simplified = rdp(measurePoints, eps);
+                const removed = measurePoints.length - simplified.length;
+                if (removed === 0) { showToast(`📐 Path is already optimal at ${eps}km tolerance`); return; }
+                setMeasurePoints(simplified);
+                showToast(`📐 Simplified ${measurePoints.length} → ${simplified.length} pts (removed ${removed} at ${eps}km tolerance)`);
+              },
+            }] : []),
+            // Convex hull (Andrew's monotone chain) — replaces the path
+            // with the smallest convex polygon containing every point.
+            // Useful for "what's the outer shape of my coverage area?".
+            ...(measureMode && measurePoints.length >= 3 ? [{
+              id: "measureConvexHull" as const,
+              label: `🔷 Replace path with its convex hull (smallest enclosing polygon)`,
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                // Andrew's monotone chain in 2D — sufficient at small scales.
+                // Uses lat/lon directly without spherical correction; over
+                // continental distances this can be off near the poles but
+                // is fine for typical measure-tool use.
+                const sorted = [...measurePoints].sort((a, b) => a.lon - b.lon || a.lat - b.lat);
+                type Pt = { lat: number; lon: number };
+                const cross = (O: Pt, A: Pt, B: Pt) => (A.lon - O.lon) * (B.lat - O.lat) - (A.lat - O.lat) * (B.lon - O.lon);
+                const lower: Pt[] = [];
+                for (const p of sorted) {
+                  while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop();
+                  lower.push(p);
+                }
+                const upper: Pt[] = [];
+                for (let i = sorted.length - 1; i >= 0; i--) {
+                  const p = sorted[i];
+                  while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop();
+                  upper.push(p);
+                }
+                upper.pop();
+                lower.pop();
+                const hull = lower.concat(upper);
+                if (hull.length < 3) { showToast("🔷 Points are collinear — no hull formed"); return; }
+                setMeasurePoints(hull);
+                showToast(`🔷 Convex hull: ${measurePoints.length} pts → ${hull.length}-vertex polygon`);
+              },
+            }] : []),
+            // Export path as a closed Polygon GeoJSON instead of an
+            // open LineString. Auto-closes the ring (repeats first
+            // vertex at the end) per RFC 7946 §3.1.6.
+            ...(measureMode && measurePoints.length >= 3 ? [{
+              id: "measureExportPolygonGeoJSON" as const,
+              label: "🔷 Export path as closed Polygon GeoJSON (with auto-closed ring)",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                // Polygon LinearRing requires first === last vertex.
+                const ring = measurePoints.map(p => [p.lon, p.lat]);
+                const first = ring[0];
+                const last = ring[ring.length - 1];
+                if (first[0] !== last[0] || first[1] !== last[1]) ring.push([first[0], first[1]]);
+                const geo = {
+                  type: "Feature",
+                  properties: {
+                    name: "Atlas measure path (polygon)",
+                    vertexCount: measurePoints.length,
+                    exportedAt: new Date().toISOString(),
+                  },
+                  geometry: {
+                    type: "Polygon",
+                    coordinates: [ring],
+                  },
+                };
+                const blob = new Blob([JSON.stringify(geo, null, 2)], { type: "application/geo+json" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `measure-polygon-${Date.now()}.geojson`;
+                a.click();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+                showToast(`🔷 Exported ${ring.length}-vertex polygon GeoJSON (RFC 7946 §3.1.6 closed ring)`);
+              },
+            }] : []),
             // Save the active measure path with a name so it can be
             // restored / overlaid / shared later. Library lives in
             // localStorage so paths survive across sessions.
