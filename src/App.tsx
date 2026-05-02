@@ -679,6 +679,11 @@ const KEYBOARD_HINTS = [
   { keys: "Shift+R", desc: "Fly to a random famous landmark (surprise me)" },
   { keys: "N", desc: "Fly to next bookmark (closest unvisited)" },
   { keys: "J / K", desc: "Cycle through pins (vim-style prev/next)" },
+  // ===== Pin manipulation (operate on the currently-selected pin) =====
+  { keys: "Shift+P", desc: "📌 Drop a pin at view center (no pin tool needed)" },
+  { keys: "E", desc: "✏ Edit/rename selected pin's label" },
+  { keys: "Shift+E", desc: "🎨 Cycle selected pin's color" },
+  { keys: "Shift+X", desc: "🗑 Delete selected pin (with confirm)" },
   // ===== Pan / zoom =====
   { keys: "↑ ↓ ← → / W X A D", desc: "Pan camera north / south / west / east" },
   { keys: "+ / =", desc: "Zoom in 2× (halve altitude)" },
@@ -3811,8 +3816,46 @@ function App() {
           break;
         case "p":
           event.preventDefault();
-          setPinTool((v) => !v);
-          showToast(pinTool ? "Pin tool off" : "Pin tool — click to drop pins");
+          if (event.shiftKey) {
+            // Shift+P — drop a pin at exact view center without
+            // having to enable the pin tool and click. One-keystroke
+            // bookmark equivalent for tagging where you're looking.
+            const c = cameraStateRef.current;
+            if (!c) { showToast("Camera position unknown"); return; }
+            const id = `pin-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+            const color = PIN_COLORS[Math.floor(Math.random() * PIN_COLORS.length)];
+            const newPin: Pin = { id, lat: c.lat, lon: c.lon, label: `Pin ${pins.length + 1}`, color, createdAt: Date.now() };
+            setPins((prev) => [...prev, newPin]);
+            setSelectedPin(id);
+            showToast(`📌 Dropped pin at view center: ${formatLat(c.lat)} ${formatLon(c.lon)}`);
+          } else {
+            setPinTool((v) => !v);
+            showToast(pinTool ? "Pin tool off" : "Pin tool — click to drop pins");
+          }
+          break;
+        case "e":
+          // E — Edit (rename) the selected pin's label via prompt.
+          // Shift+E — cycle the selected pin's color through PIN_COLORS.
+          event.preventDefault();
+          if (!selectedPin) { showToast("No pin selected — click a pin first (or press J/K)"); return; }
+          if (event.shiftKey) {
+            setPins((prev) => prev.map((p) => {
+              if (p.id !== selectedPin) return p;
+              const idx = PIN_COLORS.indexOf(p.color);
+              const nextColor = PIN_COLORS[(idx + 1) % PIN_COLORS.length];
+              showToast(`🎨 ${p.label} → next color`);
+              return { ...p, color: nextColor };
+            }));
+          } else {
+            const sp = pins.find(p => p.id === selectedPin);
+            if (!sp) { showToast("Selected pin no longer exists"); return; }
+            const newLabel = window.prompt("Rename pin:", sp.label);
+            if (newLabel === null) return; // cancelled
+            const trimmed = newLabel.trim();
+            if (!trimmed) { showToast("Label cannot be empty"); return; }
+            setPins((prev) => prev.map((p) => p.id === selectedPin ? { ...p, label: trimmed } : p));
+            showToast(`✏ Renamed: ${trimmed}`);
+          }
           break;
         case "i":
           event.preventDefault();
@@ -3889,7 +3932,18 @@ function App() {
         case "arrowdown":
         case "x":
           event.preventDefault();
-          if (cameraStateRef.current) {
+          if (event.shiftKey && event.key.toLowerCase() === "x") {
+            // Shift+X — delete the selected pin (with confirm). Plain X
+            // still pans south. Tucked behind shift to make accidental
+            // pin loss much less likely.
+            if (!selectedPin) { showToast("No pin selected — click a pin first (or press J/K)"); return; }
+            const sp = pins.find(p => p.id === selectedPin);
+            if (!sp) { showToast("Selected pin no longer exists"); return; }
+            if (!window.confirm(`Delete pin "${sp.label}"? This cannot be undone.`)) return;
+            deletePin(selectedPin);
+            setSelectedPin(null);
+            showToast(`🗑 Deleted: ${sp.label}`);
+          } else if (cameraStateRef.current) {
             const c = cameraStateRef.current;
             const step = Math.max(0.5, c.altKm * 0.05);
             setFlyTo((p) => ({ id: p.id + 1, lat: Math.max(-89, c.lat - step), lon: c.lon, altKm: c.altKm }));
@@ -4135,7 +4189,7 @@ function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [cycleTheme, mode, resetView, saveCurrentBookmark, showSearch, showShortcuts, switchToAtlas, switchToSurface, measureMode, showToast, bookmarks, pins, selectedPin]);
+  }, [cycleTheme, mode, resetView, saveCurrentBookmark, showSearch, showShortcuts, switchToAtlas, switchToSurface, measureMode, showToast, bookmarks, pins, selectedPin, deletePin]);
 
   const rootStyle: CSSProperties = {
     "--accent": "#5cb5ff",
