@@ -6692,6 +6692,23 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: 39.83, lon: 34.51, altKm: 1500 }));
               showToast(`🌍 Geographic center of land · ~39.83°N, 34.51°E in central Turkey near Lake Tuz. The point that minimizes total distance to all land surface.`);
             }},
+            // ===== Historic catastrophe / impact site fly-tos =====
+            { id: "flyChicxulub", label: "🦖 Fly to Chicxulub crater (Yucatán — dinosaur extinction asteroid 66 Mya)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 21.3, lon: -89.5167, altKm: 800 }));
+              showToast(`🦖 Chicxulub impact · ~10 km asteroid · 180 km crater · 66 Mya · K-Pg mass extinction (75% of species)`);
+            }},
+            { id: "flyTunguska", label: "💥 Fly to Tunguska event site (Siberia — 1908 airburst)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 60.886, lon: 101.894, altKm: 200 }));
+              showToast(`💥 Tunguska event · 30 Jun 1908 · ~10 megaton airburst · flattened 2,000 km² of forest · no crater`);
+            }},
+            { id: "flyToba", label: "🌋 Fly to Lake Toba (Sumatra — supervolcano eruption 74 kya)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 2.6845, lon: 98.875, altKm: 200 }));
+              showToast(`🌋 Lake Toba · supervolcanic caldera · 74,000 ya VEI-8 eruption (largest in 25M years) · 2,800 km³ of ejecta · global cooling`);
+            }},
+            { id: "flyChernobyl", label: "☢ Fly to Chernobyl Exclusion Zone (Ukraine — 1986 nuclear disaster)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 51.389, lon: 30.099, altKm: 60 }));
+              showToast(`☢ Chernobyl reactor 4 · 26 Apr 1986 · INES 7 nuclear accident · 2,600 km² exclusion zone (largest in Europe) · pripyat ghost city nearby`);
+            }},
             // ===== Landmark discovery =====
             { id: "landmarksClosest", label: "🗺 Show 5 closest landmarks to current view", group: "Tools", icon: Sparkles, run: () => {
               const c = cameraStateRef.current;
