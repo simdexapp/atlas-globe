@@ -6777,6 +6777,23 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: 12.4634, lon: 53.8237, altKm: 60 }));
               showToast(`🌳 Socotra · 240 km off Horn of Africa · Dragon's Blood Trees · 37% of plant species endemic (most isolated continental island) · UNESCO 2008`);
             }},
+            // ===== Iconic suspension / arch bridges =====
+            { id: "flyAkashi", label: "🌉 Fly to Akashi-Kaikyo Bridge (Japan — longest suspension main span, 1,991m)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 34.616, lon: 135.022, altKm: 4 }));
+              showToast(`🌉 Akashi-Kaikyo Bridge · 1,991m main span · longest suspension bridge span in the world (until 2022) · grew 1m wider during 1995 Kobe earthquake mid-construction`);
+            }},
+            { id: "flyGoldenGate", label: "🌉 Fly to Golden Gate Bridge (San Francisco — opened 1937)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 37.819, lon: -122.479, altKm: 3 }));
+              showToast(`🌉 Golden Gate Bridge · 1,280m main span · opened 1937 · 'International Orange' color chosen for fog visibility · iconic SF symbol`);
+            }},
+            { id: "flySydneyHarbour", label: "🌉 Fly to Sydney Harbour Bridge (largest steel arch, 503m)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: -33.852, lon: 151.211, altKm: 3 }));
+              showToast(`🌉 Sydney Harbour Bridge · 503m steel arch · opened 1932 · BridgeClimb tour to top (134m above water) since 1998 · 'The Coathanger'`);
+            }},
+            { id: "flyMillauViaduct", label: "🌉 Fly to Millau Viaduct (France — tallest bridge in the world, 343m)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 44.077, lon: 3.022, altKm: 6 }));
+              showToast(`🌉 Millau Viaduct · 343m tall (taller than Eiffel Tower) · world's tallest bridge · opened 2004 · cable-stayed across the Tarn valley in southern France`);
+            }},
             // ===== Landmark discovery =====
             { id: "landmarksClosest", label: "🗺 Show 5 closest landmarks to current view", group: "Tools", icon: Sparkles, run: () => {
               const c = cameraStateRef.current;
