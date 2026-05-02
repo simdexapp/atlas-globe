@@ -7111,6 +7111,62 @@ function App() {
                 );
               },
             }] : []),
+            // ===== Plain-text list copy commands =====
+            ...(pins.length > 0 ? [{
+              id: "copyPinLabelsText" as const,
+              label: `📋 Copy all ${pins.length} pin label${pins.length === 1 ? "" : "s"} as plain text list`,
+              group: "Tools" as const,
+              icon: Share2,
+              run: () => {
+                const text = pins.map(p => p.label).join("\n");
+                navigator.clipboard?.writeText(text).then(
+                  () => showToast(`📋 Copied ${pins.length} pin labels`),
+                  () => showToast(text.slice(0, 80) + (text.length > 80 ? "…" : ""))
+                );
+              },
+            }] : []),
+            { id: "copyBookmarkNamesText", label: `📋 Copy all ${bookmarks.length} bookmark name${bookmarks.length === 1 ? "" : "s"} as plain text list`, group: "Tools", icon: Share2, run: () => {
+              const text = bookmarks.map(b => b.name).join("\n");
+              navigator.clipboard?.writeText(text).then(
+                () => showToast(`📋 Copied ${bookmarks.length} bookmark names`),
+                () => showToast(text.slice(0, 80) + (text.length > 80 ? "…" : ""))
+              );
+            }},
+            { id: "copyActiveLayersText", label: "📋 Copy currently-active layer names as plain text list", group: "Tools", icon: Share2, run: () => {
+              const active = Object.entries(layers).filter(([, v]) => v).map(([k]) => k);
+              if (active.length === 0) { showToast("No layers are active"); return; }
+              const text = active.join("\n");
+              navigator.clipboard?.writeText(text).then(
+                () => showToast(`📋 Copied ${active.length} active layer name${active.length === 1 ? "" : "s"}`),
+                () => showToast(text)
+              );
+            }},
+            { id: "copyStateSummary", label: "📋 Copy full state summary (view + layers + counts) as JSON", group: "Tools", icon: Share2, run: () => {
+              const c = cameraStateRef.current;
+              const summary = {
+                view: c ? { lat: c.lat, lon: c.lon, altKm: c.altKm } : null,
+                mode,
+                theme: uiTheme,
+                units: unitsImperial ? "imperial" : "metric",
+                activeLayers: Object.entries(layers).filter(([, v]) => v).map(([k]) => k),
+                counts: {
+                  pins: pins.length,
+                  bookmarks: bookmarks.length,
+                  selectedPin: selectedPin ? "yes" : "no",
+                  selectedAircraft: selectedAircraftId ? "yes" : "no",
+                  measureMode,
+                  measurePoints: measurePoints.length,
+                  pinTool,
+                  hideUi,
+                },
+                timestamp: new Date().toISOString(),
+              };
+              const json = JSON.stringify(summary, null, 2);
+              navigator.clipboard?.writeText(json).then(
+                () => showToast(`📋 Copied state summary (${json.length} chars) — paste into bug reports / docs`),
+                () => showToast(`📋 ${json.slice(0, 80)}…`)
+              );
+            }},
             // ===== State / storage management commands =====
             { id: "localStorageStats", label: "📊 Show localStorage usage breakdown by key prefix", group: "Tools", icon: Compass, run: () => {
               try {
