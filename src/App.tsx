@@ -10629,6 +10629,52 @@ ${trkpts}
               const hours = Math.max(0, (next.netUnixMs - Date.now()) / 3_600_000);
               showToast(`🚀 ${next.name} — T-${hours < 1 ? `${Math.round(hours * 60)} min` : `${hours.toFixed(1)} hr`}`);
             }},
+            // ===== Rocket-launch query commands =====
+            { id: "launchesByAgency", label: "🚀 Show upcoming launches grouped by agency (top 5)", group: "Tools", icon: Sparkles, run: () => {
+              if (launches.length === 0) { showToast("No upcoming launches loaded"); return; }
+              const counts = new Map<string, number>();
+              for (const l of launches) counts.set(l.agency, (counts.get(l.agency) ?? 0) + 1);
+              const sorted = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5);
+              const list = sorted.map(([a, n]) => `${a}: ${n}`).join(" · ");
+              showToast(`🚀 ${launches.length} upcoming · top agencies: ${list}`);
+            }},
+            { id: "launchesNext24h", label: "🚀 Launches in the next 24 hours (count + names)", group: "Tools", icon: Sparkles, run: () => {
+              if (launches.length === 0) { showToast("No upcoming launches loaded"); return; }
+              const cutoff = Date.now() + 24 * 3600_000;
+              const soon = launches.filter(l => l.netUnixMs > Date.now() && l.netUnixMs < cutoff);
+              if (soon.length === 0) { showToast("🚀 No launches in the next 24 hours"); return; }
+              const list = soon.slice(0, 5).map(l => `${l.rocket} (${Math.round((l.netUnixMs - Date.now()) / 3600_000)}h)`).join(" · ");
+              const more = soon.length > 5 ? ` +${soon.length - 5} more` : "";
+              showToast(`🚀 Next 24h: ${soon.length} launches · ${list}${more}`);
+            }},
+            { id: "launchesClosestPad", label: "🚀 Fly to closest upcoming launch pad to current view", group: "Tools", icon: Sparkles, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const upcoming = launches.filter(l => l.netUnixMs > Date.now());
+              if (upcoming.length === 0) { showToast("🚀 No upcoming launches"); return; }
+              const closest = upcoming.map(l => ({ l, km: haversineKm(c.lat, c.lon, l.padLat, l.padLon) })).sort((a, b) => a.km - b.km)[0];
+              setFlyTo((p) => ({ id: p.id + 1, lat: closest.l.padLat, lon: closest.l.padLon, altKm: 50 }));
+              const hrs = (closest.l.netUnixMs - Date.now()) / 3600_000;
+              showToast(`🚀 Closest pad: ${closest.l.padName} · ${closest.l.name} · T-${hrs < 1 ? `${Math.round(hrs * 60)}min` : `${hrs.toFixed(1)}h`} · ${formatDistKm(closest.km, unitsImperial)} away`);
+            }},
+            { id: "launchesExportCsv", label: "📊 Export upcoming launches as CSV", group: "Tools", icon: Share2, run: () => {
+              if (launches.length === 0) { showToast("No upcoming launches loaded"); return; }
+              const escape = (s: string) => `"${(s || "").replace(/"/g, '""')}"`;
+              const header = "id,name,rocket,agency,padName,padLat,padLon,netUtc,status\n";
+              const rows = launches.map(l => [
+                l.id, escape(l.name), escape(l.rocket), escape(l.agency),
+                escape(l.padName), l.padLat.toFixed(6), l.padLon.toFixed(6),
+                l.netUtc, escape(l.status),
+              ].join(",")).join("\n");
+              const blob = new Blob([header + rows], { type: "text/csv;charset=utf-8" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `atlas-launches-${new Date().toISOString().slice(0, 10)}.csv`;
+              a.click();
+              setTimeout(() => URL.revokeObjectURL(url), 500);
+              showToast(`📊 Exported ${launches.length} launches to CSV`);
+            }},
             // Camera-orientation resets
             { id: "headingNorth", label: "Reset heading to true north", group: "View", icon: Compass, run: () => {
               const c = cameraStateRef.current;
