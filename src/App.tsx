@@ -6726,6 +6726,23 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: 46.235, lon: 6.055, altKm: 12 }));
               showToast(`⚛ CERN · LHC ring is 27 km circumference · 100m underground · highest-energy particle collider · discovered Higgs boson 2012`);
             }},
+            // ===== Ancient archaeology / megalithic sites =====
+            { id: "flyGobekliTepe", label: "🗿 Fly to Göbekli Tepe (Turkey — oldest known temple, ~9500 BCE)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 37.2233, lon: 38.9224, altKm: 4 }));
+              showToast(`🗿 Göbekli Tepe · ~11,500 years old · pre-dates agriculture by ~1,000 years · upended assumption that civilization came before religion`);
+            }},
+            { id: "flyNazca", label: "🦅 Fly to Nazca Lines (Peru — geoglyphs, ~2,000 years old)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: -14.7390, lon: -75.1300, altKm: 30 }));
+              showToast(`🦅 Nazca Lines · 100s of geoglyphs · largest ~370m across · made 500 BCE–500 CE · only fully visible from the air (rediscovered 1927 by airplane)`);
+            }},
+            { id: "flyCarnac", label: "🪨 Fly to Carnac Stones (France — ~3,000 megalithic stones)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 47.583, lon: -3.078, altKm: 4 }));
+              showToast(`🪨 Carnac Stones · ~3,000 standing stones in 4 km of rows · erected 4500–3300 BCE · second-largest megalithic site after Stonehenge area`);
+            }},
+            { id: "flyNewgrange", label: "🌅 Fly to Newgrange (Ireland — Neolithic passage tomb, 5,200 years old)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 53.694, lon: -6.475, altKm: 3 }));
+              showToast(`🌅 Newgrange · ~3200 BCE · older than Stonehenge AND the Egyptian pyramids · winter-solstice sunrise illuminates the inner chamber for 17 minutes`);
+            }},
             // ===== Landmark discovery =====
             { id: "landmarksClosest", label: "🗺 Show 5 closest landmarks to current view", group: "Tools", icon: Sparkles, run: () => {
               const c = cameraStateRef.current;
