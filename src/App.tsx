@@ -5501,6 +5501,44 @@ function App() {
               const fractionEarth = horizonKm / (Math.PI * EARTH_RADIUS_KM);
               showToast(`↻ From ${formatDistKm(h, unitsImperial)} altitude, horizon is ${formatDistKm(horizonKm, unitsImperial)} away — ${(fractionEarth * 100).toFixed(1)}% of the way around Earth`);
             }},
+            { id: "factVisibleEarthArea", label: "🌍 Surface area of Earth visible from current altitude (spherical cap)", group: "Tools", icon: Compass, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const R = EARTH_RADIUS_KM;
+              const h = c.altKm;
+              if (h <= 0) { showToast("At ground level — visible area approaches zero"); return; }
+              // Spherical cap visible from altitude h: 2πRh / (R+h) for cap height,
+              // area = 2πR × cap_height. Equivalent: A = 2πR² × (1 - R/(R+h)).
+              const visibleArea = 2 * Math.PI * R * R * (1 - R / (R + h));
+              const totalArea = 4 * Math.PI * R * R;
+              const pct = (visibleArea / totalArea * 100).toFixed(1);
+              showToast(`🌍 At ${formatDistKm(h, unitsImperial)} altitude, you can see ${formatAreaKm2(visibleArea, unitsImperial)} of Earth's surface — ${pct}% of the total ${formatAreaKm2(totalArea, unitsImperial)}`);
+            }},
+            { id: "factPinsInView", label: "📍 How many of my pins are within the visible Earth from this altitude?", group: "Tools", icon: Compass, run: () => {
+              const c = cameraStateRef.current;
+              if (!c || pins.length === 0) { showToast(pins.length === 0 ? "No pins to check" : "Camera position unknown"); return; }
+              // Pin is visible if angular distance from view center is less than half-angle of horizon.
+              // half-angle = acos(R / (R+h))
+              const R = EARTH_RADIUS_KM;
+              const h = c.altKm;
+              const halfAngleRad = Math.acos(R / (R + h));
+              const halfAngleKm = halfAngleRad * R;
+              const visible = pins.filter(p => haversineKm(c.lat, c.lon, p.lat, p.lon) < halfAngleKm);
+              const pct = (visible.length / pins.length * 100).toFixed(0);
+              showToast(`📍 ${visible.length}/${pins.length} pins (${pct}%) are within visible Earth from ${formatDistKm(h, unitsImperial)} altitude (visible radius ≈ ${formatDistKm(halfAngleKm, unitsImperial)})`);
+            }},
+            { id: "factScaleAtZoom", label: "📐 What scale is shown at current view (km per pixel + zoom level)", group: "Tools", icon: Compass, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              // Heuristic: web map zoom level n shows ~circumference/(256·2^n) meters per pixel at equator.
+              // Estimate altitude ↔ zoom equivalence: 156543 m/pixel at zoom 0 (one tile = whole world)
+              // For our purposes: kmPerPx ≈ altKm × 0.0014 (matches the existing ScaleBar calc)
+              const kmPerPx = c.altKm * 0.0014;
+              // Equivalent zoom level via log2 of relative scale
+              const equivZoom = Math.max(0, Math.min(20, Math.log2(40075 / 256 / kmPerPx)));
+              const oneInchKm = kmPerPx * 96;       // 96px ≈ 1 CSS inch on most monitors
+              showToast(`📐 At ${formatDistKm(c.altKm, unitsImperial)} altitude: ~${kmPerPx.toFixed(2)} km/px · 1 inch ≈ ${formatDistKm(oneInchKm, unitsImperial)} · web-map equiv zoom ~${equivZoom.toFixed(1)}`);
+            }},
             // ===== Coordinate calculator commands — distance / bearing /
             // midpoint between any two arbitrary lat/lon pairs without
             // having to drop pins or use the measure tool.
