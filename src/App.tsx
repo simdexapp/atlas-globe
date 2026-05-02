@@ -931,6 +931,37 @@ function App() {
   });
   const voiceNarrationRef = useRef(voiceNarration);
   useEffect(() => { voiceNarrationRef.current = voiceNarration; }, [voiceNarration]);
+  // Accessibility settings — text scale (normal/large/xlarge),
+  // high-contrast mode, and force-reduced-motion. All persisted to
+  // localStorage and applied via data-* attributes on <html>, with
+  // CSS rules in styles.css that override base tokens.
+  const [textScale, setTextScale] = useState<"normal" | "large" | "xlarge">(() => {
+    try {
+      const v = window.localStorage.getItem("atlas-text-scale");
+      if (v === "large" || v === "xlarge") return v;
+    } catch { /* ignore */ }
+    return "normal";
+  });
+  useEffect(() => {
+    document.documentElement.dataset.textScale = textScale;
+    try { window.localStorage.setItem("atlas-text-scale", textScale); } catch { /* ignore */ }
+  }, [textScale]);
+  const [highContrast, setHighContrast] = useState<boolean>(() => {
+    try { return window.localStorage.getItem("atlas-high-contrast") === "true"; } catch { return false; }
+  });
+  useEffect(() => {
+    if (highContrast) document.documentElement.dataset.highContrast = "true";
+    else delete document.documentElement.dataset.highContrast;
+    try { window.localStorage.setItem("atlas-high-contrast", String(highContrast)); } catch { /* ignore */ }
+  }, [highContrast]);
+  const [forceReducedMotion, setForceReducedMotion] = useState<boolean>(() => {
+    try { return window.localStorage.getItem("atlas-force-reduced-motion") === "true"; } catch { return false; }
+  });
+  useEffect(() => {
+    if (forceReducedMotion) document.documentElement.dataset.forceReducedMotion = "true";
+    else delete document.documentElement.dataset.forceReducedMotion;
+    try { window.localStorage.setItem("atlas-force-reduced-motion", String(forceReducedMotion)); } catch { /* ignore */ }
+  }, [forceReducedMotion]);
   const [showFps, setShowFps] = useState(false);
   const [paused, setPaused] = useState(false);
   const [orbiting, setOrbiting] = useState(false);
@@ -985,7 +1016,10 @@ function App() {
   // Live OS preference for reduced motion. Used to disable camera fly-to
   // tweens, modal entrance animations, etc. Already kills CSS animations
   // via the global @media block in styles.css; this covers JS-driven motion.
-  const reducedMotion = useReducedMotion();
+  // OR'd with the user's manual `forceReducedMotion` toggle (set above
+  // via the accessibility palette command) so either source wins.
+  const osReducedMotion = useReducedMotion();
+  const reducedMotion = osReducedMotion || forceReducedMotion;
 
   // When on, automatically transition Atlas → Surface at low altitudes and
   // Surface → Atlas at high ones, so the user gets the right engine for the
@@ -10319,6 +10353,37 @@ ${trkpts}
                 window.speechSynthesis.speak(u);
               }
               showToast(newVal ? "🔊 Voice narration enabled" : "🔇 Voice narration disabled");
+            }},
+            // ===== Accessibility palette commands =====
+            // Cycle the global text size scale: normal → large (+20%) →
+            // xlarge (+50%) → normal. Uses CSS calc on root --text-* tokens.
+            { id: "textScaleCycle", label: `🔍 Text size: ${textScale === "normal" ? "normal — bump to large (+20%)" : textScale === "large" ? "large — bump to xlarge (+50%)" : "xlarge — back to normal"}`, group: "Tools", icon: Sparkles, run: () => {
+              const next = textScale === "normal" ? "large" : textScale === "large" ? "xlarge" : "normal";
+              setTextScale(next);
+              const pct = next === "normal" ? "100%" : next === "large" ? "120%" : "150%";
+              showToast(`🔍 Text size: ${next} (${pct})`);
+            }},
+            { id: "textScaleReset", label: `🔍 Reset text size to normal (currently ${textScale})`, group: "Tools", icon: Sparkles, run: () => {
+              setTextScale("normal");
+              showToast(`🔍 Text size reset to normal`);
+            }},
+            // High-contrast mode — boosts text/border contrast for low-vision users.
+            { id: "highContrastToggle", label: highContrast ? "♿ Disable high-contrast mode" : "♿ Enable high-contrast mode (stronger text + borders)", group: "Tools", icon: Sparkles, run: () => {
+              setHighContrast((v) => {
+                const next = !v;
+                showToast(next ? "♿ High-contrast mode enabled" : "♿ High-contrast mode disabled");
+                return next;
+              });
+            }},
+            // Force reduced-motion overrides — useful when the OS pref isn't
+            // set but you still want all UI animations to stop. Disables
+            // transitions, fly-to interpolation, the spinning globe, etc.
+            { id: "forceReducedMotionToggle", label: forceReducedMotion ? "♿ Re-enable UI motion (currently force-reduced)" : "♿ Force reduced motion (override OS pref)", group: "Tools", icon: Sparkles, run: () => {
+              setForceReducedMotion((v) => {
+                const next = !v;
+                showToast(next ? "♿ Reduced motion forced (animations disabled)" : "♿ Motion restored to OS preference");
+                return next;
+              });
             }},
             { id: "wikiNearby", label: "🗺 Wikipedia articles near this view (top 8 within 50km)", group: "Tools", icon: Sparkles, run: async () => {
               const c = cameraStateRef.current;

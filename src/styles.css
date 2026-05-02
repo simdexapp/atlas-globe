@@ -163,6 +163,67 @@ html[data-theme="mono"] {
   --warm: #b8b8b8;
 }
 
+/* ===== A11y: text-scale toggle (set via Tools palette) =====
+   Multiplies the typography token scale globally. CSS calc() keeps the
+   relative spacing within each tier (xs : sm : base : md : lg : xl)
+   while making everything proportionally larger. */
+html[data-text-scale="large"] {
+  --text-xs: 12.6px;     /* 10.5 × 1.20 */
+  --text-sm: 13.8px;
+  --text-base: 15.0px;
+  --text-md: 16.2px;
+  --text-lg: 18.0px;
+  --text-xl: 21.6px;
+}
+html[data-text-scale="xlarge"] {
+  --text-xs: 15.75px;    /* 10.5 × 1.50 */
+  --text-sm: 17.25px;
+  --text-base: 18.75px;
+  --text-md: 20.25px;
+  --text-lg: 22.5px;
+  --text-xl: 27.0px;
+}
+
+/* ===== A11y: high-contrast mode (set via Tools palette) =====
+   Boosts text-on-surface contrast and border visibility. Targets the
+   most important readability tokens; keeps theme-specific accents intact
+   so users still get their preferred color identity. */
+html[data-high-contrast="true"] {
+  --text-strong: #ffffff;
+  --text-secondary: #f0f0f0;
+  --text-muted: #d8d8d8;
+  --border-subtle: rgba(255, 255, 255, 0.40);
+  --border: rgba(255, 255, 255, 0.65);
+  --border-strong: rgba(255, 255, 255, 0.90);
+}
+html[data-high-contrast="true"][data-theme="light"] {
+  --text-strong: #000000;
+  --text-secondary: #1a1a1a;
+  --text-muted: #2a2a2a;
+  --border-subtle: rgba(0, 0, 0, 0.40);
+  --border: rgba(0, 0, 0, 0.65);
+  --border-strong: rgba(0, 0, 0, 0.90);
+}
+html[data-high-contrast="true"] button:focus-visible,
+html[data-high-contrast="true"] input:focus-visible,
+html[data-high-contrast="true"] [role="button"]:focus-visible,
+html[data-high-contrast="true"] [tabindex]:focus-visible {
+  outline-width: 3px;     /* thicker focus ring in high-contrast */
+  outline-style: solid;
+}
+
+/* ===== A11y: force reduced-motion (set via Tools palette) =====
+   Overrides the OS prefers-reduced-motion. When enabled, all CSS
+   animations and transitions are essentially instantaneous. */
+html[data-force-reduced-motion="true"] *,
+html[data-force-reduced-motion="true"] *::before,
+html[data-force-reduced-motion="true"] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
 /* ===== Focus / accessibility =====
    Visible focus ring for keyboard navigation. Browser default outline
    is too thin and easily missed against our dark-on-dark surfaces. */
