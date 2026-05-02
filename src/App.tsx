@@ -11624,6 +11624,54 @@ ${trkpts}
             { id: "infoISS", label: "About: ISS / Tiangong / Hubble", group: "Tools", icon: Sparkles, run: () => { showToast("🛰 LEO: live positions from wheretheiss.at. ISS / Tiangong / Hubble all polled every 5-15s. Ground tracks from past 90min."); } },
             { id: "infoStorms", label: "About: Storms layer", group: "Tools", icon: Cloud, run: () => { showToast("🌀 Storms: NOAA NHC active tropical cyclones. Saffir-Simpson tinted. Empty out of season."); } },
             { id: "infoAurora", label: "About: Aurora layer", group: "Tools", icon: SunIcon, run: () => { showToast("🌌 Aurora: NOAA SWPC OVATION 30-min forecast + Kp index drives the oval radius (Surface mode)."); } },
+            // ===== Space-weather query commands =====
+            { id: "spaceWeatherKp", label: "🌌 Show current Kp index + solar wind speed (NOAA SWPC)", group: "Tools", icon: Telescope, run: () => {
+              if (!spaceWeather) { showToast("🌌 Space-weather data not loaded — toggle Aurora layer first"); return; }
+              const { kpLatest, swSpeedKmS, swDensityCm3 } = spaceWeather;
+              const kpDesc = kpLatest === null ? "?" :
+                kpLatest < 4 ? "quiet" :
+                kpLatest < 5 ? "unsettled" :
+                kpLatest < 6 ? "minor storm (G1)" :
+                kpLatest < 7 ? "moderate storm (G2)" :
+                kpLatest < 8 ? "strong storm (G3)" :
+                kpLatest < 9 ? "severe storm (G4)" : "extreme storm (G5)";
+              showToast(`🌌 Kp index: ${kpLatest?.toFixed(1) ?? "?"} (${kpDesc}) · solar wind ${swSpeedKmS?.toFixed(0) ?? "?"} km/s · density ${swDensityCm3?.toFixed(1) ?? "?"} p/cm³`);
+            }},
+            { id: "spaceWeatherAuroraOdds", label: "🌌 Aurora visibility odds at current view's latitude", group: "Tools", icon: Telescope, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              if (!spaceWeather?.kpLatest) { showToast("🌌 Space-weather data not loaded — toggle Aurora layer first"); return; }
+              const kp = spaceWeather.kpLatest;
+              // Auroral oval extends from polar cap to ~67° at Kp 0, expanding ~2° per Kp unit toward equator
+              const ovalLat = 67 - 2 * kp;
+              const absLat = Math.abs(c.lat);
+              const odds = absLat >= ovalLat ? "✓ HIGH — within auroral oval" :
+                absLat >= ovalLat - 5 ? "~ MODERATE — at oval edge, possible if dark/clear" :
+                absLat >= ovalLat - 10 ? "✗ LOW — would need much higher Kp to reach this latitude" :
+                "✗ NONE — too far from auroral oval at current Kp";
+              showToast(`🌌 Kp ${kp.toFixed(1)} · oval extends to ${ovalLat.toFixed(0)}° lat · current view at ${absLat.toFixed(1)}° → ${odds}`);
+            }},
+            { id: "spaceWeatherAuroraGo", label: "✈ Fly to where aurora is visible right now (closest oval point)", group: "Tools", icon: Telescope, run: () => {
+              if (!spaceWeather?.kpLatest) { showToast("🌌 Space-weather data not loaded — toggle Aurora layer first"); return; }
+              const kp = spaceWeather.kpLatest;
+              const ovalLat = 67 - 2 * kp;
+              const c = cameraStateRef.current;
+              if (!c) return;
+              // Pick closer hemisphere — north or south oval
+              const targetLat = c.lat >= 0 ? ovalLat : -ovalLat;
+              setFlyTo((p) => ({ id: p.id + 1, lat: targetLat, lon: c.lon, altKm: 1500 }));
+              showToast(`✈ Auroral oval at Kp ${kp.toFixed(1)} is at ${ovalLat.toFixed(0)}° — flew to ${targetLat.toFixed(0)}°N at your longitude. Best viewing in dark hours.`);
+            }},
+            { id: "spaceWeatherForecast", label: "🌌 Aurora forecast — when will Kp peak?", group: "Tools", icon: Telescope, run: () => {
+              if (!spaceWeather) { showToast("🌌 Space-weather data not loaded — toggle Aurora layer first"); return; }
+              const kp = spaceWeather.kpLatest;
+              const advice = kp === null ? "Kp data unavailable" :
+                kp >= 5 ? "🚨 Active aurora storm RIGHT NOW — get to high latitudes if you can!" :
+                kp >= 4 ? "🌟 Marginal aurora possible at high latitudes (60+°)" :
+                kp >= 3 ? "📡 Quiet conditions — aurora only at extreme latitudes (>67°)" :
+                "💤 Very quiet — aurora confined to polar regions only";
+              showToast(`🌌 Current Kp: ${kp?.toFixed(1) ?? "?"} · ${advice}`);
+            }},
             { id: "infoTerminator", label: "About: Terminator layer (Surface mode)", group: "Tools", icon: SunIcon, run: () => { showToast("🌗 Terminator: live great-circle marking the day/night boundary. 60s redraw under requestRenderMode."); } },
             { id: "infoCountries", label: "About: Country labels (Surface)", group: "Tools", icon: Compass, run: () => { showToast("🌍 Country labels: 50 curated centroids with flags. Tier-1 visible to 12,000km, tier-2 to 4,000km. Click to fly."); } },
             { id: "infoBuildings", label: "About: 3D Buildings (Surface)", group: "Tools", icon: Mountain, run: () => { showToast("🏢 3D Buildings: Cesium OSM Buildings tileset. Off by default — heavy. Tinted soft-white when enabled."); } },
