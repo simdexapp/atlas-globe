@@ -1022,13 +1022,102 @@ function App() {
       e.preventDefault();
       const file = e.dataTransfer?.files?.[0];
       if (!file) return;
-      if (!/\.(json|geojson)$/i.test(file.name)) return;
+      const name = file.name.toLowerCase();
       try {
         const text = await file.text();
-        const parsed = JSON.parse(text);
-        setGeoJsonImport(parsed);
+        // GeoJSON / JSON: render as Cesium entities (existing behaviour)
+        if (/\.(json|geojson)$/i.test(name)) {
+          try {
+            const parsed = JSON.parse(text);
+            setGeoJsonImport(parsed);
+            // Pending toast queue — showToast not yet defined in this useEffect,
+            // so we stash a message that fires once showToast is available via
+            // a microtask (the parent component's render runs by then).
+            queueMicrotask(() => (window as any).__atlasDropToast?.(`📥 Imported ${name} as GeoJSON layer`));
+            return;
+          } catch { /* fall through to other handlers */ }
+        }
+        // CSV: parse as 'lat,lon[,label]' rows and drop pins
+        if (/\.csv$/i.test(name)) {
+          const lines = text.split(/\r?\n/).filter(l => l.trim());
+          if (lines.length === 0) return;
+          const header = lines[0].split(",").map(h => h.trim().toLowerCase().replace(/^"|"$/g, ""));
+          const latIdx = header.findIndex(h => h === "lat" || h === "latitude");
+          const lonIdx = header.findIndex(h => h === "lon" || h === "longitude" || h === "lng");
+          const labelIdx = header.findIndex(h => h === "label" || h === "name");
+          if (latIdx < 0 || lonIdx < 0) return;
+          const imported: Pin[] = [];
+          for (let i = 1; i < lines.length; i++) {
+            const parts = lines[i].split(",").map(s => s.replace(/^"|"$/g, ""));
+            const lat = parseFloat(parts[latIdx]);
+            const lon = parseFloat(parts[lonIdx]);
+            if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+            if (Math.abs(lat) > 90 || Math.abs(lon) > 180) continue;
+            imported.push({
+              id: `pin-drop-csv-${Date.now()}-${i}`,
+              lat, lon,
+              label: (labelIdx >= 0 && parts[labelIdx]?.trim()) || `Dropped ${imported.length + 1}`,
+              color: PIN_COLORS[Math.floor(Math.random() * PIN_COLORS.length)],
+              createdAt: Date.now() + i,
+            });
+          }
+          if (imported.length > 0) {
+            setPins(prev => [...prev, ...imported]);
+            queueMicrotask(() => (window as any).__atlasDropToast?.(`📥 Imported ${imported.length} pins from dropped CSV`));
+          }
+          return;
+        }
+        // KML: walk Placemark > Point > coordinates
+        if (/\.kml$/i.test(name)) {
+          const doc = new DOMParser().parseFromString(text, "text/xml");
+          if (doc.querySelector("parsererror")) return;
+          const imported: Pin[] = [];
+          for (const pm of Array.from(doc.querySelectorAll("Placemark"))) {
+            const coords = pm.querySelector("Point > coordinates")?.textContent?.trim();
+            if (!coords) continue;
+            const [lonStr, latStr] = coords.split(",");
+            const lat = parseFloat(latStr);
+            const lon = parseFloat(lonStr);
+            if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+            const pName = pm.querySelector("name")?.textContent?.trim() || `Dropped ${imported.length + 1}`;
+            imported.push({
+              id: `pin-drop-kml-${Date.now()}-${imported.length}`,
+              lat, lon, label: pName,
+              color: PIN_COLORS[Math.floor(Math.random() * PIN_COLORS.length)],
+              createdAt: Date.now(),
+            });
+          }
+          if (imported.length > 0) {
+            setPins(prev => [...prev, ...imported]);
+            queueMicrotask(() => (window as any).__atlasDropToast?.(`📥 Imported ${imported.length} pins from dropped KML`));
+          }
+          return;
+        }
+        // GPX: walk wpt elements
+        if (/\.gpx$/i.test(name)) {
+          const doc = new DOMParser().parseFromString(text, "text/xml");
+          if (doc.querySelector("parsererror")) return;
+          const imported: Pin[] = [];
+          for (const wpt of Array.from(doc.querySelectorAll("wpt"))) {
+            const lat = parseFloat(wpt.getAttribute("lat") ?? "NaN");
+            const lon = parseFloat(wpt.getAttribute("lon") ?? "NaN");
+            if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+            const pName = wpt.querySelector("name")?.textContent?.trim() || `Dropped ${imported.length + 1}`;
+            imported.push({
+              id: `pin-drop-gpx-${Date.now()}-${imported.length}`,
+              lat, lon, label: pName,
+              color: PIN_COLORS[Math.floor(Math.random() * PIN_COLORS.length)],
+              createdAt: Date.now(),
+            });
+          }
+          if (imported.length > 0) {
+            setPins(prev => [...prev, ...imported]);
+            queueMicrotask(() => (window as any).__atlasDropToast?.(`📥 Imported ${imported.length} waypoints from dropped GPX`));
+          }
+          return;
+        }
       } catch {
-        // silent — invalid GeoJSON
+        // silent — bad file shape
       }
     };
     window.addEventListener("dragover", onDragOver);
@@ -2189,6 +2278,14 @@ function App() {
     setToast({ id: Date.now() + Math.random(), text });
     toastHistoryRef.current = [{ ts: Date.now(), text }, ...toastHistoryRef.current].slice(0, 50);
   }, []);
+  // Expose showToast on window so the file-drop handler (which is set up
+  // in a useEffect that runs before showToast is defined) can fire toasts
+  // for successful imports. queueMicrotask in onDrop reads this property
+  // so it sees the latest reference.
+  useEffect(() => {
+    (window as any).__atlasDropToast = showToast;
+    return () => { delete (window as any).__atlasDropToast; };
+  }, [showToast]);
 
   useEffect(() => {
     if (!toast) return;
