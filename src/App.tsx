@@ -5549,6 +5549,66 @@ function App() {
               const fractionEarth = horizonKm / (Math.PI * EARTH_RADIUS_KM);
               showToast(`↻ From ${formatDistKm(h, unitsImperial)} altitude, horizon is ${formatDistKm(horizonKm, unitsImperial)} away — ${(fractionEarth * 100).toFixed(1)}% of the way around Earth`);
             }},
+            { id: "factDistanceToPoles", label: "❄ Distance from view to all four reference lines (N/S pole, equator, prime meridian)", group: "Tools", icon: Compass, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const npKm = haversineKm(c.lat, c.lon, 90, c.lon);
+              const spKm = haversineKm(c.lat, c.lon, -90, c.lon);
+              const eqKm = haversineKm(c.lat, c.lon, 0, c.lon);     // along longitude
+              // Distance to prime meridian: shortest path along latitude to lon=0
+              // Approximated as |lon| * cos(lat) * (R * π/180)
+              const latRad = c.lat * Math.PI / 180;
+              const pmKm = Math.abs(c.lon) * Math.cos(latRad) * (EARTH_RADIUS_KM * Math.PI / 180);
+              showToast(`❄ N pole ${formatDistKm(npKm, unitsImperial)} · S pole ${formatDistKm(spKm, unitsImperial)} · equator ${formatDistKm(eqKm, unitsImperial)} · prime meridian ${formatDistKm(pmKm, unitsImperial)}`);
+            }},
+            { id: "factDigThroughEarth", label: "⛏ If you dug straight through Earth from current view — how far is it?", group: "Tools", icon: Compass, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              // Antipode is always exactly 2R away through Earth (diameter), πR around the surface.
+              const chordKm = 2 * EARTH_RADIUS_KM;
+              const surfaceKm = Math.PI * EARTH_RADIUS_KM;
+              const aLat = -c.lat;
+              const aLon = c.lon > 0 ? c.lon - 180 : c.lon + 180;
+              // At average drilling rate ~10m/day for deep wells (Kola Superdeep took 19 yrs to reach 12km)
+              const yearsAt10m = (chordKm * 1000) / 10 / 365.25;
+              showToast(`⛏ Through Earth: ${formatDistKm(chordKm, unitsImperial)} (chord) vs ${formatDistKm(surfaceKm, unitsImperial)} (around surface) · You'd emerge at ${formatLat(aLat)} ${formatLon(aLon)} · At Kola Superdeep drill speed: ~${yearsAt10m.toFixed(0)} years`);
+            }},
+            { id: "factPinFurthest", label: pins.length > 0 ? `📌 Which of my ${pins.length} pin${pins.length === 1 ? "" : "s"} is furthest from current view?` : "📌 Furthest pin from view (no pins yet)", group: "Tools", icon: Compass, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) { showToast("Camera position unknown"); return; }
+              if (pins.length === 0) { showToast("No pins to measure — drop one first"); return; }
+              let furthest = pins[0]; let furthestKm = haversineKm(c.lat, c.lon, pins[0].lat, pins[0].lon);
+              let closest = pins[0]; let closestKm = furthestKm;
+              for (const p of pins) {
+                const km = haversineKm(c.lat, c.lon, p.lat, p.lon);
+                if (km > furthestKm) { furthestKm = km; furthest = p; }
+                if (km < closestKm) { closestKm = km; closest = p; }
+              }
+              const bearing = bearingDeg(c.lat, c.lon, furthest.lat, furthest.lon);
+              const dir = compassDir(bearing);
+              if (pins.length === 1) {
+                showToast(`📌 "${furthest.label}" is ${formatDistKm(furthestKm, unitsImperial)} away · bearing ${bearing.toFixed(0)}° (${dir})`);
+              } else {
+                showToast(`📌 Furthest: "${furthest.label}" — ${formatDistKm(furthestKm, unitsImperial)} ${dir} · Closest: "${closest.label}" — ${formatDistKm(closestKm, unitsImperial)}`);
+              }
+            }},
+            { id: "factTravelTimeAntipode", label: "🚶 Travel time to current view's antipode at walking / driving / jet / rocket speeds", group: "Tools", icon: Compass, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              // Surface distance to antipode is always exactly π × R (half circumference)
+              const distKm = Math.PI * EARTH_RADIUS_KM;
+              const walkH = distKm / 5;          // 5 km/h walking
+              const driveH = distKm / 100;       // 100 km/h driving
+              const jetH = distKm / 900;         // 900 km/h cruise
+              const rocketH = distKm / 28000;    // 28000 km/h ISS orbit speed
+              const fmtTime = (h: number) => {
+                if (h < 1) return `${(h * 60).toFixed(0)} min`;
+                if (h < 24) return `${h.toFixed(1)} h`;
+                if (h < 24 * 365) return `${(h / 24).toFixed(1)} days`;
+                return `${(h / 24 / 365.25).toFixed(1)} yrs`;
+              };
+              showToast(`🚶 To antipode (${formatDistKm(distKm, unitsImperial)} along surface): walk ${fmtTime(walkH)} · drive ${fmtTime(driveH)} · jet ${fmtTime(jetH)} · ISS-orbit speed ${fmtTime(rocketH)}`);
+            }},
             { id: "factVisibleEarthArea", label: "🌍 Surface area of Earth visible from current altitude (spherical cap)", group: "Tools", icon: Compass, run: () => {
               const c = cameraStateRef.current;
               if (!c) return;
