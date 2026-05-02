@@ -6794,6 +6794,23 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: 44.077, lon: 3.022, altKm: 6 }));
               showToast(`🌉 Millau Viaduct · 343m tall (taller than Eiffel Tower) · world's tallest bridge · opened 2004 · cable-stayed across the Tarn valley in southern France`);
             }},
+            // ===== Ghost towns / abandoned places =====
+            { id: "flyHashima", label: "🏚 Fly to Hashima 'Battleship' Island (Japan — abandoned coal mining city)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 32.628, lon: 129.738, altKm: 2 }));
+              showToast(`🏚 Hashima Island ('Gunkanjima') · Mitsubishi coal mine 1887-1974 · once the densest population in history (5,259 people on 6 hectares) · UNESCO 2015 · Skyfall location`);
+            }},
+            { id: "flyCentralia", label: "🔥 Fly to Centralia, PA (abandoned town with underground coal fire since 1962)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 40.804, lon: -76.341, altKm: 4 }));
+              showToast(`🔥 Centralia, Pennsylvania · underground anthracite coal seam fire burning since 1962 · could burn 250 more years · town largely abandoned, ZIP code revoked 2002`);
+            }},
+            { id: "flyBodie", label: "🤠 Fly to Bodie, California (gold-rush ghost town, abandoned 1942)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 38.213, lon: -119.014, altKm: 4 }));
+              showToast(`🤠 Bodie, California · gold-rush town · peaked 1879-80 with 7,000 residents · abandoned 1942 · preserved in 'state of arrested decay' as State Historic Park`);
+            }},
+            { id: "flyKolmanskop", label: "🏜 Fly to Kolmanskop (Namibia — diamond ghost town being reclaimed by sand)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: -26.704, lon: 15.234, altKm: 6 }));
+              showToast(`🏜 Kolmanskop · German diamond mining town in Namib Desert · founded 1908 · abandoned 1956 · houses now half-buried in sand dunes encroaching from the Atlantic`);
+            }},
             // ===== Landmark discovery =====
             { id: "landmarksClosest", label: "🗺 Show 5 closest landmarks to current view", group: "Tools", icon: Sparkles, run: () => {
               const c = cameraStateRef.current;
