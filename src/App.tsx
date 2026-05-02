@@ -5484,6 +5484,60 @@ function App() {
               const more = big.length > 5 ? ` +${big.length - 5} more` : "";
               showToast(`🛬 ${big.length} heavy/super-heavy: ${sample}${more}`);
             }},
+            // ===== Aircraft superlatives — top-5 lists by altitude / speed
+            // / proximity / latitude. Counterparts to existing
+            // aircraftLowestAirborne (1 result) and aircraftFastest.
+            { id: "aircraftHighest5", label: "🚀 Top 5 highest-flying aircraft globally (cruise altitude)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const top = aircraftSnapshot.aircraft
+                .filter(a => !a.onGround && a.altitudeM > 0)
+                .sort((a, b) => b.altitudeM - a.altitudeM)
+                .slice(0, 5);
+              if (top.length === 0) { showToast("🚀 No airborne aircraft in current snapshot"); return; }
+              const sample = top.map(a => `${(a.callsign || a.icao24).trim()} ${Math.round(a.altitudeM / 0.3048).toLocaleString()}ft`).join(" · ");
+              showToast(`🚀 Highest 5: ${sample}`);
+            }},
+            { id: "aircraftSlowest5", label: "🐢 Top 5 slowest airborne aircraft (excluding ground & gliders <50kt)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const slow = aircraftSnapshot.aircraft
+                .filter(a => !a.onGround && a.altitudeM > 100 && a.velocityMs > 25)  // >50kt = ~25 m/s
+                .sort((a, b) => a.velocityMs - b.velocityMs)
+                .slice(0, 5);
+              if (slow.length === 0) { showToast("🐢 No slow airborne aircraft right now"); return; }
+              const knots = (ms: number) => Math.round(ms * 1.944);
+              const sample = slow.map(a => `${(a.callsign || a.icao24).trim()} ${knots(a.velocityMs)}kt`).join(" · ");
+              showToast(`🐢 Slowest 5 (airborne): ${sample}`);
+            }},
+            { id: "aircraftPolarFlights", label: "🧊 Aircraft on polar routes (above 60°N or below 60°S)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const polar = aircraftSnapshot.aircraft.filter(a => !a.onGround && (a.lat > 60 || a.lat < -60));
+              if (polar.length === 0) { showToast("🧊 No aircraft above 60° lat right now"); return; }
+              const north = polar.filter(a => a.lat > 60).length;
+              const south = polar.filter(a => a.lat < -60).length;
+              const sample = polar.slice(0, 5).map(a => `${(a.callsign || a.icao24).trim()} @${a.lat.toFixed(1)}°`).join(" · ");
+              showToast(`🧊 ${polar.length} polar (N:${north} S:${south}): ${sample}`);
+            }},
+            { id: "aircraftClosestPair", label: "📡 Find the closest pair of aircraft globally (great-circle)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length < 2) { showToast("Need ≥2 aircraft loaded"); return; }
+              // O(n²) brute force — at typical n=2000-5000 aircraft this is
+              // 2-12M comparisons. Slowish (200-500ms) but acceptable for a
+              // one-shot palette command.
+              const ac = aircraftSnapshot.aircraft.filter(a => !a.onGround);
+              if (ac.length < 2) { showToast("Need ≥2 airborne aircraft"); return; }
+              showToast(`📡 Scanning ${ac.length}² pairs…`);
+              let bestKm = Infinity;
+              let a1 = ac[0], a2 = ac[1];
+              // Limit to N=2000 to keep it reasonable
+              const sample = ac.length > 2000 ? ac.slice(0, 2000) : ac;
+              for (let i = 0; i < sample.length; i++) {
+                for (let j = i + 1; j < sample.length; j++) {
+                  const km = haversineKm(sample[i].lat, sample[i].lon, sample[j].lat, sample[j].lon);
+                  if (km < bestKm) { bestKm = km; a1 = sample[i]; a2 = sample[j]; }
+                }
+              }
+              const altDiffFt = Math.abs(a1.altitudeM - a2.altitudeM) / 0.3048;
+              showToast(`📡 Closest pair: ${(a1.callsign || a1.icao24).trim()} ↔ ${(a2.callsign || a2.icao24).trim()} — ${formatDistKm(bestKm, unitsImperial)} horizontal · ${Math.round(altDiffFt).toLocaleString()}ft vertical`);
+            }},
             // Decode the airline from the SELECTED aircraft's callsign
             // prefix. Useful for "what airline is this?" without leaving
             // the app to look it up.
