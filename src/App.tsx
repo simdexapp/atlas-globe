@@ -5456,6 +5456,34 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: q.lat, lon: q.lon, altKm: 200 }));
               showToast(`🌍 M${q.mag.toFixed(1)} · ${q.place}`);
             }},
+            // ===== Active tropical-storm queries =====
+            { id: "stormsList", label: activeStorms.length > 0 ? `🌀 Show all ${activeStorms.length} active storms (name + class + intensity)` : "🌀 Active storms (none right now — toggle storms layer to fetch)", group: "Tools", icon: Sparkles, run: () => {
+              if (activeStorms.length === 0) { showToast("🌀 No active storms in feed (or toggle storms layer first)"); return; }
+              const summary = activeStorms.slice(0, 5).map(s => `${s.name} (${s.classification}, ${s.intensityKph ?? "?"} km/h)`).join(" · ");
+              const more = activeStorms.length > 5 ? ` +${activeStorms.length - 5} more` : "";
+              showToast(`🌀 ${activeStorms.length} active: ${summary}${more}`);
+            }},
+            { id: "stormStrongest", label: "🌀 Fly to strongest active storm (highest sustained wind)", group: "Tools", icon: Sparkles, run: () => {
+              if (activeStorms.length === 0) { showToast("🌀 No active storms in feed"); return; }
+              const strongest = activeStorms.reduce((max, s) => (s.intensityKph ?? 0) > (max.intensityKph ?? 0) ? s : max);
+              setFlyTo((p) => ({ id: p.id + 1, lat: strongest.lat, lon: strongest.lon, altKm: 800 }));
+              showToast(`🌀 ${strongest.name} (${strongest.classification}) · sustained ${strongest.intensityKph ?? "?"} km/h${strongest.pressureMb ? ` · ${strongest.pressureMb}mb` : ""}`);
+            }},
+            { id: "stormClosest", label: "🌀 Fly to active storm closest to current view", group: "Tools", icon: Sparkles, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              if (activeStorms.length === 0) { showToast("🌀 No active storms in feed"); return; }
+              const closest = activeStorms.map(s => ({ s, km: haversineKm(c.lat, c.lon, s.lat, s.lon) }))
+                .sort((a, b) => a.km - b.km)[0];
+              setFlyTo((p) => ({ id: p.id + 1, lat: closest.s.lat, lon: closest.s.lon, altKm: 800 }));
+              showToast(`🌀 Closest: ${closest.s.name} (${closest.s.classification}) · ${formatDistKm(closest.km, unitsImperial)} away`);
+            }},
+            { id: "stormRandom", label: "🎲 Fly to a random active storm", group: "Tools", icon: Sparkles, run: () => {
+              if (activeStorms.length === 0) { showToast("🌀 No active storms in feed"); return; }
+              const s = activeStorms[Math.floor(Math.random() * activeStorms.length)];
+              setFlyTo((p) => ({ id: p.id + 1, lat: s.lat, lon: s.lon, altKm: 800 }));
+              showToast(`🌀 ${s.name} · ${s.classification} · ${s.intensityKph ?? "?"} km/h sustained`);
+            }},
             { id: "exploreStrongestQuake", label: earthquakes.length > 0 ? `🌍 Fly to strongest recent earthquake (top of ${earthquakes.length})` : "Fly to strongest quake (no data — toggle layer first)", group: "Tools", icon: Sparkles, run: () => {
               if (earthquakes.length === 0) { showToast("Toggle Earthquakes layer first"); return; }
               let strongest = earthquakes[0];
