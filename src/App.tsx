@@ -5388,6 +5388,54 @@ function App() {
                 },
               }];
             })() : []),
+            // ===== More selected-aircraft analytics =====
+            ...(selectedAircraftId && aircraftSnapshot ? (() => {
+              const a = aircraftSnapshot.aircraft.find(x => x.icao24 === selectedAircraftId);
+              if (!a) return [];
+              return [{
+                id: "aircraftDistanceFromView" as const,
+                label: `📏 Selected: distance from current view to ${(a.callsign || a.icao24).trim()}`,
+                group: "Tools" as const,
+                icon: Plane,
+                run: () => {
+                  const c = cameraStateRef.current;
+                  if (!c) return;
+                  const km = haversineKm(c.lat, c.lon, a.lat, a.lon);
+                  const bearing = bearingDeg(c.lat, c.lon, a.lat, a.lon);
+                  const altFt = Math.round(a.altitudeM / 0.3048);
+                  showToast(`📏 ${(a.callsign || a.icao24).trim()}: ${formatDistKm(km, unitsImperial)} away · bearing ${Math.round(bearing)}° ${compassDir(bearing)} · ${altFt.toLocaleString()} ft alt`);
+                },
+              }, {
+                id: "aircraftClosestAirport" as const,
+                label: `🛬 Selected: closest major airport to ${(a.callsign || a.icao24).trim()}`,
+                group: "Tools" as const,
+                icon: Plane,
+                run: () => {
+                  const closest = AIRPORTS
+                    .map(ap => ({ ap, km: haversineKm(a.lat, a.lon, ap.lat, ap.lon) }))
+                    .sort((x, y) => x.km - y.km)[0];
+                  showToast(`🛬 ${(a.callsign || a.icao24).trim()} → nearest airport: ${closest.ap.iata} (${closest.ap.city}, ${formatDistKm(closest.km, unitsImperial)})`);
+                },
+              }, {
+                id: "aircraftStatusBreakdown" as const,
+                label: `🔍 Selected: full flight status (${(a.callsign || a.icao24).trim()})`,
+                group: "Tools" as const,
+                icon: Plane,
+                run: () => {
+                  const altFt = Math.round(a.altitudeM / 0.3048);
+                  const speedKt = Math.round((a.velocityMs ?? 0) * 1.944);
+                  const vrate = a.verticalRateMs ?? 0;
+                  const phase = a.onGround ? "🛩 on ground" :
+                    altFt < 1500 ? `🛫 takeoff/approach (${altFt}ft)` :
+                    Math.abs(vrate) < 1.5 ? `✈ cruising (${altFt}ft)` :
+                    vrate > 0 ? `🛫 climbing (+${(vrate * 196.85).toFixed(0)} ft/min)` :
+                    `🛬 descending (${(vrate * 196.85).toFixed(0)} ft/min)`;
+                  const squawk = a.squawk ? ` · sq ${a.squawk}` : "";
+                  const emergency = ["7500", "7600", "7700"].includes(a.squawk) ? ` 🚨 EMERGENCY` : "";
+                  showToast(`🔍 ${(a.callsign || a.icao24).trim()} · ${phase} · ${speedKt} kt · hdg ${Math.round(a.headingDeg)}°${squawk}${emergency}${a.registration ? ` · ${a.registration}` : ""}${a.type ? ` (${a.type})` : ""}`);
+                },
+              }];
+            })() : []),
             // ===== "Where it's currently X" — solar-time discovery batch.
             // Solar hour at longitude L = (utcHour + L/15) mod 24. Solving
             // for the longitude where that equals 6/12/18/0 (sunrise/noon/
