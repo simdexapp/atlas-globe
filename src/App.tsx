@@ -7129,6 +7129,25 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: -46.692, lon: -72.638, altKm: 8 }));
               showToast(`💎 Marble Caves (Cuevas de Mármol) · sculpted into a marble peninsula on Lake General Carrera, Patagonian Chile · turquoise water reflects on swirled marble · ~6,000 years of wave erosion`);
             }},
+            // ===== Iconic glacier fly-to commands =====
+            // Glaciers visible in satellite imagery, dramatic, and most
+            // are retreating — useful for climate-context exploration.
+            { id: "flyPeritoMoreno", label: "🧊 Fly to Perito Moreno Glacier (Argentina — one of few advancing glaciers, calving spectacle)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: -50.4956, lon: -73.1442, altKm: 18 }));
+              showToast(`🧊 Perito Moreno · 250 km² ice field in Patagonian Argentina · 5 km wide, 70m tall ice front · one of the few glaciers worldwide still advancing rather than retreating · spectacular calving collapses every few years`);
+            }},
+            { id: "flyVatnajokull", label: "🧊 Fly to Vatnajökull (Iceland — Europe's largest glacier by volume)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 64.4096, lon: -16.7892, altKm: 60 }));
+              showToast(`🧊 Vatnajökull · ~7,900 km² ice cap covering 8% of Iceland · Europe's largest by volume (~3,100 km³) · sits over active volcanoes (Grímsvötn, Bárðarbunga) — eruptions melt ice into massive jökulhlaup floods`);
+            }},
+            { id: "flyJakobshavn", label: "🧊 Fly to Jakobshavn Isbræ / Sermeq Kujalleq (Greenland — fastest-moving glacier on Earth)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 69.1670, lon: -49.8330, altKm: 30 }));
+              showToast(`🧊 Sermeq Kujalleq (Jakobshavn Isbræ) · fastest-moving glacier on Earth at peak · drains 6.5% of the Greenland ice sheet · likely calved the iceberg that sank the Titanic in 1912 · was retreating ~40m/day pre-2016, now slightly slowed`);
+            }},
+            { id: "flyHubbardGlacier", label: "🧊 Fly to Hubbard Glacier (Alaska — longest tidewater glacier in North America)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 60.0033, lon: -139.4900, altKm: 30 }));
+              showToast(`🧊 Hubbard Glacier · 122 km long, longest tidewater glacier in North America · still advancing despite climate change · has dammed Russell Fjord twice (1986, 2002) creating a temporary lake · 80m-tall ice cliffs at the calving face`);
+            }},
             // ===== Landmark discovery =====
             { id: "landmarksClosest", label: "🗺 Show 5 closest landmarks to current view", group: "Tools", icon: Sparkles, run: () => {
               const c = cameraStateRef.current;
