@@ -7076,6 +7076,41 @@ function App() {
                 setTimeout(() => showToast(`📜 ${t.text}`), i * 2500);
               });
             }},
+            // ===== Recent commands history utilities =====
+            // Recent commands (the same store CommandPalette uses for the
+            // 'Recent' group) — surface as palette commands too.
+            ...(recentCommandIds.length > 0 ? [{
+              id: "recentShowList" as const,
+              label: `📜 Show recent commands (last ${Math.min(10, recentCommandIds.length)} of ${recentCommandIds.length})`,
+              group: "Tools" as const,
+              icon: Compass,
+              run: () => {
+                const list = recentCommandIds.slice(0, 10).join(" · ");
+                showToast(`📜 Recent: ${list}`);
+              },
+            }, {
+              id: "recentClearList" as const,
+              label: `🗑 Clear recent-commands history (${recentCommandIds.length} entries)`,
+              group: "Tools" as const,
+              icon: Trash2,
+              run: () => {
+                setRecentCommandIds([]);
+                try { window.localStorage.removeItem("atlas-recent-commands"); } catch { /* ignore */ }
+                showToast(`🗑 Cleared recent-commands history`);
+              },
+            }, {
+              id: "recentCopyList" as const,
+              label: `📋 Copy recent-commands list as Markdown (${recentCommandIds.length} entries)`,
+              group: "Tools" as const,
+              icon: Share2,
+              run: () => {
+                const md = recentCommandIds.map((id, i) => `${i + 1}. \`${id}\``).join("\n");
+                navigator.clipboard?.writeText(md).then(
+                  () => showToast(`📋 Copied ${recentCommandIds.length} recent command IDs as Markdown`),
+                  () => showToast(`📋 ${md.slice(0, 80)}…`)
+                );
+              },
+            }] : []),
             // ===== State / storage management commands =====
             { id: "localStorageStats", label: "📊 Show localStorage usage breakdown by key prefix", group: "Tools", icon: Compass, run: () => {
               try {
