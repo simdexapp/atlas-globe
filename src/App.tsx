@@ -12356,6 +12356,102 @@ ${trkpts}
               setTimeout(() => URL.revokeObjectURL(url), 500);
               showToast(`Exported ${bookmarks.length} bookmarks as KML`);
             }},
+            // ===== Bookmark management commands =====
+            // Pick a random user-saved bookmark and fly to it. Skips
+            // city-preset bookmarks (savedAt === 0) so it only surprises
+            // with places the user actually saved themselves.
+            { id: "bookmarksFlyRandom", label: "🎲 Fly to a random user bookmark (skips city presets)", group: "Tools", icon: Bookmark, run: () => {
+              const userBookmarks = bookmarks.filter(b => b.savedAt > 0);
+              if (userBookmarks.length === 0) { showToast("No user bookmarks saved yet — press B to bookmark a view"); return; }
+              const b = userBookmarks[Math.floor(Math.random() * userBookmarks.length)];
+              setFlyTo((p) => ({ id: p.id + 1, lat: b.lat, lon: b.lon, altKm: b.altKm }));
+              showToast(`🎲 ${b.name}`);
+            }},
+            // List bookmarks sorted by recency (most-recent first), with
+            // age in days. Console-output for the full list, toast for
+            // the top 3 to give a quick taste.
+            { id: "bookmarksByDate", label: "🕒 List bookmarks by date saved (most recent first)", group: "Tools", icon: Bookmark, run: () => {
+              const userBookmarks = bookmarks.filter(b => b.savedAt > 0);
+              if (userBookmarks.length === 0) { showToast("No user bookmarks saved yet"); return; }
+              const sorted = [...userBookmarks].sort((a, b) => b.savedAt - a.savedAt);
+              const now = Date.now();
+              const lines = sorted.map((b, i) => {
+                const ageDays = (now - b.savedAt) / 86_400_000;
+                const ageLabel = ageDays < 1 ? `${Math.round(ageDays * 24)}h ago` : `${Math.round(ageDays)}d ago`;
+                return `${i + 1}. ${b.name} — ${ageLabel}`;
+              });
+              console.log(`🕒 Bookmarks by date (${sorted.length}):\n${lines.join("\n")}`);
+              const top3 = sorted.slice(0, 3).map(b => b.name).join(" · ");
+              showToast(`🕒 ${sorted.length} user bookmarks · most recent: ${top3} · full list in console`);
+            }},
+            // Sort bookmarks by distance from current view, list top 5.
+            { id: "bookmarksByDistance", label: "📏 List bookmarks by distance from current view (top 5)", group: "Tools", icon: Bookmark, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) { showToast("Camera position unknown"); return; }
+              if (bookmarks.length === 0) { showToast("No bookmarks"); return; }
+              const ranked = bookmarks
+                .map(b => ({ b, km: haversineKm(c.lat, c.lon, b.lat, b.lon) }))
+                .sort((a, b) => a.km - b.km)
+                .slice(0, 5);
+              const list = ranked.map(({ b, km }) => `${b.name} (${formatDistKm(km, unitsImperial)})`).join(" · ");
+              showToast(`📏 Closest 5 bookmarks: ${list}`);
+            }},
+            // Find duplicate-ish bookmarks (within 5km of each other) and
+            // offer to delete the older copy of each pair. Helps clean up
+            // accumulated bookmark clutter.
+            { id: "bookmarksDedupe", label: bookmarks.filter(b => b.savedAt > 0).length >= 2 ? "🧹 Remove duplicate bookmarks (within 5km of each other)" : "🧹 Remove duplicate bookmarks (need 2+)", group: "Tools", icon: Bookmark, run: () => {
+              const userBookmarks = bookmarks.filter(b => b.savedAt > 0);
+              if (userBookmarks.length < 2) { showToast("Need ≥2 user bookmarks"); return; }
+              // Sort by date so we keep the newest in each cluster.
+              const sorted = [...userBookmarks].sort((a, b) => b.savedAt - a.savedAt);
+              const toDelete = new Set<string>();
+              for (let i = 0; i < sorted.length; i++) {
+                if (toDelete.has(sorted[i].id)) continue;
+                for (let j = i + 1; j < sorted.length; j++) {
+                  if (toDelete.has(sorted[j].id)) continue;
+                  const km = haversineKm(sorted[i].lat, sorted[i].lon, sorted[j].lat, sorted[j].lon);
+                  if (km < 5) toDelete.add(sorted[j].id); // delete older
+                }
+              }
+              if (toDelete.size === 0) { showToast("🧹 No duplicates within 5km — bookmarks are clean!"); return; }
+              if (!window.confirm(`Delete ${toDelete.size} duplicate bookmark${toDelete.size === 1 ? "" : "s"} (within 5km of a newer copy)?`)) return;
+              setBookmarks((prev) => prev.filter(b => !toDelete.has(b.id)));
+              showToast(`🧹 Deleted ${toDelete.size} duplicate bookmark${toDelete.size === 1 ? "" : "s"}`);
+            }},
+            // Find the centroid of all user bookmarks and fly there with
+            // an altitude that frames them all. The "where am I most
+            // gravitating?" view of saved places.
+            { id: "bookmarksFlyCentroid", label: "🎯 Fly to the centroid of all user bookmarks (frames the cluster)", group: "Tools", icon: Bookmark, run: () => {
+              const userBookmarks = bookmarks.filter(b => b.savedAt > 0);
+              if (userBookmarks.length === 0) { showToast("No user bookmarks"); return; }
+              if (userBookmarks.length === 1) {
+                const b = userBookmarks[0];
+                setFlyTo((p) => ({ id: p.id + 1, lat: b.lat, lon: b.lon, altKm: b.altKm }));
+                showToast(`🎯 Single bookmark · flew there`);
+                return;
+              }
+              // Spherical mean — convert each lat/lon to a unit vector,
+              // sum, normalize, convert back. Avoids the ±180° wrap bug
+              // that plagues plain mean(lon).
+              let x = 0, y = 0, z = 0;
+              for (const b of userBookmarks) {
+                const phi = b.lat * Math.PI / 180, lam = b.lon * Math.PI / 180;
+                x += Math.cos(phi) * Math.cos(lam);
+                y += Math.cos(phi) * Math.sin(lam);
+                z += Math.sin(phi);
+              }
+              const lat = Math.atan2(z, Math.sqrt(x*x + y*y)) * 180 / Math.PI;
+              const lon = Math.atan2(y, x) * 180 / Math.PI;
+              // Frame altitude — pick the max distance from centroid × 1.4.
+              let maxKm = 0;
+              for (const b of userBookmarks) {
+                const km = haversineKm(lat, lon, b.lat, b.lon);
+                if (km > maxKm) maxKm = km;
+              }
+              const altKm = Math.max(500, maxKm * 1.4);
+              setFlyTo((p) => ({ id: p.id + 1, lat, lon, altKm }));
+              showToast(`🎯 Centroid of ${userBookmarks.length} bookmarks: ${formatLat(lat)} ${formatLon(lon)} · framed at ${formatDistKm(altKm, unitsImperial)}`);
+            }},
             // FPS overlay toggle
             { id: "fpsToggle", label: showFps ? "Hide FPS overlay" : "Show FPS overlay", group: "Tools", icon: Sparkles, run: () => setShowFps((v) => !v) },
             // Reset all settings — useful when something gets weird.
