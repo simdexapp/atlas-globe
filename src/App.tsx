@@ -13719,6 +13719,60 @@ ${wpts}
                 showToast(`📅 Over ${days.toFixed(0)} days · ${perDay.toFixed(2)}/day · ${perWeek.toFixed(1)}/week · ${perMonth.toFixed(1)}/month`);
               },
             }] : []),
+            // ===== Time-window pin commands — filter by createdAt =====
+            ...(pins.length >= 1 ? [{
+              id: "pinShowRecent1h" as const,
+              label: "🕐 Show pins created in the last hour (count + sample)",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const cutoff = Date.now() - 3600_000;
+                const recent = pins.filter(p => p.createdAt >= cutoff);
+                if (recent.length === 0) { showToast("🕐 No pins created in the last hour"); return; }
+                const list = recent.slice(0, 5).map(p => p.label).join(" · ");
+                const more = recent.length > 5 ? ` +${recent.length - 5} more` : "";
+                showToast(`🕐 ${recent.length} pin${recent.length === 1 ? "" : "s"} created in last hour: ${list}${more}`);
+              },
+            }, {
+              id: "pinShowRecent24h" as const,
+              label: "📅 Show pins created in the last 24 hours (count + sample)",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const cutoff = Date.now() - 86400_000;
+                const recent = pins.filter(p => p.createdAt >= cutoff);
+                if (recent.length === 0) { showToast("📅 No pins created in the last 24 hours"); return; }
+                const list = recent.slice(0, 5).map(p => p.label).join(" · ");
+                const more = recent.length > 5 ? ` +${recent.length - 5} more` : "";
+                showToast(`📅 ${recent.length} pin${recent.length === 1 ? "" : "s"} created in last 24h: ${list}${more}`);
+              },
+            }, {
+              id: "pinShowRecent7d" as const,
+              label: "📅 Show pins created in the last 7 days (count + sample)",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const cutoff = Date.now() - 7 * 86400_000;
+                const recent = pins.filter(p => p.createdAt >= cutoff);
+                if (recent.length === 0) { showToast("📅 No pins created in the last 7 days"); return; }
+                const list = recent.slice(0, 5).map(p => p.label).join(" · ");
+                const more = recent.length > 5 ? ` +${recent.length - 5} more` : "";
+                showToast(`📅 ${recent.length} pin${recent.length === 1 ? "" : "s"} created in last week: ${list}${more}`);
+              },
+            }, {
+              id: "pinDeleteRecent5min" as const,
+              label: "↩ Undo recent — delete pins created in the last 5 minutes",
+              group: "Tools" as const,
+              icon: RotateCcw,
+              run: () => {
+                const cutoff = Date.now() - 5 * 60_000;
+                const recent = pins.filter(p => p.createdAt >= cutoff);
+                if (recent.length === 0) { showToast("↩ No pins created in the last 5 minutes to undo"); return; }
+                if (!window.confirm(`Delete ${recent.length} pin${recent.length === 1 ? "" : "s"} created in the last 5 minutes?`)) return;
+                setPins(prev => prev.filter(p => p.createdAt < cutoff));
+                showToast(`↩ Deleted ${recent.length} recent pin${recent.length === 1 ? "" : "s"}`);
+              },
+            }] : []),
             // ===== Pattern-based bulk pin operations — find / delete /
             // rename / recolor pins matching a label substring.
             ...(pins.length >= 1 ? [{
