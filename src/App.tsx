@@ -6917,6 +6917,52 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: aLat, lon: aLon, altKm: c.altKm }));
               showToast(`🌐 Antipode: ${formatLat(aLat)} ${formatLon(aLon)} (${haversineKm(c.lat, c.lon, aLat, aLon).toFixed(0)} km diametrically opposite)`);
             }},
+            { id: "antipodeShow", label: "🌐 Show antipode coordinates without flying (with reverse-geocode)", group: "Tools", icon: Globe2, run: async () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const aLat = -c.lat;
+              const aLon = c.lon > 0 ? c.lon - 180 : c.lon + 180;
+              showToast(`🌐 Antipode: ${formatLat(aLat)} ${formatLon(aLon)} · looking up location…`);
+              const data = await cachedReverseGeocode(aLat, aLon, 10);
+              if (data) {
+                const a = data.address || {};
+                const place = a.country || a.state || data.display_name?.split(",").slice(0, 2).join(",") || "(open ocean)";
+                showToast(`🌐 Antipode is in: ${place} · ${formatLat(aLat)} ${formatLon(aLon)}`);
+              } else {
+                showToast(`🌐 Antipode: ${formatLat(aLat)} ${formatLon(aLon)} (reverse geocode failed — likely open ocean)`);
+              }
+            }},
+            { id: "antipodeAllPins", label: pins.length > 0 ? `🌐 Drop antipode pin for each of ${pins.length} existing pin${pins.length === 1 ? "" : "s"}` : "🌐 Drop antipode pin for each pin (no pins yet)", group: "Tools", icon: BookmarkPlus, run: () => {
+              if (pins.length === 0) return;
+              if (!window.confirm(`Drop ${pins.length} antipode pins (one per existing pin, doubling your pin count)?`)) return;
+              const stamp = Date.now();
+              const newPins: Pin[] = pins.map((p, i) => ({
+                id: `pin-anti-${i}-${stamp}`,
+                lat: -p.lat,
+                lon: p.lon > 0 ? p.lon - 180 : p.lon + 180,
+                label: `🌐 Antipode of ${p.label}`,
+                color: "#a8a8ff",
+                createdAt: stamp + i,
+              }));
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`🌐 Dropped ${newPins.length} antipode pins (purple — antipodes pair with originals)`);
+            }},
+            { id: "antipodePinPairs", label: "🌐 Find antipodal pin pairs (within 50km of being diametrically opposite)", group: "Tools", icon: Compass, run: () => {
+              if (pins.length < 2) { showToast("🌐 Need at least 2 pins to check for antipode pairs"); return; }
+              const pairs: Array<[Pin, Pin, number]> = [];
+              for (let i = 0; i < pins.length; i++) {
+                const a = pins[i];
+                const aAnti = { lat: -a.lat, lon: a.lon > 0 ? a.lon - 180 : a.lon + 180 };
+                for (let j = i + 1; j < pins.length; j++) {
+                  const b = pins[j];
+                  const km = haversineKm(aAnti.lat, aAnti.lon, b.lat, b.lon);
+                  if (km < 50) pairs.push([a, b, km]);
+                }
+              }
+              if (pairs.length === 0) { showToast(`🌐 No antipodal pin pairs (closest pair: check the cluster report command for nearby pins)`); return; }
+              const list = pairs.slice(0, 3).map(([a, b, km]) => `"${a.label}"↔"${b.label}" (${km.toFixed(0)}km off)`).join(" · ");
+              showToast(`🌐 Found ${pairs.length} antipodal pair${pairs.length === 1 ? "" : "s"}: ${list}`);
+            }},
             // ===== Comparison commands =====
             // Find places (bookmarks + pins) within a given range of
             // current view. 1000km is a "reasonable drive/short-flight"
