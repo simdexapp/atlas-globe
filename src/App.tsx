@@ -8606,6 +8606,121 @@ ${trkpts}
                 showToast(`🧭 Logged ${lines.length} bearings to console (open DevTools to read)`);
               },
             }] : []),
+            // Sample the path at an arbitrary percentage along its
+            // total length — interpolates linearly within the leg.
+            // Useful for "where is the halfway point?", "100km mark", etc.
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureSampleAtPercent" as const,
+              label: "🎯 Sample point at N% along the path (prompt)",
+              group: "View" as const,
+              icon: Crosshair,
+              run: () => {
+                const input = window.prompt("Sample at what % along the path? (0-100)", "50");
+                if (!input) return;
+                const pct = parseFloat(input);
+                if (!Number.isFinite(pct) || pct < 0 || pct > 100) { showToast("Enter a number 0-100"); return; }
+                let total = 0;
+                const cum: number[] = [0];
+                for (let i = 1; i < measurePoints.length; i++) {
+                  total += haversineKm(measurePoints[i-1].lat, measurePoints[i-1].lon, measurePoints[i].lat, measurePoints[i].lon);
+                  cum.push(total);
+                }
+                const targetKm = total * pct / 100;
+                // Find which leg contains targetKm
+                let legIdx = 1;
+                for (let i = 1; i < cum.length; i++) {
+                  if (cum[i] >= targetKm) { legIdx = i; break; }
+                }
+                const a = measurePoints[legIdx-1], b = measurePoints[legIdx];
+                const segKm = cum[legIdx] - cum[legIdx-1];
+                const f = segKm > 0 ? (targetKm - cum[legIdx-1]) / segKm : 0;
+                const lat = a.lat + (b.lat - a.lat) * f;
+                const lon = a.lon + (b.lon - a.lon) * f;
+                const text = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+                navigator.clipboard?.writeText(text).then(
+                  () => showToast(`🎯 ${pct}% point: ${text} · ${formatDistKm(targetKm, unitsImperial)} from start (in leg ${legIdx}) · copied`),
+                  () => showToast(`🎯 ${pct}% point: ${text} · ${formatDistKm(targetKm, unitsImperial)} from start (in leg ${legIdx})`)
+                );
+              },
+            }] : []),
+            // Export path as CSV with rich per-vertex stats. Opens a
+            // download link with index, lat, lon, leg distance, cumulative
+            // distance, and bearing — the full table you'd want in Excel.
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureExportCsv" as const,
+              label: `📊 Export path as CSV (${measurePoints.length} vertices, with per-leg stats)`,
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                const rows: string[] = ["index,lat,lon,leg_km,cumulative_km,bearing_deg,compass"];
+                let cum = 0;
+                for (let i = 0; i < measurePoints.length; i++) {
+                  const p = measurePoints[i];
+                  let legKm = 0;
+                  let bearing = "";
+                  let dir = "";
+                  if (i > 0) {
+                    const prev = measurePoints[i-1];
+                    legKm = haversineKm(prev.lat, prev.lon, p.lat, p.lon);
+                    cum += legKm;
+                    const b = bearingDeg(prev.lat, prev.lon, p.lat, p.lon);
+                    bearing = b.toFixed(1);
+                    dir = compassDir(b);
+                  }
+                  rows.push(`${i+1},${p.lat.toFixed(6)},${p.lon.toFixed(6)},${legKm.toFixed(3)},${cum.toFixed(3)},${bearing},${dir}`);
+                }
+                const csv = rows.join("\n");
+                const blob = new Blob([csv], { type: "text/csv" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `measure-path-${Date.now()}.csv`;
+                a.click();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+                showToast(`📊 Exported ${measurePoints.length}-vertex CSV (open in Excel/Sheets)`);
+              },
+            }] : []),
+            // Sequentially fly the camera through each vertex — like
+            // a tour of the path. Uses setTimeout chain with 1.5s per
+            // vertex; user can interrupt by clicking the globe.
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureFlyVertices" as const,
+              label: `✈ Fly through each vertex sequentially (${measurePoints.length} vertices, ~${(measurePoints.length * 1.5).toFixed(0)}s)`,
+              group: "View" as const,
+              icon: Plane,
+              run: () => {
+                if (measurePoints.length === 0) return;
+                const altKm = 50; // close-in altitude for dramatic vertex-to-vertex flying
+                measurePoints.forEach((p, i) => {
+                  setTimeout(() => {
+                    setFlyTo((c) => ({ id: c.id + 1, lat: p.lat, lon: p.lon, altKm }));
+                    showToast(`✈ Vertex ${i+1}/${measurePoints.length}`);
+                  }, i * 1500);
+                });
+              },
+            }] : []),
+            // Find the vertex furthest from the start point (great-circle
+            // distance, not path length). Often the apex of out-and-back
+            // routes, or the "turnaround point".
+            ...(measureMode && measurePoints.length >= 3 ? [{
+              id: "measureFurthestFromStart" as const,
+              label: "🔭 Find vertex furthest from start point (great-circle) and fly there",
+              group: "View" as const,
+              icon: Crosshair,
+              run: () => {
+                const start = measurePoints[0];
+                let furthest = measurePoints[1];
+                let furthestKm = haversineKm(start.lat, start.lon, furthest.lat, furthest.lon);
+                let furthestIdx = 1;
+                for (let i = 2; i < measurePoints.length; i++) {
+                  const km = haversineKm(start.lat, start.lon, measurePoints[i].lat, measurePoints[i].lon);
+                  if (km > furthestKm) { furthestKm = km; furthest = measurePoints[i]; furthestIdx = i; }
+                }
+                const bearing = bearingDeg(start.lat, start.lon, furthest.lat, furthest.lon);
+                setFlyTo((c) => ({ id: c.id + 1, lat: furthest.lat, lon: furthest.lon, altKm: Math.max(500, furthestKm * 1.2) }));
+                showToast(`🔭 Vertex ${furthestIdx+1} is ${formatDistKm(furthestKm, unitsImperial)} from start · bearing ${bearing.toFixed(0)}° (${compassDir(bearing)})`);
+              },
+            }] : []),
             // Save the active measure path with a name so it can be
             // restored / overlaid / shared later. Library lives in
             // localStorage so paths survive across sessions.
