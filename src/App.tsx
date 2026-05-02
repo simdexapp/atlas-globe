@@ -11586,6 +11586,40 @@ ${trkpts}
             { id: "infoEonet", label: "About: EONET layer", group: "Tools", icon: Sparkles, run: () => { showToast("🌍 EONET (NASA): wildfires, floods, severe storms, volcanoes, dust, snow, drought. Refreshes every 10min."); } },
             { id: "infoQuakes", label: "About: Earthquakes layer", group: "Tools", icon: Sparkles, run: () => { showToast("💥 Earthquakes (USGS): all magnitudes from the past 24 hours. Pulse-animated when <60min old."); } },
             { id: "infoVolcanoes", label: "About: Volcanoes layer", group: "Tools", icon: Mountain, run: () => { showToast("🌋 Volcanoes: 24 famous active volcanoes, alert color from USGS feed. Updated every 10 min."); } },
+            // ===== Volcano query commands =====
+            { id: "volcanoesAlertCount", label: "🌋 Count volcanoes by USGS alert color", group: "Tools", icon: Mountain, run: () => {
+              if (volcanoAlerts.size === 0) { showToast("No volcano alerts loaded — toggle Volcanoes layer first"); return; }
+              const counts = new Map<string, number>();
+              for (const [, color] of volcanoAlerts.entries()) counts.set(color, (counts.get(color) ?? 0) + 1);
+              const sorted = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+              const list = sorted.map(([c, n]) => `${c}: ${n}`).join(" · ");
+              showToast(`🌋 ${volcanoAlerts.size} alert states: ${list} (out of ${FAMOUS_VOLCANOES.length} curated volcanoes)`);
+            }},
+            { id: "volcanoesAlertList", label: "🚨 List volcanoes currently in non-green alert state", group: "Tools", icon: Mountain, run: () => {
+              if (volcanoAlerts.size === 0) { showToast("No volcano alerts loaded — toggle Volcanoes layer first"); return; }
+              const alerts = FAMOUS_VOLCANOES
+                .map(v => ({ v, color: volcanoAlerts.get(v.name.toLowerCase()) }))
+                .filter(({ color }) => color && color.toLowerCase() !== "green" && color.toLowerCase() !== "normal");
+              if (alerts.length === 0) { showToast("✓ All known volcanoes are at green/normal status"); return; }
+              const list = alerts.map(({ v, color }) => `${v.name} (${color})`).join(" · ");
+              showToast(`🚨 ${alerts.length} on alert: ${list}`);
+            }},
+            { id: "volcanoClosest", label: "🌋 Fly to closest famous volcano to current view", group: "Tools", icon: Mountain, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const closest = FAMOUS_VOLCANOES
+                .map(v => ({ v, km: haversineKm(c.lat, c.lon, v.lat, v.lon) }))
+                .sort((a, b) => a.km - b.km)[0];
+              setFlyTo((p) => ({ id: p.id + 1, lat: closest.v.lat, lon: closest.v.lon, altKm: 80 }));
+              const alert = volcanoAlerts.get(closest.v.name.toLowerCase());
+              showToast(`🌋 Closest volcano: ${closest.v.name} (${formatDistKm(closest.km, unitsImperial)} away${alert ? `, alert: ${alert}` : ""})`);
+            }},
+            { id: "volcanoRandom", label: "🎲 Fly to a random famous volcano", group: "Tools", icon: Mountain, run: () => {
+              const v = FAMOUS_VOLCANOES[Math.floor(Math.random() * FAMOUS_VOLCANOES.length)];
+              setFlyTo((p) => ({ id: p.id + 1, lat: v.lat, lon: v.lon, altKm: 80 }));
+              const alert = volcanoAlerts.get(v.name.toLowerCase());
+              showToast(`🌋 ${v.name}${alert ? ` (alert: ${alert})` : ""}`);
+            }},
             { id: "infoLaunches", label: "About: Launches layer", group: "Tools", icon: Sparkles, run: () => { showToast("🚀 Launches: upcoming rockets from Launch Library 2 (~30 day forward window). Pad coords."); } },
             { id: "infoISS", label: "About: ISS / Tiangong / Hubble", group: "Tools", icon: Sparkles, run: () => { showToast("🛰 LEO: live positions from wheretheiss.at. ISS / Tiangong / Hubble all polled every 5-15s. Ground tracks from past 90min."); } },
             { id: "infoStorms", label: "About: Storms layer", group: "Tools", icon: Cloud, run: () => { showToast("🌀 Storms: NOAA NHC active tropical cyclones. Saffir-Simpson tinted. Empty out of season."); } },
