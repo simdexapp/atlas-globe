@@ -10579,6 +10579,49 @@ ${trkpts}
               setFlyTo((p) => ({ id: p.id + 1, lat: e.lat, lon: e.lon, altKm: 200 }));
               showToast(`🌍 ${e.title} (${e.category})`);
             }},
+            // ===== EONET (NASA natural events) query commands =====
+            { id: "eonetClosest", label: "🔥 Fly to EONET event closest to current view", group: "Tools", icon: Sparkles, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              if (eonetEvents.length === 0) { showToast("EONET layer not loaded"); return; }
+              const closest = eonetEvents.map(e => ({ e, km: haversineKm(c.lat, c.lon, e.lat, e.lon) })).sort((a, b) => a.km - b.km)[0];
+              setFlyTo((p) => ({ id: p.id + 1, lat: closest.e.lat, lon: closest.e.lon, altKm: 200 }));
+              showToast(`🔥 Closest: ${closest.e.title} (${closest.e.category}) · ${formatDistKm(closest.km, unitsImperial)}`);
+            }},
+            { id: "eonetRandom", label: "🎲 Fly to random EONET event", group: "Tools", icon: Sparkles, run: () => {
+              if (eonetEvents.length === 0) { showToast("EONET layer not loaded"); return; }
+              const e = eonetEvents[Math.floor(Math.random() * eonetEvents.length)];
+              setFlyTo((p) => ({ id: p.id + 1, lat: e.lat, lon: e.lon, altKm: 200 }));
+              showToast(`🌍 ${e.title} (${e.category})`);
+            }},
+            { id: "eonetByCategory", label: "🔥 Fly to most recent event matching category (prompt)", group: "Tools", icon: Sparkles, run: () => {
+              if (eonetEvents.length === 0) { showToast("EONET layer not loaded"); return; }
+              const cats = Array.from(new Set(eonetEvents.map(e => e.category))).sort();
+              const input = window.prompt(`Category to search for (case-insensitive). Available right now:\n  ${cats.join(", ")}`, "Wildfires");
+              if (!input) return;
+              const q = input.trim().toLowerCase();
+              const match = eonetEvents.find(e => e.category.toLowerCase().includes(q));
+              if (!match) { showToast(`🔥 No event matching "${q}" in current feed`); return; }
+              setFlyTo((p) => ({ id: p.id + 1, lat: match.lat, lon: match.lon, altKm: 200 }));
+              showToast(`🔥 ${match.title} (${match.category})`);
+            }},
+            { id: "eonetExportCsv", label: "📊 Export EONET events as CSV (snapshot)", group: "Tools", icon: Share2, run: () => {
+              if (eonetEvents.length === 0) { showToast("EONET layer not loaded"); return; }
+              const escape = (s: string) => `"${(s || "").replace(/"/g, '""')}"`;
+              const header = "id,title,category,lat,lon\n";
+              const rows = eonetEvents.map(e => [
+                e.id, escape(e.title), escape(e.category),
+                e.lat.toFixed(6), e.lon.toFixed(6),
+              ].join(",")).join("\n");
+              const blob = new Blob([header + rows], { type: "text/csv;charset=utf-8" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `atlas-eonet-${new Date().toISOString().slice(0, 10)}.csv`;
+              a.click();
+              setTimeout(() => URL.revokeObjectURL(url), 500);
+              showToast(`📊 Exported ${eonetEvents.length} EONET events to CSV`);
+            }},
             { id: "nextLaunch", label: "Fly to next rocket launch pad", group: "Tools", icon: Sparkles, run: () => {
               if (launches.length === 0) { showToast("No upcoming launches loaded"); return; }
               const next = launches.find((l) => l.netUnixMs > Date.now()) || launches[0];
