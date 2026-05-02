@@ -11732,6 +11732,36 @@ ${trkpts}
               setFlyTo((p) => ({ id: p.id + 1, lat: biggest.lat, lon: biggest.lon, altKm: 100 }));
               showToast(`💥 Last hour: ${recent.length} quakes · biggest M${biggest.mag.toFixed(1)} @ ${biggest.place}`);
             }},
+            // ===== Earthquake depth + chronology commands =====
+            { id: "quakeDeepest", label: "🌍 Fly to deepest recent earthquake (last 24h)", group: "Tools", icon: Sparkles, run: () => {
+              if (earthquakes.length === 0) { showToast("Earthquake layer not loaded"); return; }
+              const deepest = earthquakes.reduce((max, q) => q.depth > max.depth ? q : max);
+              setFlyTo((p) => ({ id: p.id + 1, lat: deepest.lat, lon: deepest.lon, altKm: 200 }));
+              showToast(`🌍 Deepest: M${deepest.mag.toFixed(1)} at ${deepest.depth.toFixed(0)} km depth · ${deepest.place}`);
+            }},
+            { id: "quakeShallowest", label: "🌍 Fly to shallowest recent earthquake (last 24h)", group: "Tools", icon: Sparkles, run: () => {
+              if (earthquakes.length === 0) { showToast("Earthquake layer not loaded"); return; }
+              const shallowest = earthquakes.reduce((min, q) => q.depth < min.depth ? q : min);
+              setFlyTo((p) => ({ id: p.id + 1, lat: shallowest.lat, lon: shallowest.lon, altKm: 200 }));
+              showToast(`🌍 Shallowest: M${shallowest.mag.toFixed(1)} at ${shallowest.depth.toFixed(1)} km depth · ${shallowest.place}`);
+            }},
+            { id: "quakeMostRecent", label: "🌍 Fly to most recent earthquake (latest USGS feed)", group: "Tools", icon: Sparkles, run: () => {
+              if (earthquakes.length === 0) { showToast("Earthquake layer not loaded"); return; }
+              const newest = earthquakes.reduce((max, q) => q.time > max.time ? q : max);
+              const minAgo = Math.round((Date.now() - newest.time) / 60_000);
+              setFlyTo((p) => ({ id: p.id + 1, lat: newest.lat, lon: newest.lon, altKm: 100 }));
+              showToast(`🌍 Most recent: M${newest.mag.toFixed(1)} @ ${newest.place} (${minAgo} min ago)`);
+            }},
+            { id: "quakeDepthDist", label: "📊 Earthquake depth distribution (shallow / intermediate / deep)", group: "Tools", icon: Sparkles, run: () => {
+              if (earthquakes.length === 0) { showToast("Earthquake layer not loaded"); return; }
+              // Standard seismological depth classification
+              const shallow = earthquakes.filter(q => q.depth < 70).length;
+              const intermediate = earthquakes.filter(q => q.depth >= 70 && q.depth < 300).length;
+              const deep = earthquakes.filter(q => q.depth >= 300).length;
+              const total = earthquakes.length;
+              const pct = (n: number) => `${(n/total*100).toFixed(0)}%`;
+              showToast(`📊 24h depth: shallow (<70km): ${shallow} (${pct(shallow)}) · intermediate (70-300km): ${intermediate} (${pct(intermediate)}) · deep (>300km): ${deep} (${pct(deep)})`);
+            }},
             // EONET commands
             { id: "eonetStats", label: "Show EONET stats (count by category)", group: "Tools", icon: Sparkles, run: () => {
               if (eonetEvents.length === 0) { showToast("EONET layer not loaded"); return; }
