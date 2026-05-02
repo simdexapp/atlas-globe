@@ -11924,6 +11924,85 @@ function App() {
               const mm = String(Math.floor((moonriseHrs % 1) * 60)).padStart(2, "0");
               showToast(`🌙 Approximate moonrise at ${formatLat(c.lat)} ${formatLon(c.lon)}: ${hh}:${mm} UTC (lags sun by ${moonLagHours.toFixed(1)}h today)`);
             }},
+            // ===== Astronomy / twilight commands =====
+            // Civil/nautical/astronomical twilight times — generalization
+            // of solarTimes formula. Sun at -6/-12/-18° below horizon.
+            { id: "twilightTimes", label: "🌅 Civil / nautical / astronomical twilight times today at view", group: "Tools", icon: SunIcon, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const date = new Date();
+              const start = Date.UTC(date.getUTCFullYear(), 0, 0);
+              const doy = Math.floor((date.getTime() - start) / 86400_000);
+              const declRad = (23.45 * Math.sin(2 * Math.PI / 365 * (doy - 81))) * Math.PI / 180;
+              const latRad = c.lat * Math.PI / 180;
+              const solarNoon = 12 - c.lon / 15;
+              // Generalized hour-angle for sun at given altitude angle below horizon.
+              // sin(elev) = sin(φ)·sin(δ) + cos(φ)·cos(δ)·cos(H)
+              // → cos(H) = (sin(elev) - sin(φ)·sin(δ)) / (cos(φ)·cos(δ))
+              const computeHa = (elevDeg: number): number | null => {
+                const sinElev = Math.sin(elevDeg * Math.PI / 180);
+                const cosH = (sinElev - Math.sin(latRad) * Math.sin(declRad)) / (Math.cos(latRad) * Math.cos(declRad));
+                if (cosH > 1 || cosH < -1) return null;
+                return Math.acos(cosH) * 180 / Math.PI;
+              };
+              const fmtHr = (h: number) => {
+                const norm = ((h % 24) + 24) % 24;
+                const hh = String(Math.floor(norm)).padStart(2, "0");
+                const mm = String(Math.floor((norm % 1) * 60)).padStart(2, "0");
+                return `${hh}:${mm}`;
+              };
+              const horizon = computeHa(0);
+              const civil = computeHa(-6);
+              const nautical = computeHa(-12);
+              const astro = computeHa(-18);
+              if (horizon === null) { showToast(`🌅 Polar day or polar night at ${formatLat(c.lat)} — no sunrise/sunset today`); return; }
+              const lines = [
+                `Sunrise/Sunset: ${fmtHr(solarNoon - horizon/15)} / ${fmtHr(solarNoon + horizon/15)}`,
+                civil !== null ? `Civil tw:       ${fmtHr(solarNoon - civil/15)} / ${fmtHr(solarNoon + civil/15)}` : `Civil tw:       — (sun never -6° at this lat today)`,
+                nautical !== null ? `Nautical:       ${fmtHr(solarNoon - nautical/15)} / ${fmtHr(solarNoon + nautical/15)}` : `Nautical:       — (sun never -12°)`,
+                astro !== null ? `Astronomical:   ${fmtHr(solarNoon - astro/15)} / ${fmtHr(solarNoon + astro/15)}` : `Astronomical:   — (sun never -18° — never fully dark)`,
+              ];
+              console.log(`🌅 Twilight times at ${formatLat(c.lat)} ${formatLon(c.lon)} (UTC):\n${lines.join("\n")}`);
+              showToast(`🌅 Twilights logged to console (Sunrise ${fmtHr(solarNoon - horizon/15)} · Sunset ${fmtHr(solarNoon + horizon/15)} UTC)`);
+            }},
+            { id: "stargazingWindow", label: "⭐ Astronomical dark window tonight (between -18° twilight times)", group: "Tools", icon: Telescope, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const date = new Date();
+              const start = Date.UTC(date.getUTCFullYear(), 0, 0);
+              const doy = Math.floor((date.getTime() - start) / 86400_000);
+              const declRad = (23.45 * Math.sin(2 * Math.PI / 365 * (doy - 81))) * Math.PI / 180;
+              const latRad = c.lat * Math.PI / 180;
+              const solarNoon = 12 - c.lon / 15;
+              const sinElev = Math.sin(-18 * Math.PI / 180);
+              const cosH = (sinElev - Math.sin(latRad) * Math.sin(declRad)) / (Math.cos(latRad) * Math.cos(declRad));
+              if (cosH > 1) { showToast(`⭐ Sun never reaches -18° — astronomical dark window doesn't exist tonight`); return; }
+              if (cosH < -1) { showToast(`⭐ Sun is always below -18° — full astronomical dark all day`); return; }
+              const H = Math.acos(cosH) * 180 / Math.PI;
+              const astroSet = solarNoon + H/15;
+              const astroRise = solarNoon - H/15;
+              const darkHours = ((24 - 2 * H/15) + 24) % 24;
+              const fmtHr = (h: number) => {
+                const norm = ((h % 24) + 24) % 24;
+                const hh = String(Math.floor(norm)).padStart(2, "0");
+                const mm = String(Math.floor((norm % 1) * 60)).padStart(2, "0");
+                return `${hh}:${mm}`;
+              };
+              showToast(`⭐ Dark window at ${formatLat(c.lat)} ${formatLon(c.lon)}: ${fmtHr(astroSet)} → ${fmtHr(astroRise)} UTC · ${darkHours.toFixed(1)}h of true astronomical darkness`);
+            }},
+            { id: "dayLengthVsEquinox", label: "🌗 Today's day length vs equinox (12h) and seasonal extremes", group: "Tools", icon: SunIcon, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const sun = solarTimes(c.lat, c.lon, new Date());
+              if (sun === "polar-day") { showToast(`🌗 Polar day at ${formatLat(c.lat)} — 24 hours of sunlight (vs 12h at equinox; +12h)`); return; }
+              if (sun === "polar-night") { showToast(`🌗 Polar night at ${formatLat(c.lat)} — 0 hours of sunlight (vs 12h at equinox; -12h)`); return; }
+              const dayHrs = ((sun.sunset - sun.sunrise) + 24) % 24;
+              const diffHrs = dayHrs - 12;
+              const sign = diffHrs >= 0 ? "+" : "";
+              const absLat = Math.abs(c.lat);
+              const seasonalSwing = absLat < 1 ? "0h (equator — same year-round)" : absLat > 66.5 ? "0–24h (polar — extreme)" : `~${(2 * absLat / 90 * 6).toFixed(1)}h annual swing`;
+              showToast(`🌗 Day length today at ${formatLat(c.lat)}: ${dayHrs.toFixed(2)}h · ${sign}${diffHrs.toFixed(2)}h vs equinox · ${seasonalSwing}`);
+            }},
             { id: "distanceToLandmark", label: "Show distance from this view to nearest famous landmark", group: "Tools", icon: Compass, run: () => {
               const c = cameraStateRef.current;
               if (!c) return;
