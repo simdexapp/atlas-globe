@@ -12848,6 +12848,83 @@ ${trkpts}
               const seasonalSwing = absLat < 1 ? "0h (equator — same year-round)" : absLat > 66.5 ? "0–24h (polar — extreme)" : `~${(2 * absLat / 90 * 6).toFixed(1)}h annual swing`;
               showToast(`🌗 Day length today at ${formatLat(c.lat)}: ${dayHrs.toFixed(2)}h · ${sign}${diffHrs.toFixed(2)}h vs equinox · ${seasonalSwing}`);
             }},
+            // ===== Photography golden / blue hour times =====
+            // Golden hour: sun -4° to +6° altitude (low-angle warm light).
+            // Blue hour: sun -6° to -4° (twilight before/after golden).
+            // Best photography window combines both.
+            { id: "goldenHourTimes", label: "📸 Golden hour times today at view (UTC)", group: "Tools", icon: SunIcon, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const date = new Date();
+              const start = Date.UTC(date.getUTCFullYear(), 0, 0);
+              const doy = Math.floor((date.getTime() - start) / 86400_000);
+              const declRad = (23.45 * Math.sin(2 * Math.PI / 365 * (doy - 81))) * Math.PI / 180;
+              const latRad = c.lat * Math.PI / 180;
+              const solarNoon = 12 - c.lon / 15;
+              const computeHa = (elevDeg: number): number | null => {
+                const sinElev = Math.sin(elevDeg * Math.PI / 180);
+                const cosH = (sinElev - Math.sin(latRad) * Math.sin(declRad)) / (Math.cos(latRad) * Math.cos(declRad));
+                if (cosH > 1 || cosH < -1) return null;
+                return Math.acos(cosH) * 180 / Math.PI;
+              };
+              const fmtHr = (h: number) => {
+                const norm = ((h % 24) + 24) % 24;
+                return `${String(Math.floor(norm)).padStart(2, "0")}:${String(Math.floor((norm % 1) * 60)).padStart(2, "0")}`;
+              };
+              const haTop = computeHa(6);            // sun at +6° (golden upper bound)
+              const haBottom = computeHa(-4);        // sun at -4° (golden lower bound)
+              if (haTop === null || haBottom === null) { showToast(`📸 Golden hour doesn't form at ${formatLat(c.lat)} today (sun stays too low or too high)`); return; }
+              // Morning golden: sun rising from -4° → +6°
+              // Evening golden: sun setting from +6° → -4°
+              const amStart = solarNoon - haBottom/15;
+              const amEnd = solarNoon - haTop/15;
+              const pmStart = solarNoon + haTop/15;
+              const pmEnd = solarNoon + haBottom/15;
+              showToast(`📸 Morning golden: ${fmtHr(amStart)}–${fmtHr(amEnd)} UTC · Evening golden: ${fmtHr(pmStart)}–${fmtHr(pmEnd)} UTC at ${formatLat(c.lat)}`);
+            }},
+            { id: "blueHourTimes", label: "🌆 Blue hour times today at view (UTC)", group: "Tools", icon: SunIcon, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const date = new Date();
+              const start = Date.UTC(date.getUTCFullYear(), 0, 0);
+              const doy = Math.floor((date.getTime() - start) / 86400_000);
+              const declRad = (23.45 * Math.sin(2 * Math.PI / 365 * (doy - 81))) * Math.PI / 180;
+              const latRad = c.lat * Math.PI / 180;
+              const solarNoon = 12 - c.lon / 15;
+              const computeHa = (elevDeg: number): number | null => {
+                const sinElev = Math.sin(elevDeg * Math.PI / 180);
+                const cosH = (sinElev - Math.sin(latRad) * Math.sin(declRad)) / (Math.cos(latRad) * Math.cos(declRad));
+                if (cosH > 1 || cosH < -1) return null;
+                return Math.acos(cosH) * 180 / Math.PI;
+              };
+              const fmtHr = (h: number) => {
+                const norm = ((h % 24) + 24) % 24;
+                return `${String(Math.floor(norm)).padStart(2, "0")}:${String(Math.floor((norm % 1) * 60)).padStart(2, "0")}`;
+              };
+              const haDeep = computeHa(-6);          // sun at -6° (blue lower)
+              const haShallow = computeHa(-4);       // sun at -4° (blue upper, golden lower)
+              if (haDeep === null || haShallow === null) { showToast(`🌆 Blue hour doesn't form at ${formatLat(c.lat)} today`); return; }
+              const amStart = solarNoon - haDeep/15;
+              const amEnd = solarNoon - haShallow/15;
+              const pmStart = solarNoon + haShallow/15;
+              const pmEnd = solarNoon + haDeep/15;
+              showToast(`🌆 Morning blue: ${fmtHr(amStart)}–${fmtHr(amEnd)} UTC · Evening blue: ${fmtHr(pmStart)}–${fmtHr(pmEnd)} UTC at ${formatLat(c.lat)}`);
+            }},
+            { id: "midnightSunCheck", label: "☀ Midnight sun / polar night check at current view", group: "Tools", icon: SunIcon, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const sun = solarTimes(c.lat, c.lon, new Date());
+              if (sun === "polar-day") { showToast(`☀ MIDNIGHT SUN at ${formatLat(c.lat)} ${formatLon(c.lon)} — sun never sets today`); return; }
+              if (sun === "polar-night") { showToast(`🌑 POLAR NIGHT at ${formatLat(c.lat)} ${formatLon(c.lon)} — sun never rises today`); return; }
+              const absLat = Math.abs(c.lat);
+              const dayHrs = ((sun.sunset - sun.sunrise) + 24) % 24;
+              if (absLat >= 60) {
+                const trend = dayHrs > 18 ? `Approaching midnight sun zone` : dayHrs < 6 ? `Approaching polar night zone` : `Mid-extreme latitude — extreme seasonal swings`;
+                showToast(`☀ At ${formatLat(c.lat)}: normal day/night today (${dayHrs.toFixed(1)}h light) · ${trend}`);
+              } else {
+                showToast(`☀ At ${formatLat(c.lat)}: normal day/night cycle (${dayHrs.toFixed(1)}h light) — too far from poles for midnight sun (need lat > 66.5°)`);
+              }
+            }},
             { id: "distanceToLandmark", label: "Show distance from this view to nearest famous landmark", group: "Tools", icon: Compass, run: () => {
               const c = cameraStateRef.current;
               if (!c) return;
