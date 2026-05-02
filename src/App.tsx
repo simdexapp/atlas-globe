@@ -7397,6 +7397,81 @@ function App() {
                   () => showToast(text.length > 60 ? text.slice(0, 57) + "..." : text)
                 );
               },
+            }, {
+              id: "measureExportKml" as const,
+              label: `📤 Export measure path as KML (Google Earth, ${measurePoints.length} vertices)`,
+              group: "Tools" as const,
+              icon: Share2,
+              run: () => {
+                const coords = measurePoints.map(p => `${p.lon},${p.lat},0`).join(" ");
+                const kml = `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Atlas Globe measurement</name>
+    <Placemark>
+      <name>Measure path (${measurePoints.length} pts)</name>
+      <LineString>
+        <tessellate>1</tessellate>
+        <coordinates>${coords}</coordinates>
+      </LineString>
+    </Placemark>
+  </Document>
+</kml>`;
+                const blob = new Blob([kml], { type: "application/vnd.google-earth.kml+xml" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `atlas-measure-${new Date().toISOString().slice(0, 10)}.kml`;
+                a.click();
+                setTimeout(() => URL.revokeObjectURL(url), 500);
+                showToast(`📤 Exported measure path as KML`);
+              },
+            }, {
+              id: "measureExportGpx" as const,
+              label: `📤 Export measure path as GPX (GPS / hiking apps, ${measurePoints.length} vertices)`,
+              group: "Tools" as const,
+              icon: Share2,
+              run: () => {
+                // GPX: trkpt elements inside trk > trkseg
+                const trkpts = measurePoints.map(p => `      <trkpt lat="${p.lat}" lon="${p.lon}"/>`).join("\n");
+                const gpx = `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="Atlas Globe" xmlns="http://www.topografix.com/GPX/1/1">
+  <trk>
+    <name>Atlas Globe measurement (${measurePoints.length} pts)</name>
+    <trkseg>
+${trkpts}
+    </trkseg>
+  </trk>
+</gpx>`;
+                const blob = new Blob([gpx], { type: "application/gpx+xml" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `atlas-measure-${new Date().toISOString().slice(0, 10)}.gpx`;
+                a.click();
+                setTimeout(() => URL.revokeObjectURL(url), 500);
+                showToast(`📤 Exported measure path as GPX`);
+              },
+            }, {
+              id: "measureCopyMarkdownLegs" as const,
+              label: `📋 Copy measure path as Markdown leg table (${measurePoints.length - 1} legs)`,
+              group: "Tools" as const,
+              icon: Share2,
+              run: () => {
+                if (measurePoints.length < 2) { showToast("Need at least 2 points for legs"); return; }
+                const lines: string[] = ["| Leg | From | To | Distance | Bearing |", "|---|---|---|---|---|"];
+                for (let i = 1; i < measurePoints.length; i++) {
+                  const a = measurePoints[i-1], b = measurePoints[i];
+                  const km = haversineKm(a.lat, a.lon, b.lat, b.lon);
+                  const bearing = bearingDeg(a.lat, a.lon, b.lat, b.lon);
+                  lines.push(`| ${i} | ${formatLat(a.lat)} ${formatLon(a.lon)} | ${formatLat(b.lat)} ${formatLon(b.lon)} | ${formatDistKm(km, unitsImperial)} | ${Math.round(bearing)}° ${compassDir(bearing)} |`);
+                }
+                const md = lines.join("\n");
+                navigator.clipboard?.writeText(md).then(
+                  () => showToast(`📋 Copied ${measurePoints.length - 1}-leg Markdown table to clipboard`),
+                  () => showToast(`📋 ${md.slice(0, 80)}…`)
+                );
+              },
             }] : []),
             // Compute spherical-excess area when the path has 3+ vertices —
             // we close the polygon by joining the last vertex back to the
