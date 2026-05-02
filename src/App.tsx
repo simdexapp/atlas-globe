@@ -18507,7 +18507,11 @@ function SelectedPinNavWidget({
 // view's lat/lon, plus moon phase + age. Updates every minute. No
 // external API; uses Spencer's declination + standard hour-angle math
 // + the synodic-month moon phase formula already used elsewhere.
-function SunMoonInfoWidget({ cameraLat, cameraLon }: { cameraLat: number; cameraLon: number }) {
+// Memoized — props are 2 number primitives. Default referential
+// equality skips re-renders when parent state changes for unrelated
+// reasons (toast, layer toggle, etc.). The internal solar/lunar math
+// is non-trivial; skipping it on every camera tick is real savings.
+const SunMoonInfoWidget = memo(function SunMoonInfoWidget({ cameraLat, cameraLon }: { cameraLat: number; cameraLon: number }) {
   // Tick every minute so the sun/moon readouts stay current. The
   // computation is cheap so this won't pose a perf issue.
   const [now, setNow] = useState(() => Date.now());
@@ -18590,7 +18594,7 @@ function SunMoonInfoWidget({ cameraLat, cameraLon }: { cameraLat: number; camera
       </div>
     </div>
   );
-}
+});
 
 
 // Quick layer toggles — a small "remote control" panel of 6 buttons
@@ -18642,7 +18646,10 @@ const QuickTogglesWidget = memo(function QuickTogglesWidget({ layers, onToggle }
 // multiple coordinate format conventions, all at once. Educational
 // for navigation buffs and useful for ham-radio operators (Maidenhead),
 // pilots (DMS), and developers (Mercator XY).
-function CoordinatesWidget({ cameraLat, cameraLon }: { cameraLat: number; cameraLon: number }) {
+// Memoized — props are 2 number primitives so default equality
+// catches every camera tick that doesn't actually change them.
+// Heavy widget: computes DD/DMS/Maidenhead/Mercator/antipode in one go.
+const CoordinatesWidget = memo(function CoordinatesWidget({ cameraLat, cameraLon }: { cameraLat: number; cameraLon: number }) {
   // Maidenhead grid locator — 2 letters (field 20°×10°) + 2 digits
   // (square 2°×1°) + 2 letters (subsquare 5'×2.5'). Used by amateur
   // radio operators worldwide to identify their station's location.
@@ -18736,7 +18743,7 @@ function CoordinatesWidget({ cameraLat, cameraLon }: { cameraLat: number; camera
       </div>
     </div>
   );
-}
+});
 
 // Distance-to-anchors — small panel showing live great-circle distance
 // from the current camera position to 5 famous reference cities, sorted
@@ -18749,7 +18756,10 @@ const DISTANCE_ANCHORS: Array<{ name: string; emoji: string; lat: number; lon: n
   { name: "Sydney",    emoji: "🇦🇺", lat: -33.8688, lon: 151.2093 },
   { name: "Cape Town", emoji: "🇿🇦", lat: -33.9249, lon: 18.4241  },
 ];
-function DistanceAnchorsWidget({ cameraLat, cameraLon, unitsImperial }: { cameraLat: number; cameraLon: number; unitsImperial: boolean }) {
+// Memoized — props are 3 primitives so default referential equality
+// works perfectly. Skips re-renders when parent re-renders for any
+// reason that doesn't actually change cameraLat/cameraLon/units.
+const DistanceAnchorsWidget = memo(function DistanceAnchorsWidget({ cameraLat, cameraLon, unitsImperial }: { cameraLat: number; cameraLon: number; unitsImperial: boolean }) {
   const ranked = useMemo(() => {
     return DISTANCE_ANCHORS
       .map(a => ({ ...a, km: haversineKm(cameraLat, cameraLon, a.lat, a.lon) }))
@@ -18772,9 +18782,12 @@ function DistanceAnchorsWidget({ cameraLat, cameraLon, unitsImperial }: { camera
       </div>
     </div>
   );
-}
+});
 
-function CompassWidget({ cameraState }: { cameraState: CameraState }) {
+// Memoized via custom comparator — only the longitude affects the
+// rotation of the compass rose, so re-renders on lat/altKm changes
+// were pure waste. Avoids re-rendering ~5×/sec while user pans.
+const CompassWidget = memo(function CompassWidget({ cameraState }: { cameraState: CameraState }) {
   // Compass shows where camera "north" points relative to the globe.
   // For our orbit camera looking at origin, "up" in world is also screen-up,
   // and north is at lat=90. Compute screen rotation from camera pos.
@@ -18790,7 +18803,7 @@ function CompassWidget({ cameraState }: { cameraState: CameraState }) {
       </div>
     </div>
   );
-}
+}, (prev, next) => prev.cameraState.lon === next.cameraState.lon);
 
 function MiniMap({ cameraState, pins }: { cameraState: CameraState; pins: Pin[] }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
