@@ -977,6 +977,20 @@ function App() {
     else delete document.documentElement.dataset.forceReducedMotion;
     try { window.localStorage.setItem("atlas-force-reduced-motion", String(forceReducedMotion)); } catch { /* ignore */ }
   }, [forceReducedMotion]);
+  // Colorblind-safe palette mode — swaps high-frequency accent /
+  // danger / warm tokens to a Wong-palette-derived colorblind-safe
+  // alternative. Affects CSS tokens via [data-color-blind-safe="true"]
+  // — existing per-pin colors are preserved (color is stored per-pin
+  // when created), but new pins can pick from the safe palette via
+  // Shift+E cycling.
+  const [colorBlindSafe, setColorBlindSafe] = useState<boolean>(() => {
+    try { return window.localStorage.getItem("atlas-color-blind-safe") === "true"; } catch { return false; }
+  });
+  useEffect(() => {
+    if (colorBlindSafe) document.documentElement.dataset.colorBlindSafe = "true";
+    else delete document.documentElement.dataset.colorBlindSafe;
+    try { window.localStorage.setItem("atlas-color-blind-safe", String(colorBlindSafe)); } catch { /* ignore */ }
+  }, [colorBlindSafe]);
   const [showFps, setShowFps] = useState(false);
   const [paused, setPaused] = useState(false);
   const [orbiting, setOrbiting] = useState(false);
@@ -10685,6 +10699,57 @@ ${trkpts}
                 showToast(next ? "♿ Reduced motion forced (animations disabled)" : "♿ Motion restored to OS preference");
                 return next;
               });
+            }},
+            // Colorblind-safe palette — swaps red/green/orange accent
+            // tokens to Wong-palette derived colorblind-safe equivalents
+            // (Vermillion #D55E00, Bluish Green #009E73, etc.).
+            { id: "colorBlindSafeToggle", label: colorBlindSafe ? "♿ Disable colorblind-safe palette" : "♿ Enable colorblind-safe palette (Wong palette)", group: "Tools", icon: Sparkles, run: () => {
+              setColorBlindSafe((v) => {
+                const next = !v;
+                showToast(next ? "♿ Colorblind-safe palette enabled (red/green tokens swapped to Wong palette)" : "♿ Standard palette restored");
+                return next;
+              });
+            }},
+            // Speak the current camera position via SpeechSynthesis.
+            // One-shot announcement — useful for screen-reader users
+            // and for ambient/kiosk-mode listeners. Strips emojis since
+            // most TTS engines mispronounce them.
+            { id: "announceCameraPosition", label: "🔊 Speak current camera position (lat/lon/altitude)", group: "Tools", icon: Sparkles, run: () => {
+              if (typeof window === "undefined" || !window.speechSynthesis) { showToast("🔊 SpeechSynthesis not available in this browser"); return; }
+              const c = cameraStateRef.current;
+              if (!c) { showToast("Camera position unknown"); return; }
+              // Format lat/lon as words rather than ° degree symbol so the
+              // engine doesn't say 'degree symbol'.
+              const ns = c.lat >= 0 ? "north" : "south";
+              const ew = c.lon >= 0 ? "east" : "west";
+              const text = `Latitude ${Math.abs(c.lat).toFixed(2)} degrees ${ns}, longitude ${Math.abs(c.lon).toFixed(2)} degrees ${ew}, altitude ${c.altKm.toFixed(0)} kilometers.`;
+              window.speechSynthesis.cancel();
+              const u = new SpeechSynthesisUtterance(text);
+              u.rate = 1.0;
+              window.speechSynthesis.speak(u);
+              showToast(`🔊 Speaking: ${text}`);
+            }},
+            // Speak info about the currently-selected pin. Errors
+            // gracefully if no pin is selected.
+            { id: "announceSelectedPin", label: selectedPin ? "🔊 Speak selected pin info (label, distance, bearing)" : "🔊 Speak selected pin (no pin selected)", group: "Tools", icon: Sparkles, run: () => {
+              if (typeof window === "undefined" || !window.speechSynthesis) { showToast("🔊 SpeechSynthesis not available in this browser"); return; }
+              if (!selectedPin) { showToast("No pin selected — click a pin first"); return; }
+              const p = pins.find(x => x.id === selectedPin);
+              if (!p) { showToast("Selected pin no longer exists"); return; }
+              const c = cameraStateRef.current;
+              const km = c ? haversineKm(c.lat, c.lon, p.lat, p.lon) : null;
+              const dir = c ? compassDir(bearingDeg(c.lat, c.lon, p.lat, p.lon)) : null;
+              const distText = km !== null && dir !== null
+                ? ` ${km < 100 ? km.toFixed(1) : Math.round(km)} kilometers ${dir} of current view.`
+                : "";
+              // Strip leading emojis from label
+              const cleanLabel = p.label.replace(/^[\p{Emoji}\s]+/u, "").trim() || p.label;
+              const text = `Pin ${cleanLabel} at latitude ${p.lat.toFixed(2)}, longitude ${p.lon.toFixed(2)}.${distText}`;
+              window.speechSynthesis.cancel();
+              const u = new SpeechSynthesisUtterance(text);
+              u.rate = 1.0;
+              window.speechSynthesis.speak(u);
+              showToast(`🔊 Speaking: ${text}`);
             }},
             { id: "wikiNearby", label: "🗺 Wikipedia articles near this view (top 8 within 50km)", group: "Tools", icon: Sparkles, run: async () => {
               const c = cameraStateRef.current;

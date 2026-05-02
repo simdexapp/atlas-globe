@@ -224,6 +224,20 @@ html[data-force-reduced-motion="true"] *::after {
   scroll-behavior: auto !important;
 }
 
+/* ===== A11y: colorblind-safe palette (set via Tools palette) =====
+   Swaps high-frequency red/green/orange tokens to Wong palette
+   colorblind-safe equivalents. Most-affected: --danger (red emergency
+   indicators, was #ff5a5a → vermillion #D55E00) and --warm (was an
+   orange that desaturates badly under deuteranopia → orange-yellow
+   #E69F00). Accent stays in the blue family (already safe).
+   Reference: Wong 2011, "Color blindness", Nature Methods.  */
+html[data-color-blind-safe="true"] {
+  --danger: #D55E00;       /* Vermillion — distinguishable from green */
+  --warm: #E69F00;         /* Orange — clear in all CVD modes */
+  --good: #009E73;         /* Bluish green — safe vs the new vermillion */
+  --aurora: #0072B2;       /* Blue — keeps aurora-greens distinct */
+}
+
 /* ===== Focus / accessibility =====
    Visible focus ring for keyboard navigation. Browser default outline
    is too thin and easily missed against our dark-on-dark surfaces. */
