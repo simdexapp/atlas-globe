@@ -6760,6 +6760,23 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: 48.708, lon: 44.514, altKm: 30 }));
               showToast(`🪖 Stalingrad · Aug 1942 – Feb 1943 · ~2 million casualties (deadliest battle in human history) · turning point of WWII Eastern Front`);
             }},
+            // ===== UNESCO natural heritage sites =====
+            { id: "flyGalapagos", label: "🐢 Fly to Galápagos Islands (Ecuador — Darwin's natural laboratory)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: -0.7, lon: -90.4, altKm: 200 }));
+              showToast(`🐢 Galápagos Islands · 19 volcanic islands 906 km off Ecuador's coast · Darwin visited 1835 · inspired theory of evolution by natural selection · UNESCO 1978`);
+            }},
+            { id: "flyHalongBay", label: "⛰ Fly to Hạ Long Bay (Vietnam — 1,600 limestone karst islets)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 20.95, lon: 107.05, altKm: 30 }));
+              showToast(`⛰ Hạ Long Bay · ~1,600 limestone karst islets / pillars in 1,553 km² · 'Descending Dragon Bay' · UNESCO 1994 · one of New 7 Wonders of Nature`);
+            }},
+            { id: "flyPlitvice", label: "🏞 Fly to Plitvice Lakes (Croatia — 16 cascading lakes)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 44.881, lon: 15.617, altKm: 8 }));
+              showToast(`🏞 Plitvice Lakes · 16 terraced lakes connected by waterfalls · turquoise color from dissolved limestone · Croatia's oldest national park · UNESCO 1979`);
+            }},
+            { id: "flySocotra", label: "🌳 Fly to Socotra (Yemen — alien-flora island, 37% endemic species)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 12.4634, lon: 53.8237, altKm: 60 }));
+              showToast(`🌳 Socotra · 240 km off Horn of Africa · Dragon's Blood Trees · 37% of plant species endemic (most isolated continental island) · UNESCO 2008`);
+            }},
             // ===== Landmark discovery =====
             { id: "landmarksClosest", label: "🗺 Show 5 closest landmarks to current view", group: "Tools", icon: Sparkles, run: () => {
               const c = cameraStateRef.current;
