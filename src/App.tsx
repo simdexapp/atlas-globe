@@ -205,6 +205,10 @@ type LayerVisibility = {
   // phase at the view's lat/lon. Useful for photographers, sailors,
   // hikers planning around daylight + moonlight.
   sunMoonInfo: boolean;
+  // Trip-meter widget — total ground distance the camera has covered
+  // this session (haversine-summed), with elapsed time and average
+  // angular speed. Resets via palette command.
+  tripMeter: boolean;
 };
 
 type GlobeSettings = {
@@ -546,6 +550,7 @@ const defaultLayers: LayerVisibility = {
   // when they're navigating toward a target.
   selectedPinNav: false,
   sunMoonInfo: false,
+  tripMeter: false,
   // 3D OSM Buildings tileset is heavy and renders with edge outlines
   // that disable imagery draping underneath, painting the screen with
   // dark olive boxes at low altitudes (the user's tear repro). Off by
@@ -2834,8 +2839,28 @@ function App() {
   // (auto-mode-switch, follow-mode) sees the latest value.
   const cameraEmitDeadlineRef = useRef(0);
   const hashUpdateDeadlineRef = useRef(0);
+  // Trip-meter accumulator — totals the haversine distance of every
+  // camera move this session so the trip-meter widget can show how
+  // far the view has 'travelled'. Reset via palette command.
+  const tripMeterRef = useRef<{ totalKm: number; lastLat: number; lastLon: number; startTime: number }>({
+    totalKm: 0,
+    lastLat: NaN,
+    lastLon: NaN,
+    startTime: Date.now(),
+  });
   const onCameraChange = useCallback((lat: number, lon: number, altKm: number) => {
     cameraStateRef.current = { lat, lon, altKm };
+    // Accumulate trip-meter distance (haversine delta from last sample).
+    // Skip the first sample (NaN baseline) and skip implausibly-large
+    // jumps (>2000km between updates = a fly-to teleport, not real
+    // surface travel). Cheap enough to do on every move event.
+    const tm = tripMeterRef.current;
+    if (Number.isFinite(tm.lastLat) && Number.isFinite(tm.lastLon)) {
+      const deltaKm = haversineKm(tm.lastLat, tm.lastLon, lat, lon);
+      if (deltaKm < 2000) tm.totalKm += deltaKm;
+    }
+    tm.lastLat = lat;
+    tm.lastLon = lon;
     // 200ms on desktop, 400ms on mobile — phones can't redraw the status
     // bar 5× per second cheaply anyway.
     const throttleMs = IS_LOW_END ? 400 : 200;
@@ -4907,6 +4932,27 @@ function App() {
             { id: "toggleNearbyAircraft", label: layers.nearbyAircraft ? "Hide Nearby aircraft widget" : "✈ Show Nearby aircraft widget (top 5 closest to view)", group: "Widgets", icon: Plane, run: () => toggleLayer("nearbyAircraft") },
             { id: "toggleSelectedPinNav", label: layers.selectedPinNav ? "Hide Selected pin nav widget" : "🎯 Show Selected pin nav widget (GPS-style guidance to selected pin)", group: "Widgets", icon: Navigation, run: () => toggleLayer("selectedPinNav") },
             { id: "toggleSunMoonInfo", label: layers.sunMoonInfo ? "Hide Sun/Moon info widget" : "☀🌙 Show Sun/Moon info widget (live altitude, azimuth, phase at view)", group: "Widgets", icon: SunIcon, run: () => toggleLayer("sunMoonInfo") },
+            { id: "toggleTripMeter", label: layers.tripMeter ? "Hide Trip meter widget" : "⏱ Show Trip meter widget (cumulative ground-distance camera has covered this session)", group: "Widgets", icon: Compass, run: () => toggleLayer("tripMeter") },
+            { id: "tripMeterReset", label: "⏱ Reset trip meter to zero", group: "Tools", icon: Compass, run: () => {
+              tripMeterRef.current = { totalKm: 0, lastLat: NaN, lastLon: NaN, startTime: Date.now() };
+              setCameraState((c) => ({ ...c })); // force widget re-render
+              showToast("⏱ Trip meter reset");
+            }},
+            { id: "tripMeterStats", label: "⏱ Show trip meter stats (also works without the widget on)", group: "Tools", icon: Compass, run: () => {
+              const tm = tripMeterRef.current;
+              const elapsedMs = Date.now() - tm.startTime;
+              const elapsedH = elapsedMs / 3_600_000;
+              const elapsedMin = Math.floor(elapsedMs / 60000);
+              const avgKmh = elapsedH > 0 ? tm.totalKm / elapsedH : 0;
+              const equator = 40075;
+              const moon = 384400;
+              const compareLine = tm.totalKm < equator
+                ? `${(tm.totalKm / equator * 100).toFixed(1)}% of Earth's equator`
+                : tm.totalKm < moon
+                  ? `${(tm.totalKm / equator).toFixed(1)}× around equator`
+                  : `${(tm.totalKm / moon).toFixed(1)}× to the Moon`;
+              showToast(`⏱ Trip: ${formatDistKm(tm.totalKm, unitsImperial)} in ${elapsedMin}m · ~${Math.round(avgKmh).toLocaleString()} km/h avg · ${compareLine}`);
+            }},
             // Widget batch operations — all-on / all-off / essential only
             { id: "widgetsAllOn", label: "🪟 Show ALL stat widgets at once (LiveStats + Coords + Anchors + Nearby + QuickToggles)", group: "Widgets", icon: Layers, run: () => {
               setLayers((p) => ({ ...p, liveStats: true, distanceAnchors: true, coordinates: true, quickToggles: true, nearbyAircraft: true }));
@@ -15215,6 +15261,69 @@ ${wpts}
       {layers.sunMoonInfo && (
         <Draggable id="sunMoonInfo" customizeMode={customizeUiMode} position={widgetPositions.sunMoonInfo} onMove={setWidgetPosition}>
           <SunMoonInfoWidget cameraLat={cameraState.lat} cameraLon={cameraState.lon} />
+        </Draggable>
+      )}
+
+      {/* Trip-meter widget — total ground distance the camera has
+          covered this session, with elapsed time and average angular
+          speed. Updates whenever cameraState updates (200ms throttle).
+          The actual accumulator lives in tripMeterRef so the count is
+          frame-precise; we re-read it on each cameraState tick. */}
+      {layers.tripMeter && (
+        <Draggable id="tripMeter" customizeMode={customizeUiMode} position={widgetPositions.tripMeter} onMove={setWidgetPosition}>
+          {(() => {
+            // Read the ref value directly. We render every time
+            // cameraState changes (parent state), so this stays fresh.
+            // eslint-disable-next-line react-hooks/exhaustive-deps
+            void cameraState; // mark dependency for eslint
+            const tm = tripMeterRef.current;
+            const elapsedMs = Date.now() - tm.startTime;
+            const elapsedH = elapsedMs / 3_600_000;
+            const fmtElapsed = (() => {
+              const s = Math.floor(elapsedMs / 1000);
+              const h = Math.floor(s / 3600);
+              const m = Math.floor((s % 3600) / 60);
+              const sec = s % 60;
+              if (h > 0) return `${h}h ${m}m ${sec.toString().padStart(2, "0")}s`;
+              if (m > 0) return `${m}m ${sec.toString().padStart(2, "0")}s`;
+              return `${sec}s`;
+            })();
+            const avgKmh = elapsedH > 0 ? tm.totalKm / elapsedH : 0;
+            // Distance equivalent comparisons — make 'how far have I
+            // travelled' more relatable than just a number.
+            const equator = 40075;     // km, Earth's equator
+            const moon = 384400;       // km, Earth-Moon mean distance
+            const equatorPct = (tm.totalKm / equator * 100).toFixed(1);
+            const compareLine = tm.totalKm < equator
+              ? `${equatorPct}% of Earth's equator`
+              : tm.totalKm < moon
+                ? `${(tm.totalKm / equator).toFixed(1)}× around the equator`
+                : `${(tm.totalKm / moon).toFixed(1)}× the distance to the Moon`;
+            return (
+              <div className="atlasTripMeterWidget" role="status" aria-label="Trip meter">
+                <div className="atlasTripMeterHead">
+                  <Compass size={12} />
+                  <strong>Trip meter</strong>
+                </div>
+                <div className="atlasTripMeterDist">{formatDistKm(tm.totalKm, unitsImperial)}</div>
+                <div className="atlasTripMeterMeta">
+                  <span>⏱ {fmtElapsed}</span>
+                  <span>~{Math.round(avgKmh).toLocaleString()} km/h avg</span>
+                </div>
+                <div className="atlasTripMeterCompare">{compareLine}</div>
+                <button
+                  type="button"
+                  className="atlasTripMeterReset"
+                  onClick={() => {
+                    tripMeterRef.current = { totalKm: 0, lastLat: NaN, lastLon: NaN, startTime: Date.now() };
+                    setCameraState((c) => ({ ...c })); // force re-render
+                    showToast("⏱ Trip meter reset");
+                  }}
+                  title="Reset trip meter to zero"
+                >Reset</button>
+              </div>
+            );
+          })()}
         </Draggable>
       )}
 
