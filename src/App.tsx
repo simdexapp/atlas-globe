@@ -6709,6 +6709,23 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: 51.389, lon: 30.099, altKm: 60 }));
               showToast(`☢ Chernobyl reactor 4 · 26 Apr 1986 · INES 7 nuclear accident · 2,600 km² exclusion zone (largest in Europe) · pripyat ghost city nearby`);
             }},
+            // ===== Engineering megaprojects =====
+            { id: "flyThreeGorges", label: "🏗 Fly to Three Gorges Dam (China — largest hydro plant in the world)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 30.823, lon: 111.003, altKm: 30 }));
+              showToast(`🏗 Three Gorges Dam · Yangtze River · 22.5 GW capacity · 2.3 km long · displaced 1.4M people · slowed Earth's rotation by 0.06 μs`);
+            }},
+            { id: "flyPanamaCanal", label: "⚓ Fly to Panama Canal (Atlantic↔Pacific shortcut, 82km)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 9.080, lon: -79.680, altKm: 60 }));
+              showToast(`⚓ Panama Canal · 82 km long · opened 1914 · 14,000 ships/year · saves ~13,000 km vs Cape Horn route`);
+            }},
+            { id: "flyChannelTunnel", label: "🚆 Fly to Channel Tunnel (Eurotunnel — UK↔France undersea, 50km)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 51.000, lon: 1.500, altKm: 30 }));
+              showToast(`🚆 Channel Tunnel · 50.5 km long (38km undersea — longest undersea section in the world) · opened 1994 · 100m below seabed`);
+            }},
+            { id: "flyCERN", label: "⚛ Fly to CERN / LHC (Switzerland-France border — particle physics)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 46.235, lon: 6.055, altKm: 12 }));
+              showToast(`⚛ CERN · LHC ring is 27 km circumference · 100m underground · highest-energy particle collider · discovered Higgs boson 2012`);
+            }},
             // ===== Landmark discovery =====
             { id: "landmarksClosest", label: "🗺 Show 5 closest landmarks to current view", group: "Tools", icon: Sparkles, run: () => {
               const c = cameraStateRef.current;
