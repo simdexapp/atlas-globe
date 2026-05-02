@@ -13455,6 +13455,76 @@ ${trkpts}
                 showToast(`🕐 ✗ ${dayNames[dayOfWeek]} — ${reason} at ${formatLat(c.lat)} ${formatLon(c.lon)}`);
               }
             }},
+            // ===== Format conversion utility commands =====
+            { id: "convertDdToDms", label: "🔢 Convert decimal degrees → DMS (prompt for lat,lon)", group: "Tools", icon: Compass, run: () => {
+              const input = window.prompt("Decimal coordinates (lat,lon, e.g. 40.7128,-74.0060):", "");
+              if (!input) return;
+              const m = input.trim().match(/^\s*(-?\d+(?:\.\d+)?)\s*[,\s]\s*(-?\d+(?:\.\d+)?)\s*$/);
+              if (!m) { showToast("Couldn't parse"); return; }
+              const lat = parseFloat(m[1]);
+              const lon = parseFloat(m[2]);
+              if (Math.abs(lat) > 90 || Math.abs(lon) > 180) { showToast("Out of range"); return; }
+              const fmt = (deg: number, isLat: boolean): string => {
+                const dir = deg >= 0 ? (isLat ? "N" : "E") : (isLat ? "S" : "W");
+                const abs = Math.abs(deg);
+                const d = Math.floor(abs);
+                const minTotal = (abs - d) * 60;
+                const min = Math.floor(minTotal);
+                const sec = (minTotal - min) * 60;
+                return `${d}° ${min}' ${sec.toFixed(2)}" ${dir}`;
+              };
+              const result = `${fmt(lat, true)}, ${fmt(lon, false)}`;
+              navigator.clipboard?.writeText(result).then(() => showToast(`🔢 ${input} → ${result} (copied)`));
+            }},
+            { id: "convertDmsToDd", label: "🔢 Convert DMS → decimal degrees (prompt for DMS string)", group: "Tools", icon: Compass, run: () => {
+              const input = window.prompt(`DMS coordinates (e.g. '40° 42' 46" N, 74° 0' 21" W'):`, "");
+              if (!input) return;
+              // Match each DMS component — supports °/'/", letters N/S/E/W
+              const matches = input.matchAll(/(-?\d+(?:\.\d+)?)\s*°?\s*(\d+(?:\.\d+)?)?\s*['′]?\s*(\d+(?:\.\d+)?)?\s*["″]?\s*([NSEW])?/gi);
+              const parts: number[] = [];
+              for (const m of matches) {
+                const d = parseFloat(m[1]);
+                const min = m[2] ? parseFloat(m[2]) : 0;
+                const sec = m[3] ? parseFloat(m[3]) : 0;
+                const sign = m[4] && /[SW]/i.test(m[4]) ? -1 : 1;
+                if (Number.isFinite(d)) {
+                  const dd = sign * (Math.abs(d) + min/60 + sec/3600) * (d < 0 ? -1 : 1);
+                  parts.push(dd);
+                }
+                if (parts.length === 2) break;
+              }
+              if (parts.length < 2) { showToast("Couldn't parse — need lat AND lon"); return; }
+              const result = `${parts[0].toFixed(6)}, ${parts[1].toFixed(6)}`;
+              navigator.clipboard?.writeText(result).then(() => showToast(`🔢 ${input} → ${result} (copied)`));
+            }},
+            { id: "convertUtcToLocal", label: "🕐 Convert UTC time → local time at view (prompt HH:MM)", group: "Tools", icon: Compass, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const input = window.prompt("UTC time (HH:MM, 24-hour):", "12:00");
+              if (!input) return;
+              const m = input.trim().match(/^(\d{1,2}):(\d{2})$/);
+              if (!m) { showToast("Couldn't parse (use HH:MM)"); return; }
+              const utcHr = parseInt(m[1]) + parseInt(m[2]) / 60;
+              if (utcHr < 0 || utcHr >= 24) { showToast("Hour out of range"); return; }
+              const localMs = (utcHr * 3600_000 + c.lon / 15 * 3600_000 + 86400_000) % 86400_000;
+              const hh = Math.floor(localMs / 3600_000);
+              const mm = Math.floor((localMs % 3600_000) / 60_000);
+              showToast(`🕐 ${input} UTC = ${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")} mean solar at ${formatLat(c.lat)} ${formatLon(c.lon)}`);
+            }},
+            { id: "convertLocalToUtc", label: "🕐 Convert local time at view → UTC (prompt HH:MM)", group: "Tools", icon: Compass, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const input = window.prompt(`Local solar time at ${formatLon(c.lon)} (HH:MM, 24-hour):`, "12:00");
+              if (!input) return;
+              const m = input.trim().match(/^(\d{1,2}):(\d{2})$/);
+              if (!m) { showToast("Couldn't parse (use HH:MM)"); return; }
+              const localHr = parseInt(m[1]) + parseInt(m[2]) / 60;
+              if (localHr < 0 || localHr >= 24) { showToast("Hour out of range"); return; }
+              const utcMs = (localHr * 3600_000 - c.lon / 15 * 3600_000 + 86400_000) % 86400_000;
+              const hh = Math.floor(utcMs / 3600_000);
+              const mm = Math.floor((utcMs % 3600_000) / 60_000);
+              showToast(`🕐 ${input} local at ${formatLon(c.lon)} = ${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")} UTC`);
+            }},
             // ===== Grid-snapping navigation commands =====
             // Move the camera to the nearest grid intersection at various
             // resolutions. Useful for navigators who want to align with
