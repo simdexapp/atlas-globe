@@ -6830,6 +6830,23 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: 60.35, lon: 102.27, altKm: 30 }));
               showToast(`💥 Vanavara · 65 km SE of Tunguska airburst (Jun 30 1908) · only inhabited area to witness it · still subject of impact research expeditions`);
             }},
+            // ===== Notable lakes (record holders) =====
+            { id: "flyCaspianSea", label: "🌊 Fly to Caspian Sea (world's largest enclosed inland body of water)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 41.8, lon: 50.5, altKm: 1500 }));
+              showToast(`🌊 Caspian Sea · 371,000 km² · world's largest enclosed body of water · borders 5 countries · debate over lake vs sea designation (legally classified as a sea since 2018)`);
+            }},
+            { id: "flyLakeBaikal", label: "💧 Fly to Lake Baikal (Russia — deepest + oldest freshwater lake)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 53.5, lon: 108.0, altKm: 600 }));
+              showToast(`💧 Lake Baikal · 1,642m deep (deepest lake in the world) · 25-30M years old (oldest) · 23% of world's unfrozen freshwater · UNESCO 1996`);
+            }},
+            { id: "flyLakeVostok", label: "🧊 Fly to Lake Vostok (subglacial lake under 4 km of Antarctic ice)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: -77.5, lon: 106.0, altKm: 400 }));
+              showToast(`🧊 Lake Vostok · liquid lake under 3,700m of Antarctic ice · ~14,000 yr isolation · drilled to in 2012 · candidate analog for Europa subsurface ocean`);
+            }},
+            { id: "flyCraterLake", label: "🌋 Fly to Crater Lake (Oregon — deepest lake in USA, formed in collapsed volcano)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 42.943, lon: -122.108, altKm: 30 }));
+              showToast(`🌋 Crater Lake · 594m deep (deepest in USA, 9th deepest in world) · formed ~7,700 ya when Mt. Mazama collapsed · no inflows or outflows · pristine water clarity`);
+            }},
             // ===== Landmark discovery =====
             { id: "landmarksClosest", label: "🗺 Show 5 closest landmarks to current view", group: "Tools", icon: Sparkles, run: () => {
               const c = cameraStateRef.current;
