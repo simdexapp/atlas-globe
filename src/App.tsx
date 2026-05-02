@@ -13288,6 +13288,62 @@ ${wpts}
                 showToast(`📅 Over ${days.toFixed(0)} days · ${perDay.toFixed(2)}/day · ${perWeek.toFixed(1)}/week · ${perMonth.toFixed(1)}/month`);
               },
             }] : []),
+            // ===== Pattern-based bulk pin operations — find / delete /
+            // rename / recolor pins matching a label substring.
+            ...(pins.length >= 1 ? [{
+              id: "pinDeleteByLabel" as const,
+              label: "🗑 Delete all pins matching label search (prompt)",
+              group: "Tools" as const,
+              icon: Trash2,
+              run: () => {
+                const q = window.prompt("Delete all pins whose label contains (case-insensitive):", "")?.trim().toLowerCase();
+                if (!q) return;
+                const matches = pins.filter(p => p.label.toLowerCase().includes(q));
+                if (matches.length === 0) { showToast(`🗑 No pins match "${q}"`); return; }
+                if (!window.confirm(`Delete ${matches.length} pin${matches.length === 1 ? "" : "s"} matching "${q}"? This cannot be undone.`)) return;
+                setPins(prev => prev.filter(p => !p.label.toLowerCase().includes(q)));
+                showToast(`🗑 Deleted ${matches.length} pin${matches.length === 1 ? "" : "s"} matching "${q}"`);
+              },
+            }, {
+              id: "pinRenameByPattern" as const,
+              label: "🔁 Rename pins by find/replace in labels (prompt)",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const find = window.prompt("Find text in pin labels (case-insensitive):", "")?.trim();
+                if (!find) return;
+                const replace = window.prompt(`Replace "${find}" with:`, "");
+                if (replace === null) return;       // user cancelled
+                const re = new RegExp(find.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+                let modified = 0;
+                setPins(prev => prev.map(p => {
+                  if (re.test(p.label)) {
+                    modified++;
+                    return { ...p, label: p.label.replace(re, replace) };
+                  }
+                  return p;
+                }));
+                if (modified === 0) { showToast(`🔁 No pin labels contained "${find}"`); return; }
+                showToast(`🔁 Renamed ${modified} pin${modified === 1 ? "" : "s"} (replaced "${find}" → "${replace}")`);
+              },
+            }, {
+              id: "pinRecolorByLabel" as const,
+              label: "🎨 Recolor all pins matching label search (prompt)",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const q = window.prompt("Recolor all pins whose label contains (case-insensitive):", "")?.trim().toLowerCase();
+                if (!q) return;
+                const matches = pins.filter(p => p.label.toLowerCase().includes(q));
+                if (matches.length === 0) { showToast(`🎨 No pins match "${q}"`); return; }
+                const color = window.prompt(`Recolor ${matches.length} matching pin${matches.length === 1 ? "" : "s"} to (hex like #5cb5ff or pick from ${PIN_COLORS.join(", ")}):`, PIN_COLORS[0]);
+                if (!color) return;
+                const trimmed = color.trim();
+                if (!/^#[0-9a-fA-F]{6}$/.test(trimmed)) { showToast("Invalid hex color (use #RRGGBB)"); return; }
+                setPins(prev => prev.map(p => p.label.toLowerCase().includes(q) ? { ...p, color: trimmed } : p));
+                showToast(`🎨 Recolored ${matches.length} pin${matches.length === 1 ? "" : "s"} to ${trimmed}`);
+              },
+            }] : []),
             // Pin import from GeoJSON file
             { id: "pinImport", label: "Import pins from GeoJSON file", group: "Tools", icon: BookmarkPlus, run: () => {
               const input = document.createElement("input");
