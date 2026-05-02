@@ -9362,6 +9362,36 @@ ${trkpts}
               setImagery((prev) => ({ ...prev, date: todayUTC() }));
               showToast("🕰 Now: today's imagery");
             }},
+            { id: "imageryDatePrev", label: "⏪ Imagery date: step back 1 day", group: "Tools", icon: SunIcon, run: () => {
+              if (imagery.source !== "live") { showToast("Switch imagery to 'NASA live' first"); return; }
+              const d = new Date(imagery.date + "T00:00:00Z");
+              d.setUTCDate(d.getUTCDate() - 1);
+              const iso = d.toISOString().slice(0, 10);
+              setImagery(prev => ({ ...prev, date: iso }));
+              showToast(`⏪ Imagery: ${iso} (-1 day)`);
+            }},
+            { id: "imageryDateNext", label: "⏩ Imagery date: step forward 1 day", group: "Tools", icon: SunIcon, run: () => {
+              if (imagery.source !== "live") { showToast("Switch imagery to 'NASA live' first"); return; }
+              const d = new Date(imagery.date + "T00:00:00Z");
+              d.setUTCDate(d.getUTCDate() + 1);
+              const iso = d.toISOString().slice(0, 10);
+              const today = todayUTC();
+              const clamped = iso > today ? today : iso;
+              setImagery(prev => ({ ...prev, date: clamped }));
+              showToast(`⏩ Imagery: ${clamped}${clamped === today ? " (today, can't go further)" : " (+1 day)"}`);
+            }},
+            { id: "imageryDatePrompt", label: "📅 Imagery date: jump to specific date (prompt YYYY-MM-DD)", group: "Tools", icon: SunIcon, run: () => {
+              if (imagery.source !== "live") { showToast("Switch imagery to 'NASA live' first"); return; }
+              const input = window.prompt("Imagery date (YYYY-MM-DD, between 2000-02-24 and today):", imagery.date);
+              if (!input) return;
+              const m = input.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+              if (!m) { showToast("Invalid date format (use YYYY-MM-DD)"); return; }
+              const today = todayUTC();
+              if (input > today) { showToast(`Can't go past today (${today})`); return; }
+              if (input < "2000-02-24") { showToast("MODIS imagery starts 2000-02-24"); return; }
+              setImagery(prev => ({ ...prev, date: input }));
+              showToast(`📅 Imagery: ${input}`);
+            }},
             { id: "timeMachine1Year", label: "🕰 Time machine: 1 year ago today", group: "Tools", icon: SunIcon, run: () => {
               if (imagery.source !== "live") { showToast("Switch imagery to 'NASA live' first"); return; }
               const d = new Date();
