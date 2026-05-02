@@ -689,6 +689,11 @@ const KEYBOARD_HINTS = [
   { keys: "E", desc: "✏ Edit/rename selected pin's label" },
   { keys: "Shift+E", desc: "🎨 Cycle selected pin's color" },
   { keys: "Shift+X", desc: "🗑 Delete selected pin (with confirm)" },
+  // ===== Power shortcuts =====
+  { keys: "Shift+G", desc: "📍 Go to coordinates prompt (lat,lon)" },
+  { keys: "Shift+M", desc: "📏 Clear measure path entirely (keeps tool active)" },
+  { keys: "Shift+F", desc: "⤢ Toggle browser fullscreen" },
+  { keys: "Shift+S", desc: "📸 Capture screenshot at 1× (native resolution PNG)" },
   // ===== Pan / zoom =====
   { keys: "↑ ↓ ← → / W X A D", desc: "Pan camera north / south / west / east" },
   { keys: "+ / =", desc: "Zoom in 2× (halve altitude)" },
@@ -3857,7 +3862,20 @@ function App() {
           break;
         case "f":
           event.preventDefault();
-          setShowSearch((v) => !v);
+          if (event.shiftKey) {
+            // Shift+F — toggle browser fullscreen via the Fullscreen API.
+            // Plain F still opens search. Useful for presentation mode.
+            if (document.fullscreenElement) {
+              document.exitFullscreen?.();
+              showToast("⤡ Fullscreen off");
+            } else {
+              document.documentElement.requestFullscreen?.()
+                .then(() => showToast("⤢ Fullscreen on (Esc to exit)"))
+                .catch(() => showToast("⤢ Fullscreen blocked by browser"));
+            }
+          } else {
+            setShowSearch((v) => !v);
+          }
           break;
         case "b":
           event.preventDefault();
@@ -3869,9 +3887,17 @@ function App() {
           break;
         case "m":
           event.preventDefault();
-          setMeasureMode((v) => !v);
-          setMeasurePoints([]);
-          showToast(measureMode ? "Measure tool off" : "Measure tool — click to add path vertices");
+          if (event.shiftKey && measureMode) {
+            // Shift+M while measuring — clear all vertices but keep
+            // the tool active. Z removes one at a time; this nukes
+            // the whole path so you can start over without exiting.
+            setMeasurePoints([]);
+            showToast("Measure path cleared (tool still active)");
+          } else {
+            setMeasureMode((v) => !v);
+            setMeasurePoints([]);
+            showToast(measureMode ? "Measure tool off" : "Measure tool — click to add path vertices");
+          }
           break;
         case "p":
           event.preventDefault();
@@ -3922,9 +3948,26 @@ function App() {
           break;
         case "g":
           event.preventDefault();
-          // Toggle graticule (Atlas) or country borders (Surface) since
-          // graticule is Atlas-only.
-          if (mode === "atlas") {
+          if (event.shiftKey) {
+            // Shift+G — Go to coordinates prompt. Accepts any of:
+            //   "40.7,-74.0"  / "40.7128, -74.0060"  / "40.7128 -74.006"
+            // and validates against ±90 / ±180 ranges.
+            const input = window.prompt("Go to coordinates (lat, lon):", "");
+            if (!input) return;
+            const m = input.trim().match(/^\s*(-?\d+(?:\.\d+)?)\s*[,\s]\s*(-?\d+(?:\.\d+)?)\s*$/);
+            if (!m) { showToast("Couldn't parse coordinates — use 'lat,lon' format"); return; }
+            const lat = parseFloat(m[1]), lon = parseFloat(m[2]);
+            if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+              showToast("Out of range — lat must be ±90, lon must be ±180");
+              return;
+            }
+            const c = cameraStateRef.current;
+            const altKm = c?.altKm ?? 1500;
+            setFlyTo((p) => ({ id: p.id + 1, lat, lon, altKm }));
+            showToast(`📍 Flying to ${formatLat(lat)} ${formatLon(lon)}`);
+          } else if (mode === "atlas") {
+            // Toggle graticule (Atlas) or country borders (Surface) since
+            // graticule is Atlas-only.
             setLayers((l) => ({ ...l, graticule: !l.graticule }));
             showToast(layers.graticule ? "Graticule hidden" : "Graticule shown");
           } else {
@@ -4040,8 +4083,17 @@ function App() {
           break;
         case "s":
           event.preventDefault();
-          if (mode === "atlas") switchToSurface();
-          else switchToAtlas();
+          if (event.shiftKey) {
+            // Shift+S — capture a screenshot at 1× (native resolution).
+            // Plain S still swaps Atlas/Surface mode. Saves a PNG via
+            // the existing captureAtScale plumbing — auto-downloads.
+            captureAtScale(1);
+            showToast("📸 Screenshot captured");
+          } else if (mode === "atlas") {
+            switchToSurface();
+          } else {
+            switchToAtlas();
+          }
           break;
         case "1":
           event.preventDefault();
@@ -4248,7 +4300,7 @@ function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [cycleTheme, mode, resetView, saveCurrentBookmark, showSearch, showShortcuts, switchToAtlas, switchToSurface, measureMode, showToast, bookmarks, pins, selectedPin, deletePin]);
+  }, [cycleTheme, mode, resetView, saveCurrentBookmark, showSearch, showShortcuts, switchToAtlas, switchToSurface, measureMode, showToast, bookmarks, pins, selectedPin, deletePin, captureAtScale, layers.graticule, layers.borders]);
 
   const rootStyle: CSSProperties = {
     "--accent": "#5cb5ff",
