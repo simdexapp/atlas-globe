@@ -7201,6 +7201,25 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: -46.692, lon: -72.638, altKm: 8 }));
               showToast(`💎 Marble Caves (Cuevas de Mármol) · sculpted into a marble peninsula on Lake General Carrera, Patagonian Chile · turquoise water reflects on swirled marble · ~6,000 years of wave erosion`);
             }},
+            // ===== Iconic desert / unique geology fly-to commands =====
+            // Distinctive landforms visible from space, mostly in arid
+            // regions. Each has a wikipedia-link-worthy story.
+            { id: "flyRichatStructure", label: "👁 Fly to Richat Structure / Eye of the Sahara (Mauritania — circular bullseye visible from space)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 21.124, lon: -11.395, altKm: 60 }));
+              showToast(`👁 Richat Structure · 40-km circular geological feature in Sahara · highly eroded dome of layered sedimentary rock · used as a landmark by astronauts since the 1960s when its concentric rings were photographed from orbit`);
+            }},
+            { id: "flyWhiteDesert", label: "🏜 Fly to White Desert (Egypt — surreal chalk pinnacles eroded by sandstorms)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 27.367, lon: 28.090, altKm: 30 }));
+              showToast(`🏜 White Desert (Sahara el Beyda) · windswept chalk formations near Farafra Oasis · pinnacles shaped like mushrooms, ice cream, and animals · ancient seabed exposed by wind erosion · stunning at sunrise/sunset`);
+            }},
+            { id: "flySkeletonCoast", label: "💀 Fly to Skeleton Coast (Namibia — shipwrecks, fog, and one of Earth's most desolate shorelines)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: -19.5, lon: 12.8, altKm: 200 }));
+              showToast(`💀 Skeleton Coast · 500km of Namibian coastline named for whale bones and shipwrecks · cold Benguela current meets hot Namib Desert creating dense fog · over 1000 wrecks line the shore · Bushmen called it 'The Land God Made in Anger'`);
+            }},
+            { id: "flyWaveRock", label: "🌊 Fly to Wave Rock (Australia — granite cliff that perfectly mimics a breaking ocean wave)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: -32.4438, lon: 118.8973, altKm: 6 }));
+              showToast(`🌊 Wave Rock · 15m-tall granite cliff near Hyden, Western Australia · curve mimics a giant breaking wave · 2.7 billion-year-old rock, with the wave shape carved by 60+ million years of chemical weathering and rainwater runoff staining`);
+            }},
             // ===== Iconic glacier fly-to commands =====
             // Glaciers visible in satellite imagery, dramatic, and most
             // are retreating — useful for climate-context exploration.
