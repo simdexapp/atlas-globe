@@ -6864,6 +6864,23 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: 31.7767, lon: 35.2345, altKm: 1.5 }));
               showToast(`🕊 Western Wall (Kotel) · last remnant of the Second Temple's retaining wall · Herod the Great ~19 BCE · holiest accessible Jewish prayer site · adjacent to Temple Mount / Dome of the Rock`);
             }},
+            // ===== Iconic natural geological formations =====
+            { id: "flyCliffsMoher", label: "🌊 Fly to Cliffs of Moher (Ireland — 214m sea cliffs)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 52.972, lon: -9.428, altKm: 6 }));
+              showToast(`🌊 Cliffs of Moher · 214m at highest · 14 km along Atlantic coast · 9th most-visited tourist site in Ireland · featured in Princess Bride and Harry Potter & the Half-Blood Prince`);
+            }},
+            { id: "flyPamukkale", label: "♨ Fly to Pamukkale (Turkey — white travertine terraces with thermal pools)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 37.9203, lon: 29.1206, altKm: 4 }));
+              showToast(`♨ Pamukkale ('cotton castle') · white travertine terraces formed by calcium-rich thermal springs over 14,000 years · ancient Hierapolis ruins above · UNESCO 1988`);
+            }},
+            { id: "flyBryceCanyon", label: "🪨 Fly to Bryce Canyon (Utah — densest collection of hoodoos on Earth)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 37.5930, lon: -112.187, altKm: 30 }));
+              showToast(`🪨 Bryce Canyon · largest concentration of hoodoos (eroded sandstone spires) on Earth · NOT actually a canyon — it's a series of natural amphitheaters · pristine night skies (gold-tier dark sky park)`);
+            }},
+            { id: "flyMarbleCaves", label: "💎 Fly to Marble Caves (Chile — turquoise grotto on Lake Carrera)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: -46.692, lon: -72.638, altKm: 8 }));
+              showToast(`💎 Marble Caves (Cuevas de Mármol) · sculpted into a marble peninsula on Lake General Carrera, Patagonian Chile · turquoise water reflects on swirled marble · ~6,000 years of wave erosion`);
+            }},
             // ===== Landmark discovery =====
             { id: "landmarksClosest", label: "🗺 Show 5 closest landmarks to current view", group: "Tools", icon: Sparkles, run: () => {
               const c = cameraStateRef.current;
