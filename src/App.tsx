@@ -7033,6 +7033,46 @@ function App() {
               setTimeout(() => URL.revokeObjectURL(url), 500);
               showToast(`📊 Exported ${bookmarks.length} bookmark${bookmarks.length === 1 ? "" : "s"} as CSV`);
             }},
+            // KML / GPX bookmark exports (matching pin-export coverage so
+            // the user can move bookmark sets to Google Earth or hiking GPS).
+            { id: "bmkExportKml", label: `📤 Export all ${bookmarks.length} bookmarks as KML (Google Earth)`, group: "Tools", icon: Bookmark, run: () => {
+              const placemarks = bookmarks.map(b => `    <Placemark>
+      <name>${escapeXml(b.name)}</name>
+      <Point><coordinates>${b.lon},${b.lat},0</coordinates></Point>
+    </Placemark>`).join("\n");
+              const kml = `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Atlas Globe bookmarks</name>
+${placemarks}
+  </Document>
+</kml>`;
+              const blob = new Blob([kml], { type: "application/vnd.google-earth.kml+xml" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `atlas-bookmarks-${new Date().toISOString().slice(0, 10)}.kml`;
+              a.click();
+              setTimeout(() => URL.revokeObjectURL(url), 500);
+              showToast(`📤 Exported ${bookmarks.length} bookmark${bookmarks.length === 1 ? "" : "s"} as KML`);
+            }},
+            { id: "bmkExportGpx", label: `📤 Export all ${bookmarks.length} bookmarks as GPX (GPS / hiking apps)`, group: "Tools", icon: Bookmark, run: () => {
+              const wpts = bookmarks.map(b => `  <wpt lat="${b.lat}" lon="${b.lon}">
+    <name>${escapeXml(b.name)}</name>${b.savedAt > 0 ? `\n    <time>${new Date(b.savedAt).toISOString()}</time>` : ""}
+  </wpt>`).join("\n");
+              const gpx = `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="Atlas Globe" xmlns="http://www.topografix.com/GPX/1/1">
+${wpts}
+</gpx>`;
+              const blob = new Blob([gpx], { type: "application/gpx+xml" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `atlas-bookmarks-${new Date().toISOString().slice(0, 10)}.gpx`;
+              a.click();
+              setTimeout(() => URL.revokeObjectURL(url), 500);
+              showToast(`📤 Exported ${bookmarks.length} bookmark${bookmarks.length === 1 ? "" : "s"} as GPX`);
+            }},
             // ===== Pin power-user commands =====
             // Fly to the geographic centroid of all pins (mean lat/lon).
             // Useful for "where's the center of gravity of my travel".
