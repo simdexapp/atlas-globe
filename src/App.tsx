@@ -209,6 +209,10 @@ type LayerVisibility = {
   // this session (haversine-summed), with elapsed time and average
   // angular speed. Resets via palette command.
   tripMeter: boolean;
+  // Toast history widget — scrollable list of the last N toasts.
+  // Useful for catching messages that auto-dismissed before being
+  // read, and for reviewing what happened during the session.
+  toastHistory: boolean;
 };
 
 type GlobeSettings = {
@@ -551,6 +555,7 @@ const defaultLayers: LayerVisibility = {
   selectedPinNav: false,
   sunMoonInfo: false,
   tripMeter: false,
+  toastHistory: false,
   // 3D OSM Buildings tileset is heavy and renders with edge outlines
   // that disable imagery draping underneath, painting the screen with
   // dark olive boxes at low altitudes (the user's tear repro). Off by
@@ -4985,6 +4990,7 @@ function App() {
             { id: "toggleSelectedPinNav", label: layers.selectedPinNav ? "Hide Selected pin nav widget" : "🎯 Show Selected pin nav widget (GPS-style guidance to selected pin)", group: "Widgets", icon: Navigation, run: () => toggleLayer("selectedPinNav") },
             { id: "toggleSunMoonInfo", label: layers.sunMoonInfo ? "Hide Sun/Moon info widget" : "☀🌙 Show Sun/Moon info widget (live altitude, azimuth, phase at view)", group: "Widgets", icon: SunIcon, run: () => toggleLayer("sunMoonInfo") },
             { id: "toggleTripMeter", label: layers.tripMeter ? "Hide Trip meter widget" : "⏱ Show Trip meter widget (cumulative ground-distance camera has covered this session)", group: "Widgets", icon: Compass, run: () => toggleLayer("tripMeter") },
+            { id: "toggleToastHistory", label: layers.toastHistory ? "Hide Toast history widget" : "📜 Show Toast history widget (last 8 toast messages, click to copy)", group: "Widgets", icon: Compass, run: () => toggleLayer("toastHistory") },
             { id: "tripMeterReset", label: "⏱ Reset trip meter to zero", group: "Tools", icon: Compass, run: () => {
               tripMeterRef.current = { totalKm: 0, lastLat: NaN, lastLon: NaN, startTime: Date.now() };
               setCameraState((c) => ({ ...c })); // force widget re-render
@@ -15666,6 +15672,58 @@ ${wpts}
                   }}
                   title="Reset trip meter to zero"
                 >Reset</button>
+              </div>
+            );
+          })()}
+        </Draggable>
+      )}
+
+      {/* Toast history widget — last 8 toasts in a small scrollable
+          list. Re-renders on toast state change (showToast triggers a
+          parent setToast). Each entry is click-to-copy and shows
+          relative age. Useful for catching messages that auto-
+          dismissed before being read. */}
+      {layers.toastHistory && (
+        <Draggable id="toastHistory" customizeMode={customizeUiMode} position={widgetPositions.toastHistory} onMove={setWidgetPosition}>
+          {(() => {
+            // eslint-disable-next-line react-hooks/exhaustive-deps
+            void toast; // dependency: re-render whenever a new toast fires
+            const recent = toastHistoryRef.current.slice(0, 8);
+            const fmtAge = (ts: number) => {
+              const s = Math.floor((Date.now() - ts) / 1000);
+              if (s < 60) return `${s}s`;
+              if (s < 3600) return `${Math.floor(s / 60)}m`;
+              return `${Math.floor(s / 3600)}h`;
+            };
+            return (
+              <div className="atlasToastHistoryWidget" role="status" aria-label="Toast history">
+                <div className="atlasToastHistoryHead">
+                  <Compass size={12} />
+                  <strong>Recent toasts</strong>
+                  <span>{recent.length}/{toastHistoryRef.current.length}</span>
+                </div>
+                {recent.length === 0 ? (
+                  <div className="atlasToastHistoryEmpty">No toasts yet this session</div>
+                ) : (
+                  <ul className="atlasToastHistoryList">
+                    {recent.map((t, i) => (
+                      <li
+                        key={`${t.ts}-${i}`}
+                        className="atlasToastHistoryItem"
+                        title={`${new Date(t.ts).toLocaleTimeString()} — click to copy`}
+                        onClick={() => {
+                          navigator.clipboard?.writeText(t.text).then(
+                            () => showToast(`📋 Copied`),
+                            () => showToast(t.text)
+                          );
+                        }}
+                      >
+                        <span className="atlasToastHistoryAge">{fmtAge(t.ts)}</span>
+                        <span className="atlasToastHistoryText">{t.text}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             );
           })()}
