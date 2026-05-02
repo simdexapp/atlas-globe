@@ -5473,6 +5473,89 @@ function App() {
               const fractionEarth = horizonKm / (Math.PI * EARTH_RADIUS_KM);
               showToast(`↻ From ${formatDistKm(h, unitsImperial)} altitude, horizon is ${formatDistKm(horizonKm, unitsImperial)} away — ${(fractionEarth * 100).toFixed(1)}% of the way around Earth`);
             }},
+            // ===== Coordinate calculator commands — distance / bearing /
+            // midpoint between any two arbitrary lat/lon pairs without
+            // having to drop pins or use the measure tool.
+            { id: "calcDistanceAB", label: "📏 Calculate distance between two arbitrary coordinates (prompt)", group: "Tools", icon: Compass, run: () => {
+              const a = window.prompt("Point A coordinates (lat,lon, e.g. 40.7128,-74.006):", "");
+              if (!a) return;
+              const b = window.prompt("Point B coordinates (lat,lon, e.g. 51.5074,-0.1278):", "");
+              if (!b) return;
+              const parse = (s: string): [number, number] | null => {
+                const m = s.trim().match(/^\s*(-?\d+(?:\.\d+)?)\s*[,\s]\s*(-?\d+(?:\.\d+)?)\s*$/);
+                if (!m) return null;
+                const lat = parseFloat(m[1]), lon = parseFloat(m[2]);
+                if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+                if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+                return [lat, lon];
+              };
+              const A = parse(a), B = parse(b);
+              if (!A || !B) { showToast("Couldn't parse coordinates (use 'lat,lon' format)"); return; }
+              const km = haversineKm(A[0], A[1], B[0], B[1]);
+              const bearing = bearingDeg(A[0], A[1], B[0], B[1]);
+              const reciprocal = bearingDeg(B[0], B[1], A[0], A[1]);
+              showToast(`📏 ${formatLat(A[0])} ${formatLon(A[1])} → ${formatLat(B[0])} ${formatLon(B[1])}: ${formatDistKm(km, unitsImperial)} · bearing ${Math.round(bearing)}° ${compassDir(bearing)} · return ${Math.round(reciprocal)}° ${compassDir(reciprocal)}`);
+            }},
+            { id: "calcMidpointAB", label: "📐 Calculate midpoint of two arbitrary coordinates (prompt + fly)", group: "Tools", icon: Crosshair, run: () => {
+              const a = window.prompt("Point A coordinates (lat,lon):", "");
+              if (!a) return;
+              const b = window.prompt("Point B coordinates (lat,lon):", "");
+              if (!b) return;
+              const parse = (s: string): [number, number] | null => {
+                const m = s.trim().match(/^\s*(-?\d+(?:\.\d+)?)\s*[,\s]\s*(-?\d+(?:\.\d+)?)\s*$/);
+                if (!m) return null;
+                const lat = parseFloat(m[1]), lon = parseFloat(m[2]);
+                if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+                return [lat, lon];
+              };
+              const A = parse(a), B = parse(b);
+              if (!A || !B) { showToast("Couldn't parse coordinates"); return; }
+              // Spherical midpoint via 3D vector mean
+              const phi1 = A[0] * Math.PI / 180, lam1 = A[1] * Math.PI / 180;
+              const phi2 = B[0] * Math.PI / 180, lam2 = B[1] * Math.PI / 180;
+              const x = (Math.cos(phi1) * Math.cos(lam1) + Math.cos(phi2) * Math.cos(lam2)) / 2;
+              const y = (Math.cos(phi1) * Math.sin(lam1) + Math.cos(phi2) * Math.sin(lam2)) / 2;
+              const z = (Math.sin(phi1) + Math.sin(phi2)) / 2;
+              const lat = Math.atan2(z, Math.sqrt(x*x + y*y)) * 180 / Math.PI;
+              const lon = Math.atan2(y, x) * 180 / Math.PI;
+              setFlyTo((p) => ({ id: p.id + 1, lat, lon, altKm: 3000 }));
+              const km = haversineKm(A[0], A[1], B[0], B[1]);
+              showToast(`📐 Midpoint: ${formatLat(lat)} ${formatLon(lon)} (A↔B distance: ${formatDistKm(km, unitsImperial)})`);
+            }},
+            { id: "calcDestPoint", label: "🎯 Calculate destination point from view (bearing + distance, prompt)", group: "Tools", icon: Crosshair, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const bearingStr = window.prompt("Bearing in degrees (0=N, 90=E, 180=S, 270=W):", "");
+              if (!bearingStr) return;
+              const distStr = window.prompt("Distance in km:", "");
+              if (!distStr) return;
+              const bearing = parseFloat(bearingStr);
+              const r = parseFloat(distStr);
+              if (!Number.isFinite(bearing) || !Number.isFinite(r) || r <= 0 || r > 20000) { showToast("Invalid input (bearing 0-360°, distance 0-20000 km)"); return; }
+              const R = EARTH_RADIUS_KM;
+              const phi1 = c.lat * Math.PI / 180;
+              const lam1 = c.lon * Math.PI / 180;
+              const bearingRad = bearing * Math.PI / 180;
+              const phi2 = Math.asin(Math.sin(phi1) * Math.cos(r/R) + Math.cos(phi1) * Math.sin(r/R) * Math.cos(bearingRad));
+              const lam2 = lam1 + Math.atan2(Math.sin(bearingRad) * Math.sin(r/R) * Math.cos(phi1), Math.cos(r/R) - Math.sin(phi1) * Math.sin(phi2));
+              const lat = phi2 * 180 / Math.PI;
+              const lon = ((lam2 * 180 / Math.PI + 540) % 360) - 180;       // normalise to [-180, 180]
+              setFlyTo((p) => ({ id: p.id + 1, lat, lon, altKm: c.altKm }));
+              showToast(`🎯 Destination: ${formatLat(lat)} ${formatLon(lon)} (${formatDistKm(r, unitsImperial)} bearing ${Math.round(bearing)}° from current view)`);
+            }},
+            { id: "calcDistanceFromView", label: "📏 Distance from current view to arbitrary coordinate (prompt)", group: "Tools", icon: Compass, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const input = window.prompt("Target coordinates (lat,lon):", "");
+              if (!input) return;
+              const m = input.trim().match(/^\s*(-?\d+(?:\.\d+)?)\s*[,\s]\s*(-?\d+(?:\.\d+)?)\s*$/);
+              if (!m) { showToast("Couldn't parse coordinates"); return; }
+              const lat = parseFloat(m[1]), lon = parseFloat(m[2]);
+              if (Math.abs(lat) > 90 || Math.abs(lon) > 180) { showToast("Coordinates out of range"); return; }
+              const km = haversineKm(c.lat, c.lon, lat, lon);
+              const bearing = bearingDeg(c.lat, c.lon, lat, lon);
+              showToast(`📏 ${formatLat(c.lat)} ${formatLon(c.lon)} → ${formatLat(lat)} ${formatLon(lon)}: ${formatDistKm(km, unitsImperial)} · bearing ${Math.round(bearing)}° ${compassDir(bearing)}`);
+            }},
             // ===== Earth-trivia / physics-fact commands =====
             { id: "factEarthSpinSpeed", label: "🌀 Earth's surface speed at this latitude (rotation)", group: "Tools", icon: Compass, run: () => {
               const c = cameraStateRef.current;
