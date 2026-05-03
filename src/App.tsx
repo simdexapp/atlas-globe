@@ -7480,6 +7480,24 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: -46.692, lon: -72.638, altKm: 8 }));
               showToast(`💎 Marble Caves (Cuevas de Mármol) · sculpted into a marble peninsula on Lake General Carrera, Patagonian Chile · turquoise water reflects on swirled marble · ~6,000 years of wave erosion`);
             }},
+            // ===== Iconic libraries =====
+            // Architecturally famous + culturally significant book vaults.
+            { id: "flyTrinityLongRoom", label: "📚 Fly to Trinity College Library Long Room (Dublin — Book of Kells, 65m oak gallery)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 53.3441, lon: -6.2575, altKm: 3 }));
+              showToast(`📚 Trinity College Library Long Room · Dublin, Ireland · 1732 · 65m-long oak gallery houses 200,000 oldest books · home of the Book of Kells (~800 CE illuminated gospels) · marble busts of philosophers line the walls · inspired the Jedi Archives in Star Wars Episode II`);
+            }},
+            { id: "flyBibliothecaAlexandrina", label: "📚 Fly to Bibliotheca Alexandrina (Egypt — modern revival of the ancient Library of Alexandria)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 31.2089, lon: 29.9092, altKm: 4 }));
+              showToast(`📚 Bibliotheca Alexandrina · Alexandria, Egypt · opened 2002 · cultural revival of the ancient Library of Alexandria (founded ~280 BCE, destroyed by 4th-century CE) · 11-storey angled disk, 70m diameter · holds 8M books, 100k manuscripts · giant reading hall seats 2,000`);
+            }},
+            { id: "flyPeabodyLibrary", label: "📚 Fly to George Peabody Library (Baltimore — 'cathedral of books' with 5-story atrium)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 39.2974, lon: -76.6151, altKm: 3 }));
+              showToast(`📚 George Peabody Library · Baltimore, MD · opened 1878 · part of Johns Hopkins University · five tiers of cast-iron balconies surround a glass-roofed atrium called the "cathedral of books" · 300,000 volumes spanning 19th century · used as a wedding venue and filmed often`);
+            }},
+            { id: "flyTianjinLibrary", label: "📚 Fly to Tianjin Binhai Library (China — futuristic spiral with central 'Eye' atrium)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 39.0210, lon: 117.6981, altKm: 3 }));
+              showToast(`📚 Tianjin Binhai Library · opened 2017 · designed by Dutch firm MVRDV · 33,700 m² · waterfall-style undulating shelves rise 5 floors · central spherical "Eye" auditorium · went viral in 2017 · most of the upper-shelf "books" are printed images, real books fill the lower shelves`);
+            }},
             // ===== Iconic caves & underground systems =====
             // Subterranean wonders. Each has a published Wikipedia entry
             // and is famous in caving / geology circles.
