@@ -7797,6 +7797,24 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: -46.692, lon: -72.638, altKm: 8 }));
               showToast(`💎 Marble Caves (Cuevas de Mármol) · sculpted into a marble peninsula on Lake General Carrera, Patagonian Chile · turquoise water reflects on swirled marble · ~6,000 years of wave erosion`);
             }},
+            // ===== Iconic mining / extraction sites =====
+            // Massive resource-extraction operations visible from space.
+            { id: "flyBinghamCanyon", label: "⛏ Fly to Bingham Canyon Mine (Utah — largest man-made excavation, 4 km wide, 1.2 km deep)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 40.5236, lon: -112.1505, altKm: 8 }));
+              showToast(`⛏ Bingham Canyon Mine (Kennecott Copper) · Salt Lake City suburbs, Utah · open-pit copper mine since 1906 · 4km wide, 1.2km deep · the largest man-made excavation on Earth · visible from the Space Shuttle · ~50 km of haul road spirals down the pit; trucks carry 360-tonne loads on the climb out`);
+            }},
+            { id: "flyKolaBorehole", label: "⛏ Fly to Kola Superdeep Borehole (Russia — deepest hole ever drilled, 12,262m)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 69.3957, lon: 30.6092, altKm: 4 }));
+              showToast(`⛏ Kola Superdeep Borehole · Murmansk Oblast, Russia · drilled 1970-1992 · reached 12,262m (40,230 ft) — still the deepest hole ever drilled · 22 cm wide at the bottom · drilling stopped at 180°C (deeper than expected, made bedrock plastic) · the borehole is welded shut now; the abandoned site is unmarked tundra`);
+            }},
+            { id: "flyMirnyDiamond", label: "⛏ Fly to Mirny Diamond Mine (Siberia — open-pit so deep it pulls helicopters in by suction)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 62.5286, lon: 113.9933, altKm: 5 }));
+              showToast(`⛏ Mirny Diamond Mine (Mir Mine) · Sakha Republic, Siberia · open-pit 1957-2001 (then underground) · 525m deep, 1.2km wide · USSR's largest diamond producer · airspace above closed because the void's downdraft sucks helicopters in · winters routinely hit -50°C, oil freezes solid · in nearby Mirny city ~37k people work the operation`);
+            }},
+            { id: "flyAlbertaOilSands", label: "⛏ Fly to Athabasca Oil Sands (Alberta — largest crude oil reserve outside Saudi Arabia)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 57.0220, lon: -111.6500, altKm: 30 }));
+              showToast(`⛏ Athabasca Oil Sands · NE Alberta, near Fort McMurray · ~165 billion barrels of bitumen recoverable · 3rd-largest oil reserve in the world (after Venezuela + Saudi Arabia) · open-pit mining + steam-assisted gravity drainage · trees being cut + tailings ponds visible on satellite imagery for 100km+`);
+            }},
             // ===== Iconic mountain passes =====
             // Historic crossings or modern engineering tours through
             // major ranges.
