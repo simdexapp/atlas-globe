@@ -7553,6 +7553,25 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: -46.692, lon: -72.638, altKm: 8 }));
               showToast(`💎 Marble Caves (Cuevas de Mármol) · sculpted into a marble peninsula on Lake General Carrera, Patagonian Chile · turquoise water reflects on swirled marble · ~6,000 years of wave erosion`);
             }},
+            // ===== Iconic markets / bazaars =====
+            // Major centers of trade and culture, each with centuries
+            // of history.
+            { id: "flyGrandBazaarIstanbul", label: "🛍 Fly to Grand Bazaar (Istanbul — one of the world's largest covered markets, est. 1455)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 41.0107, lon: 28.9683, altKm: 2 }));
+              showToast(`🛍 Grand Bazaar (Kapalıçarşı) · Istanbul · construction began 1455 under Mehmed II · 61 covered streets, 4,000+ shops · ~250,000-400,000 visitors daily · among most-visited tourist attractions worldwide · the gold/jewelry quarter alone hosts ~250 shops`);
+            }},
+            { id: "flyToyosu", label: "🐟 Fly to Toyosu Fish Market (Tokyo — world's largest, replaced Tsukiji in 2018)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 35.6492, lon: 139.7843, altKm: 4 }));
+              showToast(`🐟 Toyosu Market · Tokyo · opened 2018 to replace iconic Tsukiji · world's largest wholesale fish/seafood market by volume · ~2,000 tonnes traded daily · famous tuna auction at 5:30 AM where bluefin sells for hundreds of thousands of USD per fish (record: $3.1M for a 278kg tuna in 2019)`);
+            }},
+            { id: "flyKhanElKhalili", label: "🛍 Fly to Khan el-Khalili (Cairo — 14th-century Islamic Cairo bazaar)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 30.0479, lon: 31.2624, altKm: 2 }));
+              showToast(`🛍 Khan el-Khalili · Old Cairo · founded 1382 by Emir Djaharks el-Khalili · originally a caravanserai for traders · narrow alleys, gold/silver/copper craftsmen, spices, perfumes, antiques · UNESCO Historic Cairo (1979)`);
+            }},
+            { id: "flyCamdenMarket", label: "🛍 Fly to Camden Market (London — alternative-culture market, 4th most-visited London attraction)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 51.5419, lon: -0.1462, altKm: 2 }));
+              showToast(`🛍 Camden Market · London · est. 1974 in former horse stables along Regent's Canal · 1,000+ stalls across 6 sub-markets · 100k visitors per weekend · 4th most-visited tourist attraction in London · alternative fashion, vintage, street food, vinyl`);
+            }},
             // ===== Iconic train stations =====
             // Architecturally famous + historically significant rail hubs.
             { id: "flyGrandCentral", label: "🚉 Fly to Grand Central Terminal (NYC — Beaux-Arts masterpiece, painted star ceiling)", group: "View", icon: Globe2, run: () => {
