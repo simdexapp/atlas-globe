@@ -6097,6 +6097,53 @@ function App() {
                 }
               },
             }] : []),
+            // Average ground speed per altitude band — a quick sanity
+            // check for the "higher = faster" intuition. Bands match
+            // the existing altitude histogram (5,000-ft increments).
+            { id: "aircraftSpeedByAltitudeBand", label: "📊 Average ground speed per altitude band (5k-ft increments)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const airborne = aircraftSnapshot.aircraft.filter(a => !a.onGround && a.velocityMs > 0);
+              if (airborne.length === 0) { showToast("No airborne aircraft with velocity data"); return; }
+              // Bands: 0-5k, 5-10k, 10-20k, 20-30k, 30-40k, 40k+
+              const bandMaxFt = [5000, 10000, 20000, 30000, 40000, Infinity];
+              const bandLabel = ["0-5k", "5-10k", "10-20k", "20-30k", "30-40k", "40k+"];
+              const sumKts = [0, 0, 0, 0, 0, 0];
+              const counts = [0, 0, 0, 0, 0, 0];
+              for (const a of airborne) {
+                const altFt = a.altitudeM / 0.3048;
+                let band = 0;
+                while (band < 5 && altFt > bandMaxFt[band]) band++;
+                sumKts[band] += a.velocityMs * 1.944;
+                counts[band]++;
+              }
+              const parts = bandLabel.map((label, i) => counts[i] > 0 ? `${label}ft:${Math.round(sumKts[i] / counts[i])}kt(${counts[i]})` : `${label}ft:—`);
+              showToast(`📊 Avg kt/band: ${parts.join(" · ")}`);
+            }},
+            // Estimate global airborne fuel burn rate. Uses an extremely
+            // rough average: 3 kg/sec per heavy jet at cruise. Counts
+            // anything above 9,000ft as cruising heavy. This isn't
+            // precise but gives a feel for the scale.
+            { id: "aircraftFuelBurnEstimate", label: "⛽ Rough estimate of total fuel burn rate of all airborne aircraft right now", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              // Tiered burn rates (kg/sec):
+              //   GA / regional (<10k ft)        : ~0.1
+              //   Mid (10-25k)                   : ~0.5
+              //   Cruise jet (>25k)              : ~3.0
+              let totalKgSec = 0;
+              for (const a of aircraftSnapshot.aircraft) {
+                if (a.onGround) continue;
+                const ft = a.altitudeM / 0.3048;
+                if (ft > 25000) totalKgSec += 3.0;
+                else if (ft > 10000) totalKgSec += 0.5;
+                else totalKgSec += 0.1;
+              }
+              const totalKgHr = totalKgSec * 3600;
+              const totalLitresHr = totalKgHr / 0.8;  // jet fuel density
+              // CO2 from burning jet fuel: ~3.16 kg CO2 per kg fuel.
+              const co2KgHr = totalKgHr * 3.16;
+              const co2TonneHr = co2KgHr / 1000;
+              showToast(`⛽ Rough global airborne burn: ${Math.round(totalKgHr).toLocaleString()} kg/h fuel (${Math.round(totalLitresHr).toLocaleString()} L/h) → ~${co2TonneHr.toFixed(0)} tonne CO₂/h`);
+            }},
             // prefix. Useful for "what airline is this?" without leaving
             // the app to look it up.
             ...(selectedAircraftId && aircraftSnapshot ? (() => {
