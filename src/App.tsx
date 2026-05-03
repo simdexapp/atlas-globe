@@ -4327,6 +4327,60 @@ function App() {
     "--accent-glow": "rgba(92, 181, 255, 0.22)"
   } as CSSProperties;
 
+  // Performance: pre-shape the SurfaceMode-bound entity arrays via
+  // useMemo so they only re-allocate when their source data changes —
+  // not on every camera tick. The .map calls used to run inline 5×/sec
+  // creating fresh array+object refs that broke SurfaceMode's prop
+  // identity checks. Each memo's dep list intentionally excludes
+  // camera state so panning doesn't invalidate.
+  const pinsForSurface = useMemo(
+    () => pins.map((p) => ({ id: p.id, lat: p.lat, lon: p.lon, label: p.label, color: p.color, altitudeM: p.altitudeM })),
+    [pins]
+  );
+  const aircraftForSurface = useMemo(
+    () => layers.aircraft
+      ? filteredAircraft.map((a) => ({ icao24: a.icao24, callsign: a.callsign, lat: a.lat, lon: a.lon, altitudeM: a.altitudeM, headingDeg: a.headingDeg, squawk: a.squawk, velocityMs: a.velocityMs, verticalRateMs: a.verticalRateMs }))
+      : [],
+    [layers.aircraft, filteredAircraft]
+  );
+  const eonetForSurface = useMemo(
+    () => layers.eonet
+      ? visibleEonetEvents.map((e) => ({ id: e.id, title: e.title, lat: e.lat, lon: e.lon, category: e.category, color: categoryColor(e.category) }))
+      : [],
+    [layers.eonet, visibleEonetEvents]
+  );
+  const earthquakesForSurface = useMemo(
+    () => layers.earthquakes
+      ? earthquakes.map((q) => ({ id: q.id, lat: q.lat, lon: q.lon, mag: q.mag, depth: q.depth, place: q.place, timeUnixMs: q.time }))
+      : [],
+    [layers.earthquakes, earthquakes]
+  );
+  const volcanoesForSurface = useMemo(
+    () => layers.volcanoes
+      ? FAMOUS_VOLCANOES.map((v) => {
+          const c = volcanoAlerts.get(v.name.toLowerCase());
+          const alertColor = c === "red" ? "#ff3a3a" : c === "orange" ? "#ff8a3a" : c === "yellow" ? "#ffd66b" : c === "green" ? "#7cffb1" : "#ff6a3d";
+          return { id: v.id, name: v.name, lat: v.lat, lon: v.lon, alertColor, elevated: !!c && c !== "green" };
+        })
+      : [],
+    [layers.volcanoes, volcanoAlerts]
+  );
+  const launchesForSurface = useMemo(
+    () => layers.launches
+      ? launches.map((l) => {
+          const hoursOut = Math.max(0, (l.netUnixMs - Date.now()) / 3_600_000);
+          return { id: l.id, name: l.name, lat: l.padLat, lon: l.padLon, imminent: hoursOut < 1, soon: hoursOut < 24 };
+        })
+      : [],
+    [layers.launches, launches]
+  );
+  const stormsForSurface = useMemo(
+    () => layers.storms
+      ? activeStorms.map((s) => ({ id: s.id, name: s.name, classification: s.classification, intensityKph: s.intensityKph, lat: s.lat, lon: s.lon, movementDir: s.movementDir }))
+      : [],
+    [layers.storms, activeStorms]
+  );
+
   return (
     <div className={`atlas${hideUi ? " hideUi" : ""} theme-${uiTheme}`} style={rootStyle} data-customize-active={customizeUiMode ? "" : undefined}>
       {/* Skip-to-content link — visually hidden until focused by Tab.
@@ -4405,21 +4459,14 @@ function App() {
               onCameraChange={onCameraChange}
               onPickLocation={onGlobeClick}
               flyTo={flyTo}
-              pins={pins.map((p) => ({ id: p.id, lat: p.lat, lon: p.lon, label: p.label, color: p.color, altitudeM: p.altitudeM }))}
-              aircraft={layers.aircraft ? filteredAircraft.map((a) => ({ icao24: a.icao24, callsign: a.callsign, lat: a.lat, lon: a.lon, altitudeM: a.altitudeM, headingDeg: a.headingDeg, squawk: a.squawk, velocityMs: a.velocityMs, verticalRateMs: a.verticalRateMs })) : []}
+              pins={pinsForSurface}
+              aircraft={aircraftForSurface}
               realTimeSun={globe.realTimeSun}
               initialCamera={cameraState}
-              eonet={layers.eonet ? visibleEonetEvents.map((e) => ({ id: e.id, title: e.title, lat: e.lat, lon: e.lon, category: e.category, color: categoryColor(e.category) })) : []}
-              earthquakes={layers.earthquakes ? earthquakes.map((q) => ({ id: q.id, lat: q.lat, lon: q.lon, mag: q.mag, depth: q.depth, place: q.place, timeUnixMs: q.time })) : []}
-              volcanoes={layers.volcanoes ? FAMOUS_VOLCANOES.map((v) => {
-                const c = volcanoAlerts.get(v.name.toLowerCase());
-                const alertColor = c === "red" ? "#ff3a3a" : c === "orange" ? "#ff8a3a" : c === "yellow" ? "#ffd66b" : c === "green" ? "#7cffb1" : "#ff6a3d";
-                return { id: v.id, name: v.name, lat: v.lat, lon: v.lon, alertColor, elevated: !!c && c !== "green" };
-              }) : []}
-              launches={layers.launches ? launches.map((l) => {
-                const hoursOut = Math.max(0, (l.netUnixMs - Date.now()) / 3_600_000);
-                return { id: l.id, name: l.name, lat: l.padLat, lon: l.padLon, imminent: hoursOut < 1, soon: hoursOut < 24 };
-              }) : []}
+              eonet={eonetForSurface}
+              earthquakes={earthquakesForSurface}
+              volcanoes={volcanoesForSurface}
+              launches={launchesForSurface}
               weatherTilePath={layers.weather && radarManifest && radarManifest.past.length > 0
                 ? (radarFrameIndex < 0
                     ? radarManifest.past[radarManifest.past.length - 1].path
@@ -4467,7 +4514,7 @@ function App() {
               issPosition={layers.iss ? issPosition : null}
               tiangongPosition={layers.tiangong ? tiangongPosition : null}
               hubblePosition={layers.hubble ? hubblePosition : null}
-              storms={layers.storms ? activeStorms.map((s) => ({ id: s.id, name: s.name, classification: s.classification, intensityKph: s.intensityKph, lat: s.lat, lon: s.lon, movementDir: s.movementDir })) : []}
+              storms={stormsForSurface}
               auroraKp={layers.aurora && spaceWeather ? spaceWeather.kpLatest : null}
               autoOrbit={surfaceAutoOrbit}
               aircraftAltitudeBars={surfaceAltBars}
