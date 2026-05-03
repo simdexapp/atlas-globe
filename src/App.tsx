@@ -6175,6 +6175,38 @@ function App() {
               if (!best || bestLen === 0) { showToast("No callsigns in current snapshot"); return; }
               showToast(`🔤 Longest callsign: "${(best.callsign || "").trim()}" (${bestLen} chars) · ICAO ${best.icao24} · ${best.onGround ? "on ground" : `${Math.round(best.altitudeM / 0.3048).toLocaleString()}ft`}`);
             }},
+            // Most-common flight level — bucket airborne altitudes into
+            // 500ft increments and find the mode. Real ATC uses RVSM
+            // levels at 1000ft increments above FL290; below, 500ft.
+            // 500ft buckets work for both regimes.
+            { id: "aircraftMostCommonFL", label: "📊 Most-common flight level airborne (mode of 500ft altitude buckets)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const buckets = new Map<number, number>(); // FL → count
+              for (const a of aircraftSnapshot.aircraft) {
+                if (a.onGround) continue;
+                const fl = Math.round(a.altitudeM / 0.3048 / 500) * 5; // FL010 = 1000ft, etc.
+                buckets.set(fl, (buckets.get(fl) || 0) + 1);
+              }
+              if (buckets.size === 0) { showToast("No airborne aircraft right now"); return; }
+              const sorted = [...buckets.entries()].sort((a, b) => b[1] - a[1]);
+              const top5 = sorted.slice(0, 5).map(([fl, n]) => `FL${fl.toString().padStart(3, "0")}:${n}`).join(" · ");
+              showToast(`📊 Top 5 flight levels: ${top5}`);
+            }},
+            // Median altitude — half of airborne aircraft are above, half below.
+            // Often a more useful "central tendency" than mean for skewed
+            // altitude distributions (cruise dominates).
+            { id: "aircraftMedianAltitude", label: "📊 Median altitude of airborne aircraft (half above, half below)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const altsM = aircraftSnapshot.aircraft.filter(a => !a.onGround).map(a => a.altitudeM).sort((a, b) => a - b);
+              if (altsM.length === 0) { showToast("No airborne aircraft right now"); return; }
+              const median = altsM[Math.floor(altsM.length / 2)];
+              const meanM = altsM.reduce((s, x) => s + x, 0) / altsM.length;
+              const medFt = Math.round(median / 0.3048).toLocaleString();
+              const meanFt = Math.round(meanM / 0.3048).toLocaleString();
+              const cruise = altsM.filter(m => m > 9144).length;
+              const cruisePct = (cruise / altsM.length * 100).toFixed(0);
+              showToast(`📊 Median ${medFt}ft · mean ${meanFt}ft (across ${altsM.length.toLocaleString()} airborne) · ${cruisePct}% above FL300`);
+            }},
             // prefix. Useful for "what airline is this?" without leaving
             // the app to look it up.
             ...(selectedAircraftId && aircraftSnapshot ? (() => {
