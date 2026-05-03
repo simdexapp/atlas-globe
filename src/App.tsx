@@ -10697,6 +10697,48 @@ ${trkpts}
             }},
             // Show essential nav layers only — what most users will want
             // for orienting themselves: borders, pins, mini-map, compass.
+            // Invert all layer states — flip every on→off and off→on.
+            // Useful for quickly seeing what you've been ignoring.
+            { id: "layersInvert", label: "🔄 Invert all layer states (on↔off)", group: "Layers", icon: Layers, run: () => {
+              const onBefore = (Object.values(layers) as boolean[]).filter(Boolean).length;
+              setLayers((prev) => {
+                const next = { ...prev };
+                for (const k of Object.keys(prev) as Array<keyof LayerVisibility>) {
+                  next[k] = !prev[k];
+                }
+                return next;
+              });
+              const total = Object.keys(layers).length;
+              showToast(`🔄 Inverted: ${onBefore} layers on → ${total - onBefore} layers on`);
+            }},
+            // Turn all layers on — counterpart to Shift+A "all off" shortcut.
+            // Reasonable for "show me everything" exploration mode.
+            { id: "layersAllOn", label: "🎚 Turn ALL layers ON (counterpart to Shift+A all-off)", group: "Layers", icon: Layers, run: () => {
+              const offCount = (Object.values(layers) as boolean[]).filter(v => !v).length;
+              if (offCount === 0) { showToast("🎚 All layers already on"); return; }
+              setLayers((prev) => {
+                const next = { ...prev };
+                for (const k of Object.keys(prev) as Array<keyof LayerVisibility>) {
+                  next[k] = true;
+                }
+                return next;
+              });
+              showToast(`🎚 Turned on ${offCount} layer${offCount === 1 ? "" : "s"} (every layer now active)`);
+            }},
+            // Random layer combo — flips each layer independently to on
+            // with 50% probability. Surprise-me exploration.
+            { id: "layersRandomize", label: "🎲 Randomize all layer states (50/50 per layer)", group: "Layers", icon: Layers, run: () => {
+              setLayers((prev) => {
+                const next = { ...prev };
+                let onCount = 0;
+                for (const k of Object.keys(prev) as Array<keyof LayerVisibility>) {
+                  next[k] = Math.random() < 0.5;
+                  if (next[k]) onCount++;
+                }
+                showToast(`🎲 Randomized: ${onCount}/${Object.keys(prev).length} layers on`);
+                return next;
+              });
+            }},
             // ===== Layer presets =====
             { id: "layerPresetSave", label: "💾 Save current layer config as a preset…", group: "Layers", icon: Bookmark, run: saveLayerPreset },
             ...layerPresets.map((p) => ({
