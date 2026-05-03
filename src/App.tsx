@@ -7662,6 +7662,25 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: -46.692, lon: -72.638, altKm: 8 }));
               showToast(`💎 Marble Caves (Cuevas de Mármol) · sculpted into a marble peninsula on Lake General Carrera, Patagonian Chile · turquoise water reflects on swirled marble · ~6,000 years of wave erosion`);
             }},
+            // ===== Iconic festival / event grounds =====
+            // Locations of recurring large gatherings — the temporary
+            // city of Black Rock to the snow sculptures of Sapporo.
+            { id: "flyBlackRockCity", label: "🔥 Fly to Burning Man / Black Rock City (Nevada — temporary city of 80,000 every Aug-Sep)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 40.7864, lon: -119.2065, altKm: 6 }));
+              showToast(`🔥 Black Rock City · Nevada · pop-up city for the Burning Man festival every late-August → early-September · ~80,000 attendees · arranged in a 2-mile-wide horseshoe with concentric streets · giant wooden Man burns Saturday night, Temple burns Sunday · normally an empty playa the rest of the year`);
+            }},
+            { id: "flySapporoSnow", label: "❄ Fly to Odori Park, Sapporo (Japan — Snow Festival snow & ice sculptures, every February)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 43.0598, lon: 141.3508, altKm: 3 }));
+              showToast(`❄ Odori Park, Sapporo · Hokkaido, Japan · Sapporo Snow Festival held every February since 1950 · 200+ snow and ice sculptures (some 15m tall) · ~2 million visitors over 7 days · giant illuminated sculptures stretch 1.5 km along the park`);
+            }},
+            { id: "flyCoachella", label: "🎵 Fly to Coachella (Indio, CA — major modern music festival, 250,000+ over 2 weekends)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 33.6803, lon: -116.2376, altKm: 4 }));
+              showToast(`🎵 Coachella Valley Music & Arts Festival · Empire Polo Club, Indio CA · founded 1999 · 2 weekends every April · ~125,000 attendees per weekend (250k+ total) · headliners on the iconic Sahara, Outdoor, and Mojave stages · Beyoncé's 2018 set ('Beychella') is widely cited as one of the greatest live performances ever`);
+            }},
+            { id: "flyGlastonbury", label: "🎵 Fly to Glastonbury Festival site (Pilton, UK — biggest greenfield music festival on Earth)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 51.1497, lon: -2.5847, altKm: 4 }));
+              showToast(`🎵 Glastonbury Festival · Worthy Farm, Pilton, Somerset · founded 1970 by Michael Eavis · world's largest greenfield music festival · 210,000+ attendees · runs 5 days every late June · iconic Pyramid Stage; tickets sell out in <30 minutes; takes a year off every 5 years to let the land recover`);
+            }},
             // ===== Iconic markets / bazaars =====
             // Major centers of trade and culture, each with centuries
             // of history.
