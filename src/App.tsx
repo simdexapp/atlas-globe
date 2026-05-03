@@ -7734,6 +7734,24 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: -46.692, lon: -72.638, altKm: 8 }));
               showToast(`💎 Marble Caves (Cuevas de Mármol) · sculpted into a marble peninsula on Lake General Carrera, Patagonian Chile · turquoise water reflects on swirled marble · ~6,000 years of wave erosion`);
             }},
+            // ===== Iconic public squares =====
+            // Major civic spaces — political, historical, or cultural focal points.
+            { id: "flyTiananmen", label: "🏛 Fly to Tiananmen Square (Beijing — one of the world's largest public squares, 440k m²)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 39.9055, lon: 116.3976, altKm: 3 }));
+              showToast(`🏛 Tiananmen Square · Beijing · ~440,000 m² (one of the world's largest urban squares) · "Gate of Heavenly Peace" along the north side · contains Mao's Mausoleum + Monument to the People's Heroes · site of the founding of the People's Republic of China (Oct 1 1949) and the 1989 protests`);
+            }},
+            { id: "flyRedSquare", label: "🏛 Fly to Red Square (Moscow — UNESCO heart of Moscow, 75k m²)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 55.7539, lon: 37.6208, altKm: 2 }));
+              showToast(`🏛 Red Square (Красная площадь) · Moscow · 75,000 m² · separates the Kremlin from the historic merchant quarter (Kitai-gorod) · bordered by St. Basil's Cathedral (1561), Lenin's Mausoleum, GUM department store, the State Historical Museum · UNESCO World Heritage 1990 · "Krasnaya" originally meant "beautiful" before "red"`);
+            }},
+            { id: "flyTahrirSquare", label: "🏛 Fly to Tahrir Square (Cairo — site of 2011 Egyptian Revolution)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 30.0444, lon: 31.2357, altKm: 2 }));
+              showToast(`🏛 Tahrir Square (Liberation Square) · downtown Cairo · centerpiece of the 2011 Egyptian Revolution which led to Mubarak's resignation · regular size square (~1 hectare) but huge symbolic weight as the Arab Spring's most-televised location · Egyptian Museum on its north side, AUC's old campus on the south`);
+            }},
+            { id: "flyTimesSquare", label: "🏛 Fly to Times Square (NYC — 'Crossroads of the World', 50M visitors/yr)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 40.7580, lon: -73.9855, altKm: 2 }));
+              showToast(`🏛 Times Square · 7th Ave + Broadway, NYC · named 1904 after the New York Times moved here · ~50M visitors/yr (~330k pedestrians on a typical day) · annual New Year's Eve ball drop televised globally · pedestrianized 2009, theater district anchor · iconic neon billboards generate ~$20M/yr in advertising revenue per spot`);
+            }},
             // ===== Iconic ancient temples =====
             // Major ancient religious complexes outside Europe / North America.
             { id: "flyAngkorWat", label: "🛕 Fly to Angkor Wat (Cambodia — largest religious monument on Earth, 12th-century Khmer)", group: "View", icon: Globe2, run: () => {
