@@ -7334,6 +7334,24 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: -46.692, lon: -72.638, altKm: 8 }));
               showToast(`💎 Marble Caves (Cuevas de Mármol) · sculpted into a marble peninsula on Lake General Carrera, Patagonian Chile · turquoise water reflects on swirled marble · ~6,000 years of wave erosion`);
             }},
+            // ===== Oldest universities of the world =====
+            // Continuously-operating institutions with centuries of history.
+            { id: "flyKaraouine", label: "📚 Fly to University of al-Karaouine, Fez (oldest continuously-operating university on Earth, founded 859 CE)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 34.0648, lon: -4.9734, altKm: 5 }));
+              showToast(`📚 University of al-Karaouine (Al-Qarawiyyin) · Fez, Morocco · founded 859 CE by Fatima al-Fihri · oldest continuously-operating educational institution AND degree-granting university per UNESCO and Guinness World Records · still teaches Islamic law and theology today`);
+            }},
+            { id: "flyBologna", label: "📚 Fly to University of Bologna (oldest in the Western world, founded 1088)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 44.4937, lon: 11.3426, altKm: 5 }));
+              showToast(`📚 University of Bologna · Italy · founded 1088 · oldest university in the Western world · invented the term "universitas" · alumni include Dante, Copernicus, and Petrarch · graduated the first woman with a doctorate (Laura Bassi, 1732)`);
+            }},
+            { id: "flyOxford", label: "📚 Fly to Oxford University (oldest English-speaking university, teaching since ~1096)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 51.7548, lon: -1.2544, altKm: 5 }));
+              showToast(`📚 Oxford University · England · teaching documented from 1096 · second-oldest continuously-operating university · 30+ Nobel laureates · 28 UK prime ministers · Bodleian Library has 13M items including a 1217 Magna Carta`);
+            }},
+            { id: "flyHarvard", label: "📚 Fly to Harvard University (oldest in the US, founded 1636)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 42.3744, lon: -71.1169, altKm: 4 }));
+              showToast(`📚 Harvard University · Cambridge, MA · founded 1636 · oldest higher-learning institution in the United States, predating the country itself by 140 years · world's largest academic library system (~20M items) · 161 Nobel laureates affiliated`);
+            }},
             // ===== Historic "firsts" in human exploration / science =====
             // Locations where pivotal scientific or technological firsts
             // happened. Each toast carries the date and a one-line story.
