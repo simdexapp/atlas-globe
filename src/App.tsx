@@ -7303,6 +7303,25 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: -46.692, lon: -72.638, altKm: 8 }));
               showToast(`💎 Marble Caves (Cuevas de Mármol) · sculpted into a marble peninsula on Lake General Carrera, Patagonian Chile · turquoise water reflects on swirled marble · ~6,000 years of wave erosion`);
             }},
+            // ===== Historic "firsts" in human exploration / science =====
+            // Locations where pivotal scientific or technological firsts
+            // happened. Each toast carries the date and a one-line story.
+            { id: "flyKittyHawk", label: "✈ Fly to Kitty Hawk (North Carolina — site of Wright brothers' first powered flight, Dec 17, 1903)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 36.0184, lon: -75.6691, altKm: 6 }));
+              showToast(`✈ Kill Devil Hills, Kitty Hawk · Wilbur and Orville Wright, December 17, 1903 · first powered, controlled, sustained heavier-than-air flight · 12 seconds, 36m distance, 10 km/h · later flights that day reached 260m`);
+            }},
+            { id: "flyTrinitySite", label: "☢ Fly to Trinity Site (New Mexico — site of the first atomic bomb test, July 16, 1945)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 33.6770, lon: -106.4754, altKm: 12 }));
+              showToast(`☢ Trinity Site, White Sands · 5:29 AM Mountain War Time, July 16, 1945 · first nuclear weapon detonation · 21 kiloton plutonium implosion device · Oppenheimer recalled the Bhagavad Gita: "Now I am become Death, the destroyer of worlds"`);
+            }},
+            { id: "flyMenloPark", label: "💡 Fly to Edison's Menlo Park (New Jersey — birthplace of the first commercially-viable lightbulb, Oct 22, 1879)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 40.5687, lon: -74.3260, altKm: 5 }));
+              showToast(`💡 Edison's Menlo Park lab, NJ · October 22, 1879 · first commercially-practical incandescent lightbulb burned for 13.5 hours · Edison's "invention factory" produced 1,093 patents · also developed the phonograph, motion-picture camera, and DC power distribution`);
+            }},
+            { id: "flyCERN", label: "⚛ Fly to CERN (Switzerland/France — birthplace of the World Wide Web, 1989; LHC particle accelerator)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 46.2333, lon: 6.0556, altKm: 30 }));
+              showToast(`⚛ CERN · Conseil Européen pour la Recherche Nucléaire · founded 1954 · Tim Berners-Lee invented the World Wide Web here in 1989 · Large Hadron Collider (27 km circumference, straddles France-Switzerland border) discovered the Higgs boson in 2012`);
+            }},
             // ===== Iconic desert / unique geology fly-to commands =====
             // Distinctive landforms visible from space, mostly in arid
             // regions. Each has a wikipedia-link-worthy story.
