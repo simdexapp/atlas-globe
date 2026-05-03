@@ -7765,6 +7765,24 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: -46.692, lon: -72.638, altKm: 8 }));
               showToast(`💎 Marble Caves (Cuevas de Mármol) · sculpted into a marble peninsula on Lake General Carrera, Patagonian Chile · turquoise water reflects on swirled marble · ~6,000 years of wave erosion`);
             }},
+            // ===== Iconic film locations =====
+            // Real places that doubled as iconic movie settings.
+            { id: "flySkelligMichael", label: "🎬 Fly to Skellig Michael (Ireland — Luke Skywalker's hideout in Star Wars TFA/TLJ)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 51.7717, lon: -10.5394, altKm: 4 }));
+              showToast(`🎬 Skellig Michael · 11.7 km off Ireland's southwest coast · 6th-century Gaelic Christian monastery on a 217m sandstone pinnacle, 600 stone steps cut by monks · UNESCO World Heritage 1996 · Luke Skywalker's exile in Star Wars: The Force Awakens (2015) and The Last Jedi (2017) · only a few hundred visitors/day allowed`);
+            }},
+            { id: "flyHobbiton", label: "🎬 Fly to Hobbiton Movie Set (Matamata, NZ — Shire from LOTR/Hobbit films, still standing)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: -37.8722, lon: 175.6831, altKm: 2 }));
+              showToast(`🎬 Hobbiton Movie Set · Matamata, North Island, NZ · 44 hobbit holes built on the Alexander family's sheep farm for Peter Jackson's Lord of the Rings (filmed 2000) and rebuilt for The Hobbit (2009-2012) · permanent tourist attraction since 2012, 600,000+ visitors/yr · 12-acre set + Green Dragon Inn pub serving authentic ale`);
+            }},
+            { id: "flyMosEspaSet", label: "🎬 Fly to Mos Espa film set (Tunisia — Star Wars Tatooine, slowly buried by Sahara dunes)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 33.9926, lon: 7.8425, altKm: 6 }));
+              showToast(`🎬 Mos Espa film set · Sahara Desert, Tunisia · built 1999 for Star Wars: Episode I; reused for Episodes II-III · 20 buildings still standing 25+ years later · sand dunes are slowly burying the set (a moving "barchan" dune was advancing on it as of 2010s) · 30 km from Tozeur; can be visited by 4WD`);
+            }},
+            { id: "flyDevilsTower", label: "🎬 Fly to Devil's Tower (Wyoming — Close Encounters mountain, first US National Monument 1906)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 44.5901, lon: -104.7146, altKm: 6 }));
+              showToast(`🎬 Devils Tower · NE Wyoming · 386m volcanic igneous intrusion exposed by 50M years of erosion · Native Americans (Lakota: "Bear's Lodge") consider it sacred · proclaimed first US National Monument by Theodore Roosevelt 1906 · Spielberg's "Close Encounters of the Third Kind" (1977) climaxes on its summit`);
+            }},
             // ===== Seasonal photography sites =====
             // Famous seasonal-bloom or weather-dependent destinations.
             { id: "flyValensoleLavender", label: "💜 Fly to Valensole Plateau (France — purple lavender fields, late June peak)", group: "View", icon: Globe2, run: () => {
