@@ -5890,6 +5890,79 @@ function App() {
               }
               showToast(`🛩 ${prefixes.size.toLocaleString()} unique airline/operator prefixes airborne (e.g. UAL, DAL, AFR, JAL, RYR)`);
             }},
+            // Show route info for selected aircraft via OpenSky route lookup.
+            // Uses already-imported fetchFlightRoute. Origin → destination
+            // codes when available.
+            ...(selectedAircraftId && aircraftSnapshot ? [{
+              id: "aircraftShowRoute" as const,
+              label: "🛫🛬 Show selected aircraft's route (origin → destination)",
+              group: "Tools" as const,
+              icon: Plane,
+              run: async () => {
+                const a = aircraftSnapshot.aircraft.find(x => x.icao24 === selectedAircraftId);
+                if (!a) { showToast("Selected aircraft no longer in snapshot"); return; }
+                if (!a.callsign) { showToast("Selected aircraft has no callsign — route lookup needs one"); return; }
+                showToast(`🔍 Looking up route for ${a.callsign.trim()}…`);
+                try {
+                  const route = await fetchFlightRoute(a.callsign);
+                  if (!route || (!route.origin && !route.destination)) {
+                    showToast(`🛫 No route data for ${a.callsign.trim()} (likely a private/military flight or new flight number)`);
+                    return;
+                  }
+                  const o = route.origin?.iata || route.origin?.icao || "?";
+                  const d = route.destination?.iata || route.destination?.icao || "?";
+                  const oName = route.origin?.city ? `${o} (${route.origin.city})` : o;
+                  const dName = route.destination?.city ? `${d} (${route.destination.city})` : d;
+                  showToast(`🛫🛬 ${a.callsign.trim()}: ${oName} → ${dName}`);
+                } catch (e) {
+                  showToast(`Route lookup failed: ${(e as Error).message}`);
+                }
+              },
+            }, {
+              id: "aircraftFlyToOrigin" as const,
+              label: "🛫 Fly to selected aircraft's origin airport",
+              group: "Tools" as const,
+              icon: Plane,
+              run: async () => {
+                const a = aircraftSnapshot.aircraft.find(x => x.icao24 === selectedAircraftId);
+                if (!a || !a.callsign) { showToast("Selected aircraft has no callsign"); return; }
+                showToast(`🔍 Looking up origin for ${a.callsign.trim()}…`);
+                try {
+                  const route = await fetchFlightRoute(a.callsign);
+                  if (!route?.origin?.lat || !route?.origin?.lon) {
+                    showToast(`🛫 No origin coordinates available for ${a.callsign.trim()}`);
+                    return;
+                  }
+                  setFlyTo((p) => ({ id: p.id + 1, lat: route.origin!.lat!, lon: route.origin!.lon!, altKm: 30 }));
+                  const o = route.origin.iata || route.origin.icao || "origin";
+                  showToast(`🛫 Flew to ${o}${route.origin.city ? ` · ${route.origin.city}` : ""}`);
+                } catch (e) {
+                  showToast(`Lookup failed: ${(e as Error).message}`);
+                }
+              },
+            }, {
+              id: "aircraftFlyToDestination" as const,
+              label: "🛬 Fly to selected aircraft's destination airport",
+              group: "Tools" as const,
+              icon: Plane,
+              run: async () => {
+                const a = aircraftSnapshot.aircraft.find(x => x.icao24 === selectedAircraftId);
+                if (!a || !a.callsign) { showToast("Selected aircraft has no callsign"); return; }
+                showToast(`🔍 Looking up destination for ${a.callsign.trim()}…`);
+                try {
+                  const route = await fetchFlightRoute(a.callsign);
+                  if (!route?.destination?.lat || !route?.destination?.lon) {
+                    showToast(`🛬 No destination coordinates available for ${a.callsign.trim()}`);
+                    return;
+                  }
+                  setFlyTo((p) => ({ id: p.id + 1, lat: route.destination!.lat!, lon: route.destination!.lon!, altKm: 30 }));
+                  const d = route.destination.iata || route.destination.icao || "destination";
+                  showToast(`🛬 Flew to ${d}${route.destination.city ? ` · ${route.destination.city}` : ""}`);
+                } catch (e) {
+                  showToast(`Lookup failed: ${(e as Error).message}`);
+                }
+              },
+            }] : []),
             // prefix. Useful for "what airline is this?" without leaving
             // the app to look it up.
             ...(selectedAircraftId && aircraftSnapshot ? (() => {
