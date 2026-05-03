@@ -7687,6 +7687,24 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: -46.692, lon: -72.638, altKm: 8 }));
               showToast(`💎 Marble Caves (Cuevas de Mármol) · sculpted into a marble peninsula on Lake General Carrera, Patagonian Chile · turquoise water reflects on swirled marble · ~6,000 years of wave erosion`);
             }},
+            // ===== Iconic massive monuments / colossal statues =====
+            // The world's tallest standing statues + monumental carvings.
+            { id: "flyStatueOfUnity", label: "🗿 Fly to Statue of Unity (Gujarat, India — tallest statue on Earth at 182m)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 21.8380, lon: 73.7191, altKm: 4 }));
+              showToast(`🗿 Statue of Unity · Sardar Sarovar Dam, Gujarat, India · 182 m tall (almost 2× Statue of Liberty) · world's tallest standing statue (since 2018) · honors Sardar Vallabhbhai Patel, India's first Deputy PM · viewing gallery at 153m offers Narmada River views`);
+            }},
+            { id: "flyMotherlandCalls", label: "🗿 Fly to The Motherland Calls / Mamayev Kurgan (Volgograd — Stalingrad WWII memorial, 85m)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 48.7421, lon: 44.5374, altKm: 3 }));
+              showToast(`🗿 The Motherland Calls (Родина-мать зовёт!) · Mamayev Kurgan, Volgograd · unveiled 1967 · 85 m tall sword-raised allegory of victory at Stalingrad · was the world's tallest statue 1967-1989 · part of vast WWII memorial complex on the hill that saw the Battle of Stalingrad's bloodiest fighting`);
+            }},
+            { id: "flyMtRushmore", label: "🗿 Fly to Mount Rushmore (South Dakota — four 18m presidential heads carved into granite)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 43.8791, lon: -103.4591, altKm: 3 }));
+              showToast(`🗿 Mount Rushmore · Black Hills, SD · sculpted 1927-1941 by Gutzon Borglum + 400 workers · 60-foot (18 m) heads of Washington, Jefferson, Roosevelt, Lincoln · originally planned to extend to waist height (defunding cut it short) · drilled with dynamite + jackhammers in granite`);
+            }},
+            { id: "flyChristRedeemer", label: "🗿 Fly to Christ the Redeemer (Rio de Janeiro — 30m art-deco icon atop Corcovado)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: -22.9519, lon: -43.2105, altKm: 3 }));
+              showToast(`🗿 Christ the Redeemer (Cristo Redentor) · Corcovado mountain, Rio · completed 1931 · 30m statue + 8m pedestal · designed by Heitor da Silva Costa, sculpted by Paul Landowski · soapstone exterior over reinforced concrete · 38m arm span · one of the New 7 Wonders of the World`);
+            }},
             // ===== Iconic gardens / botanical sites =====
             // Globally recognized gardens — formal landscape design,
             // botanical research collections, or historic significance.
