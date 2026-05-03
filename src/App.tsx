@@ -7390,6 +7390,25 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: -46.692, lon: -72.638, altKm: 8 }));
               showToast(`💎 Marble Caves (Cuevas de Mármol) · sculpted into a marble peninsula on Lake General Carrera, Patagonian Chile · turquoise water reflects on swirled marble · ~6,000 years of wave erosion`);
             }},
+            // ===== Iconic caves & underground systems =====
+            // Subterranean wonders. Each has a published Wikipedia entry
+            // and is famous in caving / geology circles.
+            { id: "flyHangSonDoong", label: "🕳 Fly to Hang Sơn Đoòng (Vietnam — world's largest cave passage by cross-section)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 17.4569, lon: 106.2877, altKm: 8 }));
+              showToast(`🕳 Hang Sơn Đoòng · Phong Nha-Kẻ Bàng National Park, Vietnam · world's largest cave passage by cross-section · 9 km long, sections >200m tall (could fit a 40-storey building) and >150m wide · contains its own jungle, river, and weather system · only discovered in 2009`);
+            }},
+            { id: "flyNaicaCrystals", label: "💎 Fly to Naica Mine (Mexico — Cave of the Crystals, with 11m gypsum selenite crystals)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 27.852, lon: -105.495, altKm: 4 }));
+              showToast(`💎 Cave of the Crystals (Cueva de los Cristales) · Naica Mine, Mexico · contains the largest known natural crystals on Earth — selenite (gypsum) up to 11m long, 4m wide, 55 tonnes · 58°C ambient with 99% humidity · cave was flooded once mining stopped in 2017`);
+            }},
+            { id: "flyCarlsbadCaverns", label: "🦇 Fly to Carlsbad Caverns (New Mexico — bat colony, 119 caves, deepest in US)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 32.1751, lon: -104.4444, altKm: 6 }));
+              showToast(`🦇 Carlsbad Caverns National Park · 119 known caves · main Lechuguilla Cave is the 4th-longest in the US (240km mapped) and 87th-deepest in the world · ~400,000 Brazilian free-tailed bats roost here in summer · Big Room is 1,200m × 190m × 78m`);
+            }},
+            { id: "flyPostojnaCave", label: "🦖 Fly to Postojna Cave (Slovenia — Europe's most-visited show cave, home of olm 'baby dragons')", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 45.7836, lon: 14.2042, altKm: 5 }));
+              showToast(`🦖 Postojna Cave · Slovenia · 24 km long; the most-visited show cave in Europe (38M visitors since 1819) · contains the olm (Proteus anguinus), an aquatic salamander once thought to be a baby dragon, blind, lives 100+ years, can survive 10 years without food`);
+            }},
             // ===== Iconic music recording / performance sites =====
             { id: "flyAbbeyRoad", label: "🎵 Fly to Abbey Road Studios (London — where the Beatles recorded most of their albums)", group: "View", icon: Globe2, run: () => {
               setFlyTo((p) => ({ id: p.id + 1, lat: 51.5320, lon: -0.1779, altKm: 3 }));
