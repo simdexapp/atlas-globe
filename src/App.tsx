@@ -7687,6 +7687,25 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: -46.692, lon: -72.638, altKm: 8 }));
               showToast(`💎 Marble Caves (Cuevas de Mármol) · sculpted into a marble peninsula on Lake General Carrera, Patagonian Chile · turquoise water reflects on swirled marble · ~6,000 years of wave erosion`);
             }},
+            // ===== Iconic gardens / botanical sites =====
+            // Globally recognized gardens — formal landscape design,
+            // botanical research collections, or historic significance.
+            { id: "flyVersaillesGardens", label: "🌷 Fly to Gardens of Versailles (France — Le Nôtre's 800-hectare French formal garden masterpiece)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 48.8042, lon: 2.1204, altKm: 5 }));
+              showToast(`🌷 Gardens of Versailles · designed by André Le Nôtre 1661-1700 for Louis XIV · 800 hectares · 50+ fountains, 372 statues, 200,000 trees · the Grand Canal is 1.6 km long · UNESCO World Heritage 1979 · embodies "French formal garden" style with bilateral symmetry`);
+            }},
+            { id: "flyKewGardens", label: "🌿 Fly to Kew Royal Botanic Gardens (London — UNESCO, world's largest plant + fungal collection)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 51.4787, lon: -0.2956, altKm: 4 }));
+              showToast(`🌿 Royal Botanic Gardens, Kew · West London · founded 1759 · 132 hectares · world's largest collection of living plants (~50,000 species) · 7M+ herbarium specimens · iconic Palm House (1844 wrought-iron) and Princess of Wales Conservatory · UNESCO World Heritage 2003`);
+            }},
+            { id: "flySuzhouGardens", label: "🌳 Fly to Classical Gardens of Suzhou (China — UNESCO Chinese landscape garden style)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 31.3220, lon: 120.6240, altKm: 4 }));
+              showToast(`🌳 Classical Gardens of Suzhou · Jiangsu, China · 9 gardens (Humble Administrator's Garden, Lingering Garden, Master of the Nets etc.) developed Song through Qing dynasties (11th-19th c.) · UNESCO World Heritage 1997 · embody Chinese landscape garden philosophy: rocks, water, plants, architecture in miniature`);
+            }},
+            { id: "flySingaporeBotanic", label: "🌴 Fly to Singapore Botanic Gardens (Singapore — UNESCO 19th-c. tropical botanical garden)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 1.3138, lon: 103.8159, altKm: 4 }));
+              showToast(`🌴 Singapore Botanic Gardens · founded 1859 · 82 hectares · Singapore's first UNESCO World Heritage Site (2015), only the 3rd botanic garden ever inscribed · 60,000 orchid plants in the National Orchid Garden · the rubber trees here helped seed the Southeast Asian rubber industry`);
+            }},
             // ===== Iconic festival / event grounds =====
             // Locations of recurring large gatherings — the temporary
             // city of Black Rock to the snow sculptures of Sapporo.
