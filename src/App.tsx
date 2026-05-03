@@ -15771,6 +15771,70 @@ ${trkpts}
                 showToast(`📏 Reordered ${pins.length} pins closest-first (first: "${sorted[0].label}")`);
               },
             }] : []),
+            // Find pins by note content (counterpart to pinSearchByPattern
+            // which searches labels). Substring or /regex/, case-insensitive.
+            ...(pins.length > 0 ? [{
+              id: "pinFindByNote" as const,
+              label: "🔎 Find pin by note content (substring or /regex/)…",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const withNotes = pins.filter(p => p.note);
+                if (withNotes.length === 0) { showToast("No pins have notes yet — add one with the pinNote command"); return; }
+                const q = window.prompt(`Note search (across ${withNotes.length} pin${withNotes.length === 1 ? "" : "s"} with notes):`, "");
+                if (!q) return;
+                let matcher: RegExp;
+                const regexLike = q.match(/^\/(.+)\/([gimsuy]*)$/);
+                try {
+                  matcher = regexLike
+                    ? new RegExp(regexLike[1], regexLike[2].includes("i") ? regexLike[2] : regexLike[2] + "i")
+                    : new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+                } catch (e) {
+                  showToast(`🔎 Invalid regex: ${(e as Error).message}`);
+                  return;
+                }
+                const matches = withNotes.filter(p => matcher.test(p.note || ""));
+                if (matches.length === 0) { showToast(`🔎 No pin notes match "${q}"`); return; }
+                const first = matches[0];
+                setSelectedPin(first.id);
+                setFlyTo((p) => ({ id: p.id + 1, lat: first.lat, lon: first.lon, altKm: 5 }));
+                showToast(`🔎 Found ${matches.length} match${matches.length === 1 ? "" : "es"} in notes · flew to "${first.label}"`);
+              },
+            }, {
+              // List all pins that have notes attached. Console gets the
+              // full list with note content; toast gets a count + first 3.
+              id: "pinNotesList" as const,
+              label: "📝 List all pins with notes",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const withNotes = pins.filter(p => p.note);
+                if (withNotes.length === 0) { showToast("No pins have notes yet"); return; }
+                console.log(`📝 ${withNotes.length} pin${withNotes.length === 1 ? "" : "s"} with notes:`);
+                for (const p of withNotes) {
+                  console.log(`  ${p.label} (${p.lat.toFixed(2)}, ${p.lon.toFixed(2)}): ${p.note}`);
+                }
+                const top3 = withNotes.slice(0, 3).map(p => p.label).join(" · ");
+                showToast(`📝 ${withNotes.length} pin${withNotes.length === 1 ? "" : "s"} with notes (full list in console): ${top3}`);
+              },
+            }] : []),
+            // Copy selected pin as JSON to clipboard. Useful for moving
+            // a pin between Atlas instances or sharing it as text.
+            ...(selectedPin && pins.find(p => p.id === selectedPin) ? [{
+              id: "pinExportSelectedJson" as const,
+              label: "📋 Copy selected pin as JSON to clipboard",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const p = pins.find(x => x.id === selectedPin);
+                if (!p) return;
+                const json = JSON.stringify(p, null, 2);
+                navigator.clipboard?.writeText(json).then(
+                  () => showToast(`📋 Copied "${p.label}" as JSON (${json.length} chars)`),
+                  () => showToast(`📋 ${json.length}-char JSON in clipboard fallback`)
+                );
+              },
+            }] : []),
             // Bulk delete pins by color — quick way to clear out a category
             // when you've used color-coding (e.g. red = visited, blue = wishlist).
             ...(pins.length > 1 ? PIN_COLORS.filter(c => pins.some(p => p.color === c)).map(c => ({
