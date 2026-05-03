@@ -7734,6 +7734,25 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: -46.692, lon: -72.638, altKm: 8 }));
               showToast(`💎 Marble Caves (Cuevas de Mármol) · sculpted into a marble peninsula on Lake General Carrera, Patagonian Chile · turquoise water reflects on swirled marble · ~6,000 years of wave erosion`);
             }},
+            // ===== Iconic prisons / penal colony sites =====
+            // Historically significant places of incarceration; some are
+            // tourist destinations now, others have a darker legacy.
+            { id: "flyAlcatraz", label: "🏝 Fly to Alcatraz Island (San Francisco — federal prison 1934-1963, escape-proof reputation)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 37.8270, lon: -122.4230, altKm: 3 }));
+              showToast(`🏝 Alcatraz Island · San Francisco Bay · federal penitentiary 1934-1963 · 1.25 miles offshore in cold currents · housed Al Capone, "Birdman" Stroud, Machine Gun Kelly · 36 escape attempts, 0 confirmed successes (3 in 1962 disappeared, presumed drowned) · now a National Park visited by ~1.5M/yr`);
+            }},
+            { id: "flyRobbenIsland", label: "🏝 Fly to Robben Island (South Africa — Mandela's prison 1964-1982, UNESCO)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: -33.8047, lon: 18.3666, altKm: 4 }));
+              showToast(`🏝 Robben Island · 7 km off Cape Town · prison since the 17th century, became apartheid-era political prison 1961-1991 · Nelson Mandela held here 18 of his 27 years (1964-1982); cell B-7 is preserved · UNESCO World Heritage 1999 · now a museum & memorial; tours given by former political prisoners`);
+            }},
+            { id: "flyDevilsIsland", label: "🏝 Fly to Devil's Island / Île du Diable (French Guiana — Dreyfus's exile, Papillon's escape)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 5.2944, lon: -52.5800, altKm: 4 }));
+              showToast(`🏝 Île du Diable · French Guiana · French penal colony 1852-1953 · ~80,000 prisoners shipped here over 100 years; few survived · Captain Alfred Dreyfus exiled here 1895-1899 (anti-Semitic miscarriage of justice that split France) · Henri "Papillon" Charrière's 1969 memoir is set here · now uninhabited, accessible by boat from Kourou`);
+            }},
+            { id: "flyUSSArizonaMemorial", label: "⚓ Fly to USS Arizona Memorial (Pearl Harbor, HI — sunken Dec 7 1941 with 1,177 sailors)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 21.3650, lon: -157.9500, altKm: 3 }));
+              showToast(`⚓ USS Arizona Memorial · Pearl Harbor, Oahu · Japanese attack December 7 1941 sank the battleship in 9 minutes · 1,177 sailors and Marines killed (~half of all Pearl Harbor deaths) · the wreck still leaks ~9 quarts of oil daily ("Black Tears of the Arizona") · 1962 memorial built directly above without touching the wreck`);
+            }},
             // ===== World's busiest ports / shipping hubs =====
             // The container terminals through which most of the world's
             // physical goods pass.
