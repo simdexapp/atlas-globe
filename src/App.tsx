@@ -213,6 +213,10 @@ type LayerVisibility = {
   // Useful for catching messages that auto-dismissed before being
   // read, and for reviewing what happened during the session.
   toastHistory: boolean;
+  // Scratchpad widget — freeform textarea for personal notes.
+  // Persists across sessions via localStorage. Single global note
+  // (not tied to lat/lon).
+  scratchpad: boolean;
 };
 
 type GlobeSettings = {
@@ -556,6 +560,7 @@ const defaultLayers: LayerVisibility = {
   sunMoonInfo: false,
   tripMeter: false,
   toastHistory: false,
+  scratchpad: false,
   // 3D OSM Buildings tileset is heavy and renders with edge outlines
   // that disable imagery draping underneath, painting the screen with
   // dark olive boxes at low altitudes (the user's tear repro). Off by
@@ -997,6 +1002,14 @@ function App() {
     try { window.localStorage.setItem("atlas-color-blind-safe", String(colorBlindSafe)); } catch { /* ignore */ }
   }, [colorBlindSafe]);
   const [showFps, setShowFps] = useState(false);
+  // Scratchpad widget text — single global note persisted across
+  // sessions. Stored in localStorage so it survives reload.
+  const [scratchpadText, setScratchpadText] = useState<string>(() => {
+    try { return window.localStorage.getItem("atlas-scratchpad") || ""; } catch { return ""; }
+  });
+  useEffect(() => {
+    try { window.localStorage.setItem("atlas-scratchpad", scratchpadText); } catch { /* ignore */ }
+  }, [scratchpadText]);
   const [paused, setPaused] = useState(false);
   const [orbiting, setOrbiting] = useState(false);
   const [cesiumToken, setCesiumToken] = useState<string>("");
@@ -5083,6 +5096,7 @@ function App() {
             { id: "toggleSunMoonInfo", label: layers.sunMoonInfo ? "Hide Sun/Moon info widget" : "☀🌙 Show Sun/Moon info widget (live altitude, azimuth, phase at view)", group: "Widgets", icon: SunIcon, run: () => toggleLayer("sunMoonInfo") },
             { id: "toggleTripMeter", label: layers.tripMeter ? "Hide Trip meter widget" : "⏱ Show Trip meter widget (cumulative ground-distance camera has covered this session)", group: "Widgets", icon: Compass, run: () => toggleLayer("tripMeter") },
             { id: "toggleToastHistory", label: layers.toastHistory ? "Hide Toast history widget" : "📜 Show Toast history widget (last 8 toast messages, click to copy)", group: "Widgets", icon: Compass, run: () => toggleLayer("toastHistory") },
+            { id: "toggleScratchpad", label: layers.scratchpad ? "Hide Scratchpad widget" : "📝 Show Scratchpad widget (freeform notes, persists across sessions)", group: "Widgets", icon: Compass, run: () => toggleLayer("scratchpad") },
             { id: "tripMeterReset", label: "⏱ Reset trip meter to zero", group: "Tools", icon: Compass, run: () => {
               tripMeterRef.current = { totalKm: 0, lastLat: NaN, lastLon: NaN, startTime: Date.now() };
               setCameraState((c) => ({ ...c })); // force widget re-render
@@ -16261,6 +16275,30 @@ ${wpts}
               </div>
             );
           })()}
+        </Draggable>
+      )}
+
+      {/* Scratchpad widget — freeform textarea for personal notes.
+          Single global note (not per-grid), auto-persists to
+          localStorage on every change. Plain-text only; no formatting. */}
+      {layers.scratchpad && (
+        <Draggable id="scratchpad" customizeMode={customizeUiMode} position={widgetPositions.scratchpad} onMove={setWidgetPosition}>
+          <div className="atlasScratchpadWidget" role="region" aria-label="Scratchpad notes">
+            <div className="atlasScratchpadHead">
+              <Compass size={12} />
+              <strong>Scratchpad</strong>
+              <span>{scratchpadText.length} chars</span>
+            </div>
+            <textarea
+              className="atlasScratchpadInput"
+              value={scratchpadText}
+              onChange={(e) => setScratchpadText(e.target.value)}
+              placeholder="Personal notes — auto-saved across sessions…"
+              spellCheck={false}
+              rows={6}
+              aria-label="Personal scratchpad text"
+            />
+          </div>
         </Draggable>
       )}
 
