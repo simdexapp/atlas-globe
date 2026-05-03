@@ -7765,6 +7765,25 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: -46.692, lon: -72.638, altKm: 8 }));
               showToast(`💎 Marble Caves (Cuevas de Mármol) · sculpted into a marble peninsula on Lake General Carrera, Patagonian Chile · turquoise water reflects on swirled marble · ~6,000 years of wave erosion`);
             }},
+            // ===== Geographic extreme cities =====
+            // The southernmost / northernmost / highest permanent
+            // human settlements.
+            { id: "flyUshuaia", label: "🏘 Fly to Ushuaia (Argentina — southernmost city in the world, 'End of the World')", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: -54.8019, lon: -68.3030, altKm: 8 }));
+              showToast(`🏘 Ushuaia · Tierra del Fuego, Argentina · 54.8°S, southernmost city in the world (population >10k) · founded 1884 as Argentine penal colony · pop. 80k · gateway to Antarctica (most cruises depart from here) · the Beagle Channel separates Argentine and Chilean Tierra del Fuego`);
+            }},
+            { id: "flyLongyearbyen", label: "🏘 Fly to Longyearbyen (Svalbard — northernmost permanent settlement, 78°N)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 78.2232, lon: 15.6267, altKm: 8 }));
+              showToast(`🏘 Longyearbyen · Spitsbergen, Svalbard, Norway · 78.2°N, northernmost permanent settlement with >1k people · pop. ~2,400 from 50+ countries (visa-free under the 1920 Svalbard Treaty) · polar bear country: it's illegal to leave town without a rifle · 4 months of polar night, 4 months of midnight sun · Global Seed Vault is 130 km away`);
+            }},
+            { id: "flyLaPaz", label: "🏘 Fly to La Paz / El Alto (Bolivia — world's highest capital city, 3,640m)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: -16.5000, lon: -68.1500, altKm: 12 }));
+              showToast(`🏘 La Paz · Bolivia · 3,640m elevation, world's highest de facto capital city (Sucre is the constitutional capital) · sits in a 500m-deep canyon below the Altiplano · upper city El Alto (pop. ~1M) is at 4,150m, world's highest city of >100k · Mi Teleférico is the longest+highest urban cable car system on Earth`);
+            }},
+            { id: "flyMcMurdo", label: "🏘 Fly to McMurdo Station (Antarctica — largest community on the continent, US research base)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: -77.8419, lon: 166.6863, altKm: 10 }));
+              showToast(`🏘 McMurdo Station · Ross Island, Antarctica · 77.8°S, US Antarctic Program's largest base · summer pop. ~1,250, winter pop. ~250 · over 100 buildings + harbor + 3 airfields · staging point for traverses to South Pole and field camps · founded 1955; the only place on Earth where Antarctic logistics happen at industrial scale`);
+            }},
             // ===== Iconic film locations =====
             // Real places that doubled as iconic movie settings.
             { id: "flySkelligMichael", label: "🎬 Fly to Skellig Michael (Ireland — Luke Skywalker's hideout in Star Wars TFA/TLJ)", group: "View", icon: Globe2, run: () => {
