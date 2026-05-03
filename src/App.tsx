@@ -6019,6 +6019,59 @@ function App() {
                 }
               },
             }] : []),
+            // Bin all airborne aircraft by heading direction (N/E/S/W
+            // octants). Useful for spotting jet-stream patterns or
+            // peak-hour directional flow at major waypoints.
+            { id: "aircraftDirectionalSplit", label: "🧭 Directional split — count airborne aircraft by heading octant (N/NE/E/SE/S/SW/W/NW)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const airborne = aircraftSnapshot.aircraft.filter(a => !a.onGround && a.headingDeg !== undefined && a.headingDeg !== null);
+              if (airborne.length === 0) { showToast("No airborne aircraft with heading data"); return; }
+              // 8 octants centered on N/NE/E/SE/S/SW/W/NW (each 45°). N is 337.5-22.5.
+              const labels = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+              const counts = [0, 0, 0, 0, 0, 0, 0, 0];
+              for (const a of airborne) {
+                const h = ((a.headingDeg ?? 0) + 22.5) % 360; // shift so N is the first bucket
+                counts[Math.floor(h / 45) % 8]++;
+              }
+              const max = Math.max(...counts);
+              const summary = labels.map((l, i) => `${l}:${counts[i]}${counts[i] === max ? "✦" : ""}`).join(" · ");
+              showToast(`🧭 ${airborne.length.toLocaleString()} airborne by heading: ${summary} (✦ = peak direction)`);
+            }},
+            // Decode the selected aircraft's transponder squawk code.
+            // Most common are reserved (VFR, emergency); the rest are
+            // controller-assigned 4-octal-digit unique IDs.
+            ...(selectedAircraftId && aircraftSnapshot ? [{
+              id: "aircraftSquawkDecode" as const,
+              label: "📡 Decode selected aircraft's squawk code (reserved meanings + standard ranges)",
+              group: "Tools" as const,
+              icon: Plane,
+              run: () => {
+                const a = aircraftSnapshot.aircraft.find(x => x.icao24 === selectedAircraftId);
+                if (!a) { showToast("Aircraft no longer in snapshot"); return; }
+                const sq = a.squawk;
+                if (!sq) { showToast(`📡 ${(a.callsign || a.icao24).trim()} not transmitting a squawk code right now`); return; }
+                // Common reserved codes
+                const reserved: Record<string, string> = {
+                  "1200": "VFR (US)",
+                  "7000": "VFR (Europe / ICAO)",
+                  "1000": "IFR conspicuity",
+                  "7500": "🚨 HIJACK",
+                  "7600": "🚨 RADIO FAILURE / lost comms",
+                  "7700": "🚨 GENERAL EMERGENCY",
+                  "2000": "Uncontrolled IFR (transitioning to controlled)",
+                  "0000": "Reserved (military / SAR)",
+                  "7777": "Military intercept (USA)",
+                };
+                const desc = reserved[sq];
+                if (desc) {
+                  showToast(`📡 Squawk ${sq}: ${desc} · ${(a.callsign || a.icao24).trim()}`);
+                } else {
+                  // Generic 4-octal interpretation
+                  const isControllerAssigned = /^[0-7][0-7][0-7][0-7]$/.test(sq);
+                  showToast(`📡 Squawk ${sq}: ${isControllerAssigned ? "controller-assigned (no special meaning)" : "non-standard format"} · ${(a.callsign || a.icao24).trim()}`);
+                }
+              },
+            }] : []),
             // prefix. Useful for "what airline is this?" without leaving
             // the app to look it up.
             ...(selectedAircraftId && aircraftSnapshot ? (() => {
