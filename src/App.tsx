@@ -699,6 +699,11 @@ const KEYBOARD_HINTS = [
   { keys: "Shift+M", desc: "📏 Clear measure path entirely (keeps tool active)" },
   { keys: "Shift+F", desc: "⤢ Toggle browser fullscreen" },
   { keys: "Shift+S", desc: "📸 Capture screenshot at 1× (native resolution PNG)" },
+  // ===== Navigation shortcuts (shifted variants of n/j/k/b) =====
+  { keys: "Shift+N", desc: "📍 Fly to FURTHEST bookmark (opposite of N which finds nearest)" },
+  { keys: "Shift+J", desc: "◀ Jump 5 pins back (vs 1 with j)" },
+  { keys: "Shift+K", desc: "▶ Jump 5 pins forward (vs 1 with k)" },
+  { keys: "Shift+B", desc: "📚 Show toast list of all user bookmarks" },
   // ===== Pan / zoom =====
   { keys: "↑ ↓ ← → / W X A D", desc: "Pan camera north / south / west / east" },
   { keys: "+ / =", desc: "Zoom in 2× (halve altitude)" },
@@ -3898,7 +3903,21 @@ function App() {
           break;
         case "b":
           event.preventDefault();
-          saveCurrentBookmark();
+          if (event.shiftKey) {
+            // Shift+B — show a toast listing all bookmark names. Quick
+            // overview without opening the inspector. Plain B still
+            // saves the current view as a new bookmark.
+            const userBookmarks = bookmarks.filter(b => b.savedAt > 0);
+            if (userBookmarks.length === 0) {
+              showToast("📚 No user bookmarks (only city presets) — press B to bookmark a view");
+            } else {
+              const names = userBookmarks.slice(0, 8).map(b => b.name).join(" · ");
+              const more = userBookmarks.length > 8 ? ` +${userBookmarks.length - 8} more` : "";
+              showToast(`📚 ${userBookmarks.length} user bookmark${userBookmarks.length === 1 ? "" : "s"}: ${names}${more}`);
+            }
+          } else {
+            saveCurrentBookmark();
+          }
           break;
         case "l":
           event.preventDefault();
@@ -4231,18 +4250,26 @@ function App() {
           // Cycle to the nearest bookmark — finds the closest one to the
           // current view that isn't already where we are. Useful for
           // browsing all bookmarks via one key.
+          // Shift+N — cycle to FURTHEST bookmark (opposite of N), useful
+          // for jumping across the globe.
           event.preventDefault();
           if (bookmarks.length > 0 && cameraStateRef.current) {
             const cur = cameraStateRef.current;
-            // Skip the current view (within 50km counts as same place)
-            // and pick the next-closest. Bookmarks already sorted by
-            // distance gives a stable cycling order.
             const sorted = [...bookmarks]
               .map((b) => ({ b, km: haversineKm(cur.lat, cur.lon, b.lat, b.lon) }))
               .sort((a, b) => a.km - b.km);
-            const target = sorted.find(({ km }) => km > 50)?.b ?? sorted[0].b;
-            setFlyTo((p) => ({ id: p.id + 1, lat: target.lat, lon: target.lon, altKm: target.altKm }));
-            showToast(`📍 ${target.name} (next bookmark)`);
+            if (event.shiftKey) {
+              const target = sorted[sorted.length - 1].b;
+              setFlyTo((p) => ({ id: p.id + 1, lat: target.lat, lon: target.lon, altKm: target.altKm }));
+              showToast(`📍 ${target.name} (furthest bookmark — ${formatDistKm(sorted[sorted.length - 1].km, unitsImperial)} away)`);
+            } else {
+              // Skip the current view (within 50km counts as same place)
+              // and pick the next-closest. Bookmarks already sorted by
+              // distance gives a stable cycling order.
+              const target = sorted.find(({ km }) => km > 50)?.b ?? sorted[0].b;
+              setFlyTo((p) => ({ id: p.id + 1, lat: target.lat, lon: target.lon, altKm: target.altKm }));
+              showToast(`📍 ${target.name} (next bookmark)`);
+            }
           } else {
             showToast(bookmarks.length === 0 ? "No bookmarks saved" : "Camera position unknown");
           }
@@ -4294,24 +4321,28 @@ function App() {
           break;
         case "j":
           // Vim-style — go to previous pin. Useful for stepping through pins.
+          // Shift+J — jump 5 pins back at once (faster scrubbing).
           event.preventDefault();
           if (pins.length > 0) {
+            const step = event.shiftKey ? 5 : 1;
             const idx = selectedPin ? pins.findIndex((p) => p.id === selectedPin) : -1;
-            const next = pins[(idx - 1 + pins.length) % pins.length];
+            const next = pins[((idx - step) % pins.length + pins.length) % pins.length];
             setSelectedPin(next.id);
             setFlyTo((p) => ({ id: p.id + 1, lat: next.lat, lon: next.lon, altKm: 5 }));
-            showToast(`◀ ${next.label}`);
+            showToast(`◀${event.shiftKey ? "◀◀◀◀" : ""} ${next.label}`);
           }
           break;
         case "k":
           // Vim-style — go to next pin. (Plain k, not Cmd+K which opens palette.)
+          // Shift+K — jump 5 pins forward at once (faster scrubbing).
           event.preventDefault();
           if (pins.length > 0) {
+            const step = event.shiftKey ? 5 : 1;
             const idx = selectedPin ? pins.findIndex((p) => p.id === selectedPin) : -1;
-            const next = pins[(idx + 1) % pins.length];
+            const next = pins[((idx + step) % pins.length + pins.length) % pins.length];
             setSelectedPin(next.id);
             setFlyTo((p) => ({ id: p.id + 1, lat: next.lat, lon: next.lon, altKm: 5 }));
-            showToast(`▶ ${next.label}`);
+            showToast(`${event.shiftKey ? "▶▶▶▶" : ""}▶ ${next.label}`);
           }
           break;
         default:
