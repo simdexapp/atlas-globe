@@ -6144,6 +6144,37 @@ function App() {
               const co2TonneHr = co2KgHr / 1000;
               showToast(`⛽ Rough global airborne burn: ${Math.round(totalKgHr).toLocaleString()} kg/h fuel (${Math.round(totalLitresHr).toLocaleString()} L/h) → ~${co2TonneHr.toFixed(0)} tonne CO₂/h`);
             }},
+            // Count aircraft within prompted radius of current view.
+            // Useful for sizing air traffic in a region (e.g., 500km
+            // radius covers a typical airline's regional service area).
+            { id: "aircraftWithinRadius", label: "📍 Count aircraft within N km of current view (prompt)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const c = cameraStateRef.current;
+              if (!c) { showToast("Camera position unknown"); return; }
+              const input = window.prompt("Search radius from view in km:", "500");
+              if (!input) return;
+              const km = parseFloat(input);
+              if (!Number.isFinite(km) || km <= 0) { showToast("Enter a positive km value"); return; }
+              const within = aircraftSnapshot.aircraft.filter(a => !a.onGround && haversineKm(c.lat, c.lon, a.lat, a.lon) < km);
+              if (within.length === 0) { showToast(`📍 0 airborne aircraft within ${km}km of view`); return; }
+              const avgAltFt = Math.round(within.reduce((s, a) => s + a.altitudeM, 0) / within.length / 0.3048);
+              const avgKt = Math.round(within.reduce((s, a) => s + (a.velocityMs || 0), 0) / within.length * 1.944);
+              showToast(`📍 ${within.length} airborne within ${km}km · avg ${avgAltFt.toLocaleString()}ft · avg ${avgKt}kt`);
+            }},
+            // Find longest valid callsign in current snapshot. Most are
+            // 4-7 characters; ICAO max is 7. Anything longer is unusual
+            // (military/test/private). Fun stat.
+            { id: "aircraftLongestCallsign", label: "🔤 Longest callsign currently airborne (stat curiosity)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              let best: typeof aircraftSnapshot.aircraft[0] | null = null;
+              let bestLen = 0;
+              for (const a of aircraftSnapshot.aircraft) {
+                const cs = (a.callsign || "").trim();
+                if (cs.length > bestLen) { bestLen = cs.length; best = a; }
+              }
+              if (!best || bestLen === 0) { showToast("No callsigns in current snapshot"); return; }
+              showToast(`🔤 Longest callsign: "${(best.callsign || "").trim()}" (${bestLen} chars) · ICAO ${best.icao24} · ${best.onGround ? "on ground" : `${Math.round(best.altitudeM / 0.3048).toLocaleString()}ft`}`);
+            }},
             // prefix. Useful for "what airline is this?" without leaving
             // the app to look it up.
             ...(selectedAircraftId && aircraftSnapshot ? (() => {
