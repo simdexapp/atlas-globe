@@ -11268,6 +11268,48 @@ ${trkpts}
               window.speechSynthesis.speak(u);
               showToast(`🔊 Speaking: ${text}`);
             }},
+            // Speak info about the currently-selected aircraft. Companion
+            // to announceSelectedPin. Same SpeechSynthesis pattern.
+            { id: "announceSelectedAircraft", label: selectedAircraftId ? "🔊 Speak selected aircraft info (callsign, alt, speed, heading)" : "🔊 Speak selected aircraft (no aircraft selected)", group: "Tools", icon: Sparkles, run: () => {
+              if (typeof window === "undefined" || !window.speechSynthesis) { showToast("🔊 SpeechSynthesis not available in this browser"); return; }
+              if (!selectedAircraftId || !aircraftSnapshot) { showToast("No aircraft selected — click an aircraft first"); return; }
+              const a = aircraftSnapshot.aircraft.find(x => x.icao24 === selectedAircraftId);
+              if (!a) { showToast("Selected aircraft no longer in snapshot"); return; }
+              const callsign = (a.callsign || a.icao24).trim();
+              const altFt = Math.round(a.altitudeM / 0.3048);
+              const kt = Math.round((a.velocityMs || 0) * 1.944);
+              const heading = Math.round(a.headingDeg || 0);
+              const dir = compassDir(heading);
+              const text = a.onGround
+                ? `Aircraft ${callsign}, on ground.`
+                : `Aircraft ${callsign}, altitude ${altFt.toLocaleString()} feet, ground speed ${kt} knots, heading ${heading} degrees ${dir}.`;
+              window.speechSynthesis.cancel();
+              const u = new SpeechSynthesisUtterance(text);
+              u.rate = 1.0;
+              window.speechSynthesis.speak(u);
+              showToast(`🔊 Speaking: ${text}`);
+            }},
+            // Speak the local solar time at the current view longitude.
+            // Useful for screen-reader users navigating timezones.
+            { id: "announceTimeAtView", label: "🔊 Speak local solar time at current view longitude", group: "Tools", icon: Sparkles, run: () => {
+              if (typeof window === "undefined" || !window.speechSynthesis) { showToast("🔊 SpeechSynthesis not available in this browser"); return; }
+              const c = cameraStateRef.current;
+              if (!c) { showToast("Camera position unknown"); return; }
+              const utcMs = Date.now();
+              const offsetH = c.lon / 15;
+              const localMs = utcMs + offsetH * 3_600_000;
+              const localD = new Date(localMs);
+              const hh = localD.getUTCHours();
+              const mm = localD.getUTCMinutes();
+              const period = hh < 12 ? "AM" : "PM";
+              const hh12 = hh === 0 ? 12 : hh > 12 ? hh - 12 : hh;
+              const text = `Local solar time at this longitude is ${hh12}:${mm.toString().padStart(2, "0")} ${period}, UTC offset ${offsetH >= 0 ? "plus" : "minus"} ${Math.abs(offsetH).toFixed(1)} hours.`;
+              window.speechSynthesis.cancel();
+              const u = new SpeechSynthesisUtterance(text);
+              u.rate = 1.0;
+              window.speechSynthesis.speak(u);
+              showToast(`🔊 Speaking: ${text}`);
+            }},
             { id: "wikiNearby", label: "🗺 Wikipedia articles near this view (top 8 within 50km)", group: "Tools", icon: Sparkles, run: async () => {
               const c = cameraStateRef.current;
               if (!c) return;
