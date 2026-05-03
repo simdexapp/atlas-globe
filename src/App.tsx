@@ -15337,6 +15337,45 @@ ${trkpts}
                 try { window.localStorage.setItem("atlas-pins-sort", "distance"); } catch { /* ignore */ }
                 showToast("Pin sort: distance from view (reload widget to see)");
               },
+            }, {
+              // Permanently reorder the pins array by label A→Z. Affects
+              // export order, J/K cycling order, and panel display order.
+              // Keeps existing colors / dates / notes / coords intact.
+              id: "pinReorderByLabel" as const,
+              label: `🔤 Reorder pin array alphabetically by label (permanent)`,
+              group: "Tools" as const,
+              icon: Compass,
+              run: () => {
+                const sorted = [...pins].sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+                setPins(sorted);
+                showToast(`🔤 Reordered ${pins.length} pins A→Z (first: "${sorted[0].label}")`);
+              },
+            }, {
+              // Reorder by createdAt newest first. Most-recent pins
+              // come first in J/K cycling and exports.
+              id: "pinReorderByDate" as const,
+              label: `🕒 Reorder pin array by date (newest first, permanent)`,
+              group: "Tools" as const,
+              icon: Compass,
+              run: () => {
+                const sorted = [...pins].sort((a, b) => b.createdAt - a.createdAt);
+                setPins(sorted);
+                showToast(`🕒 Reordered ${pins.length} pins newest-first (first: "${sorted[0].label}")`);
+              },
+            }, {
+              // Reorder by distance from current view, closest first.
+              // Snapshots the camera position at command-run time.
+              id: "pinReorderByDistance" as const,
+              label: `📏 Reorder pin array by distance from current view (closest first, permanent)`,
+              group: "Tools" as const,
+              icon: Compass,
+              run: () => {
+                const c = cameraStateRef.current;
+                if (!c) { showToast("Camera position unknown"); return; }
+                const sorted = [...pins].sort((a, b) => haversineKm(c.lat, c.lon, a.lat, a.lon) - haversineKm(c.lat, c.lon, b.lat, b.lon));
+                setPins(sorted);
+                showToast(`📏 Reordered ${pins.length} pins closest-first (first: "${sorted[0].label}")`);
+              },
             }] : []),
             // Bulk delete pins by color — quick way to clear out a category
             // when you've used color-coding (e.g. red = visited, blue = wishlist).
