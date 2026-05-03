@@ -5744,6 +5744,62 @@ function App() {
               const ageStr = ageS < 60 ? `${ageS.toFixed(0)}s` : `${(ageS / 60).toFixed(1)}m`;
               showToast(`📡 Source: ${aircraftSnapshot.source} · Age: ${ageStr} · Total: ${total.toLocaleString()} (${airborne.toLocaleString()} airborne, ${onGround.toLocaleString()} on ground)`);
             }},
+            // Show selected aircraft speed in Mach (sound-speed
+            // approximation by altitude). Uses the standard atmosphere
+            // — a good approximation up to FL360.
+            ...(selectedAircraftId && aircraftSnapshot ? [{
+              id: "aircraftMach" as const,
+              label: "🔊 Selected aircraft speed in Mach (atmosphere-corrected)",
+              group: "Tools" as const,
+              icon: Plane,
+              run: () => {
+                const a = aircraftSnapshot.aircraft.find(x => x.icao24 === selectedAircraftId);
+                if (!a) { showToast("Aircraft no longer in snapshot"); return; }
+                const v = a.velocityMs ?? 0;
+                if (v === 0) { showToast(`${(a.callsign || a.icao24).trim()} not moving (0 m/s)`); return; }
+                // Standard atmosphere speed of sound: a = sqrt(γ·R·T) where
+                // T(h) = T0 - L·h (T0=288.15K, L=0.0065K/m for troposphere
+                // up to 11km, then constant 216.65K up to 20km).
+                const altM = a.altitudeM;
+                const tempK = altM < 11000 ? 288.15 - 0.0065 * altM : 216.65;
+                const soundMs = Math.sqrt(1.4 * 287.05 * tempK);
+                const mach = v / soundMs;
+                const altFt = Math.round(altM / 0.3048).toLocaleString();
+                showToast(`🔊 ${(a.callsign || a.icao24).trim()} @ ${altFt}ft · ${Math.round(v * 1.944)}kt = Mach ${mach.toFixed(3)} (sound speed ${soundMs.toFixed(0)} m/s at this altitude)`);
+              },
+            }] : []),
+            // Centroid of all airborne aircraft — interesting "where is
+            // most of the world's air traffic right now?" view.
+            // Spherical mean to handle the ±180° wrap correctly.
+            { id: "aircraftAirborneCentroid", label: "🎯 Fly to centroid of all airborne aircraft (where is air traffic concentrated?)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const airborne = aircraftSnapshot.aircraft.filter(a => !a.onGround);
+              if (airborne.length === 0) { showToast("No airborne aircraft right now"); return; }
+              // Spherical mean via sum of unit vectors.
+              let x = 0, y = 0, z = 0;
+              for (const a of airborne) {
+                const phi = a.lat * Math.PI / 180, lam = a.lon * Math.PI / 180;
+                x += Math.cos(phi) * Math.cos(lam);
+                y += Math.cos(phi) * Math.sin(lam);
+                z += Math.sin(phi);
+              }
+              const lat = Math.atan2(z, Math.sqrt(x*x + y*y)) * 180 / Math.PI;
+              const lon = Math.atan2(y, x) * 180 / Math.PI;
+              setFlyTo((p) => ({ id: p.id + 1, lat, lon, altKm: 5000 }));
+              showToast(`🎯 Centroid of ${airborne.length.toLocaleString()} airborne aircraft: ${formatLat(lat)} ${formatLon(lon)}`);
+            }},
+            // Count active fleets — unique airline ICAO prefixes (3 chars
+            // of callsign). Useful for "how many airlines are flying?"
+            { id: "aircraftFleetCount", label: "🛩 Count of active airline fleets (unique 3-char callsign prefixes)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const prefixes = new Set<string>();
+              for (const a of aircraftSnapshot.aircraft) {
+                if (a.onGround) continue;
+                const p = (a.callsign || "").trim().slice(0, 3).toUpperCase();
+                if (p.length === 3 && /^[A-Z]+$/.test(p)) prefixes.add(p);
+              }
+              showToast(`🛩 ${prefixes.size.toLocaleString()} unique airline/operator prefixes airborne (e.g. UAL, DAL, AFR, JAL, RYR)`);
+            }},
             // prefix. Useful for "what airline is this?" without leaving
             // the app to look it up.
             ...(selectedAircraftId && aircraftSnapshot ? (() => {
