@@ -1014,6 +1014,26 @@ function App() {
     else delete document.documentElement.dataset.colorBlindSafe;
     try { window.localStorage.setItem("atlas-color-blind-safe", String(colorBlindSafe)); } catch { /* ignore */ }
   }, [colorBlindSafe]);
+  // Bold-text mode — bumps font-weight throughout for low-vision /
+  // older eyes. Persisted via localStorage.
+  const [boldText, setBoldText] = useState<boolean>(() => {
+    try { return window.localStorage.getItem("atlas-bold-text") === "true"; } catch { return false; }
+  });
+  useEffect(() => {
+    if (boldText) document.documentElement.dataset.boldText = "true";
+    else delete document.documentElement.dataset.boldText;
+    try { window.localStorage.setItem("atlas-bold-text", String(boldText)); } catch { /* ignore */ }
+  }, [boldText]);
+  // Strong-focus-ring mode — fatter, brighter focus outline on
+  // keyboard-focused elements. For users who lose track of focus.
+  const [strongFocusRing, setStrongFocusRing] = useState<boolean>(() => {
+    try { return window.localStorage.getItem("atlas-strong-focus-ring") === "true"; } catch { return false; }
+  });
+  useEffect(() => {
+    if (strongFocusRing) document.documentElement.dataset.strongFocusRing = "true";
+    else delete document.documentElement.dataset.strongFocusRing;
+    try { window.localStorage.setItem("atlas-strong-focus-ring", String(strongFocusRing)); } catch { /* ignore */ }
+  }, [strongFocusRing]);
   const [showFps, setShowFps] = useState(false);
   // Scratchpad widget text — single global note persisted across
   // sessions. Stored in localStorage so it survives reload.
@@ -11632,6 +11652,24 @@ ${trkpts}
               setColorBlindSafe((v) => {
                 const next = !v;
                 showToast(next ? "♿ Colorblind-safe palette enabled (red/green tokens swapped to Wong palette)" : "♿ Standard palette restored");
+                return next;
+              });
+            }},
+            // Bold text mode — bumps font-weight throughout the UI for
+            // low-vision / older-eyes readability.
+            { id: "boldTextToggle", label: boldText ? "♿ Disable bold text mode" : "♿ Enable bold text mode (bump font weight throughout UI)", group: "Tools", icon: Sparkles, run: () => {
+              setBoldText((v) => {
+                const next = !v;
+                showToast(next ? "♿ Bold text mode enabled" : "♿ Bold text mode disabled");
+                return next;
+              });
+            }},
+            // Strong focus rings — thicker, higher-contrast outline on
+            // keyboard-focused elements. Helps when focus is hard to track.
+            { id: "strongFocusRingToggle", label: strongFocusRing ? "♿ Disable strong focus rings" : "♿ Enable strong focus rings (4px thick, brighter color)", group: "Tools", icon: Sparkles, run: () => {
+              setStrongFocusRing((v) => {
+                const next = !v;
+                showToast(next ? "♿ Strong focus rings enabled" : "♿ Standard focus rings restored");
                 return next;
               });
             }},

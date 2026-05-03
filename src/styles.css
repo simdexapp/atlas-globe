@@ -224,6 +224,38 @@ html[data-force-reduced-motion="true"] *::after {
   scroll-behavior: auto !important;
 }
 
+/* ===== A11y: bold text mode (set via Tools palette) =====
+   Bumps font-weight across the whole UI. The +200 increase moves
+   light → regular, regular → semibold, semibold → bold, bold → extrabold.
+   Skips inputs/textareas (would harm readability of typed content). */
+html[data-bold-text="true"] body,
+html[data-bold-text="true"] body * {
+  font-weight: 700 !important;
+}
+html[data-bold-text="true"] input,
+html[data-bold-text="true"] textarea {
+  font-weight: 500 !important;
+}
+
+/* ===== A11y: strong focus rings (set via Tools palette) =====
+   Wider, higher-contrast focus outline. Replaces the default 2px
+   accent ring with a 4px solid white-or-black ring with a 2px
+   accent halo. */
+html[data-strong-focus-ring="true"] button:focus-visible,
+html[data-strong-focus-ring="true"] input:focus-visible,
+html[data-strong-focus-ring="true"] [role="button"]:focus-visible,
+html[data-strong-focus-ring="true"] [tabindex]:focus-visible {
+  outline: 4px solid var(--accent) !important;
+  outline-offset: 3px !important;
+  box-shadow: 0 0 0 6px rgba(0, 0, 0, 0.45) !important;
+}
+html[data-strong-focus-ring="true"][data-theme="light"] button:focus-visible,
+html[data-strong-focus-ring="true"][data-theme="light"] input:focus-visible,
+html[data-strong-focus-ring="true"][data-theme="light"] [role="button"]:focus-visible,
+html[data-strong-focus-ring="true"][data-theme="light"] [tabindex]:focus-visible {
+  box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.85) !important;
+}
+
 /* ===== A11y: colorblind-safe palette (set via Tools palette) =====
    Swaps high-frequency red/green/orange tokens to Wong palette
    colorblind-safe equivalents. Most-affected: --danger (red emergency
