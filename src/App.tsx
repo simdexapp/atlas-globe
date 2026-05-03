@@ -7553,6 +7553,24 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: -46.692, lon: -72.638, altKm: 8 }));
               showToast(`💎 Marble Caves (Cuevas de Mármol) · sculpted into a marble peninsula on Lake General Carrera, Patagonian Chile · turquoise water reflects on swirled marble · ~6,000 years of wave erosion`);
             }},
+            // ===== Iconic train stations =====
+            // Architecturally famous + historically significant rail hubs.
+            { id: "flyGrandCentral", label: "🚉 Fly to Grand Central Terminal (NYC — Beaux-Arts masterpiece, painted star ceiling)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 40.7527, lon: -73.9772, altKm: 2 }));
+              showToast(`🚉 Grand Central Terminal · 42nd St & Park Ave, NYC · opened 1913 · 44 platforms (more than any station on Earth) · main concourse ceiling depicts the constellations — but inverted (per medieval church tradition or possibly an error) · ~750k commuters daily`);
+            }},
+            { id: "flyShinjuku", label: "🚉 Fly to Shinjuku Station (Tokyo — busiest railway station in the world, ~3.5M users/day)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 35.6896, lon: 139.7006, altKm: 2 }));
+              showToast(`🚉 Shinjuku Station · Tokyo · opened 1885 · busiest railway station in the world by passenger throughput (~3.5 million people daily, Guinness World Record) · 200+ exits across 36 platforms · 12 different rail lines from JR/private/Tokyo Metro`);
+            }},
+            { id: "flyStPancras", label: "🚉 Fly to St. Pancras International (London — Victorian-Gothic, Eurostar terminus)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 51.5310, lon: -0.1265, altKm: 2 }));
+              showToast(`🚉 St. Pancras International · London · opened 1868 · the Barlow train shed was the world's largest single-span structure when built · Victorian-Gothic Midland Grand Hotel facade · UK terminus for Eurostar trains to Paris/Brussels/Amsterdam since 2007`);
+            }},
+            { id: "flyChhatrapati", label: "🚉 Fly to Chhatrapati Shivaji Terminus (Mumbai — UNESCO World Heritage Indo-Saracenic terminal)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 18.9398, lon: 72.8355, altKm: 2 }));
+              showToast(`🚉 Chhatrapati Shivaji Maharaj Terminus · Mumbai · opened 1887 (then Victoria Terminus) · Indo-Saracenic blend of Italian Gothic + Indian classical · UNESCO World Heritage 2004 · 3M passengers daily · iconic central dome with statue of Progress`);
+            }},
             // ===== Iconic libraries =====
             // Architecturally famous + culturally significant book vaults.
             { id: "flyTrinityLongRoom", label: "📚 Fly to Trinity College Library Long Room (Dublin — Book of Kells, 65m oak gallery)", group: "View", icon: Globe2, run: () => {
