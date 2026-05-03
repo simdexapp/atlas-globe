@@ -9555,6 +9555,92 @@ ${trkpts}
                 showToast(`🎨 Exported ${measurePoints.length}-vertex SVG (open in browser/Figma/Illustrator)`);
               },
             }] : []),
+            // Rotate the path around its centroid by N degrees.
+            // Negative degrees = counterclockwise. 2D rotation in
+            // lat/lon space — fine for paths within a few hundred km.
+            ...(measureMode && measurePoints.length >= 3 ? [{
+              id: "measureRotate" as const,
+              label: "🔄 Rotate path around its centroid (prompts for degrees)",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                const input = window.prompt("Rotate by how many degrees? (positive = clockwise, negative = counterclockwise):", "90");
+                if (!input) return;
+                const deg = parseFloat(input);
+                if (!Number.isFinite(deg)) { showToast("Enter a number"); return; }
+                // Compute centroid (simple mean — fine for small paths)
+                let cLat = 0, cLon = 0;
+                for (const p of measurePoints) { cLat += p.lat; cLon += p.lon; }
+                cLat /= measurePoints.length;
+                cLon /= measurePoints.length;
+                const rad = deg * Math.PI / 180;
+                const cosR = Math.cos(rad), sinR = Math.sin(rad);
+                // Equirectangular scaling so 1° lat == 1° lon at the centroid latitude
+                const cosLat = Math.cos(cLat * Math.PI / 180);
+                const rotated = measurePoints.map(p => {
+                  const dx = (p.lon - cLon) * cosLat;
+                  const dy = p.lat - cLat;
+                  const rx = dx * cosR - dy * sinR;
+                  const ry = dx * sinR + dy * cosR;
+                  return {
+                    lat: Math.max(-89, Math.min(89, cLat + ry)),
+                    lon: cLon + rx / cosLat,
+                  };
+                });
+                setMeasurePoints(rotated);
+                showToast(`🔄 Rotated path by ${deg}° around centroid (${formatLat(cLat)} ${formatLon(cLon)})`);
+              },
+            }] : []),
+            // Extend the path forward from the last vertex by N km
+            // along the bearing of the last leg. Drops a single new
+            // vertex at the projected point. Useful for projecting a
+            // straight-line continuation.
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureExtendForward" as const,
+              label: "➡ Extend path past last vertex by N km along the last leg's bearing",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                const input = window.prompt("Extend by how many km past the last vertex?", "100");
+                if (!input) return;
+                const km = parseFloat(input);
+                if (!Number.isFinite(km) || km <= 0) { showToast("Enter a positive km value"); return; }
+                const a = measurePoints[measurePoints.length - 2];
+                const b = measurePoints[measurePoints.length - 1];
+                const bearing = bearingDeg(a.lat, a.lon, b.lat, b.lon);
+                // Spherical destination point: φ2 = asin(sin(φ1)·cos(d/R) + cos(φ1)·sin(d/R)·cos(θ))
+                const R = EARTH_RADIUS_KM;
+                const φ1 = b.lat * Math.PI / 180;
+                const λ1 = b.lon * Math.PI / 180;
+                const θ = bearing * Math.PI / 180;
+                const dR = km / R;
+                const φ2 = Math.asin(Math.sin(φ1) * Math.cos(dR) + Math.cos(φ1) * Math.sin(dR) * Math.cos(θ));
+                const λ2 = λ1 + Math.atan2(Math.sin(θ) * Math.sin(dR) * Math.cos(φ1), Math.cos(dR) - Math.sin(φ1) * Math.sin(φ2));
+                const newPt = { lat: φ2 * 180 / Math.PI, lon: ((λ2 * 180 / Math.PI) + 540) % 360 - 180 };
+                setMeasurePoints((pts) => [...pts, newPt]);
+                showToast(`➡ Extended ${formatDistKm(km, unitsImperial)} on bearing ${bearing.toFixed(0)}° (${compassDir(bearing)})`);
+              },
+            }] : []),
+            // Mirror the path across its centroid (point reflection).
+            // Each vertex (lat, lon) becomes (2·cLat - lat, 2·cLon - lon).
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureMirror" as const,
+              label: "🪞 Mirror path across its centroid (180° rotation)",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                let cLat = 0, cLon = 0;
+                for (const p of measurePoints) { cLat += p.lat; cLon += p.lon; }
+                cLat /= measurePoints.length;
+                cLon /= measurePoints.length;
+                const mirrored = measurePoints.map(p => ({
+                  lat: Math.max(-89, Math.min(89, 2 * cLat - p.lat)),
+                  lon: 2 * cLon - p.lon,
+                }));
+                setMeasurePoints(mirrored);
+                showToast(`🪞 Mirrored path across centroid (${formatLat(cLat)} ${formatLon(cLon)})`);
+              },
+            }] : []),
             // Save the active measure path with a name so it can be
             // restored / overlaid / shared later. Library lives in
             // localStorage so paths survive across sessions.
