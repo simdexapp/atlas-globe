@@ -14761,6 +14761,66 @@ ${wpts}
               URL.revokeObjectURL(url);
               showToast(`📍 Exported ${pins.length} pin${pins.length === 1 ? "" : "s"} as GPX`);
             }},
+            // ===== New pin export formats =====
+            { id: "pinExportMarkdownTable", label: pins.length > 0 ? `📝 Export ${pins.length} pin${pins.length === 1 ? "" : "s"} as Markdown table` : "📝 Export pins as Markdown table (no pins yet)", group: "Tools", icon: BookmarkPlus, run: () => {
+              if (pins.length === 0) { showToast("No pins to export"); return; }
+              const rows = pins.map((p, i) => {
+                const date = new Date(p.createdAt).toISOString().slice(0, 10);
+                const note = (p.note || "").replace(/\|/g, "\\|").replace(/\n/g, " ");
+                return `| ${i + 1} | ${p.label.replace(/\|/g, "\\|")} | ${p.lat.toFixed(5)} | ${p.lon.toFixed(5)} | ${date} | ${note} |`;
+              }).join("\n");
+              const md = `# Atlas Pins — ${pins.length} pin${pins.length === 1 ? "" : "s"}\n\n_Exported ${new Date().toISOString().slice(0, 10)}_\n\n| # | Label | Lat | Lon | Created | Note |\n|---|-------|-----|-----|---------|------|\n${rows}\n`;
+              navigator.clipboard?.writeText(md).then(
+                () => showToast(`📝 Copied Markdown table for ${pins.length} pin${pins.length === 1 ? "" : "s"} to clipboard`),
+                () => {
+                  // Fallback: download as file
+                  const blob = new Blob([md], { type: "text/markdown" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `atlas-pins-${new Date().toISOString().slice(0, 10)}.md`;
+                  a.click();
+                  setTimeout(() => URL.revokeObjectURL(url), 500);
+                  showToast(`📝 Downloaded Markdown file for ${pins.length} pin${pins.length === 1 ? "" : "s"}`);
+                }
+              );
+            }},
+            { id: "pinExportTsv", label: pins.length > 0 ? `📊 Export ${pins.length} pin${pins.length === 1 ? "" : "s"} as TSV (tab-separated, Excel-friendly)` : "📊 Export pins as TSV (no pins yet)", group: "Tools", icon: BookmarkPlus, run: () => {
+              if (pins.length === 0) { showToast("No pins to export"); return; }
+              const header = "label\tlat\tlon\tcreated\tnote\tcolor\n";
+              const rows = pins.map(p => {
+                const date = new Date(p.createdAt).toISOString();
+                const note = (p.note || "").replace(/\t/g, " ").replace(/\n/g, " ");
+                return `${p.label.replace(/\t/g, " ")}\t${p.lat.toFixed(6)}\t${p.lon.toFixed(6)}\t${date}\t${note}\t${p.color}`;
+              }).join("\n");
+              const blob = new Blob([header + rows], { type: "text/tab-separated-values" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `atlas-pins-${new Date().toISOString().slice(0, 10)}.tsv`;
+              a.click();
+              setTimeout(() => URL.revokeObjectURL(url), 500);
+              showToast(`📊 Exported ${pins.length} pin${pins.length === 1 ? "" : "s"} as TSV (paste into Excel/Sheets)`);
+            }},
+            { id: "pinExportHtmlList", label: pins.length > 0 ? `🌐 Export ${pins.length} pin${pins.length === 1 ? "" : "s"} as standalone HTML page (with map links)` : "🌐 Export pins as HTML (no pins yet)", group: "Tools", icon: BookmarkPlus, run: () => {
+              if (pins.length === 0) { showToast("No pins to export"); return; }
+              const items = pins.map((p, i) => {
+                const date = new Date(p.createdAt).toISOString().slice(0, 10);
+                const mapUrl = `https://www.openstreetmap.org/?mlat=${p.lat}&mlon=${p.lon}#map=12/${p.lat}/${p.lon}`;
+                const escLabel = p.label.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+                const escNote = (p.note || "").replace(/&/g, "&amp;").replace(/</g, "&lt;");
+                return `<li><strong>${i + 1}. ${escLabel}</strong><br><small>${p.lat.toFixed(5)}, ${p.lon.toFixed(5)} · saved ${date}</small>${escNote ? `<br><em>${escNote}</em>` : ""}<br><a href="${mapUrl}" target="_blank">🗺 View on OpenStreetMap</a></li>`;
+              }).join("\n");
+              const html = `<!doctype html><html><head><title>Atlas Pins — ${pins.length}</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;padding:24px;background:#0a1120;color:#e8eef5;font:14px/1.5 -apple-system,Inter,sans-serif;max-width:720px;margin:0 auto}h1{font-size:18px;margin:0 0 16px}ol{padding-left:20px}li{margin-bottom:18px}small,em{color:#7a8597}a{color:#5cb5ff;text-decoration:none}a:hover{text-decoration:underline}</style></head><body><h1>📍 Atlas Pins (${pins.length})</h1><p><small>Exported ${new Date().toISOString().slice(0, 10)}</small></p><ol>\n${items}\n</ol></body></html>`;
+              const blob = new Blob([html], { type: "text/html" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `atlas-pins-${new Date().toISOString().slice(0, 10)}.html`;
+              a.click();
+              setTimeout(() => URL.revokeObjectURL(url), 500);
+              showToast(`🌐 Exported ${pins.length} pin${pins.length === 1 ? "" : "s"} as standalone HTML`);
+            }},
             { id: "pinDeleteAll", label: pins.length > 0 ? `Delete all ${pins.length} pin${pins.length === 1 ? "" : "s"}` : "Delete all pins (none to delete)", group: "Tools", icon: BookmarkPlus, run: deleteAllPins },
             { id: "pinFromClipboard", label: "Drop pin from clipboard coords", group: "Tools", icon: BookmarkPlus, run: pinFromClipboard },
             // Drop a pin from a Google Maps URL — paste, parse, drop. Supports
