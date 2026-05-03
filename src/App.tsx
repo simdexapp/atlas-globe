@@ -15098,6 +15098,50 @@ ${trkpts}
                 showToast(`📍 Duplicated 1km N → "${clone.label}"`);
               },
             }, {
+              id: "pinSwapLatLon" as const,
+              label: "🔁 Swap selected pin's lat ↔ lon (fix accidentally-flipped coordinates)",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const p = pins.find((x) => x.id === selectedPin);
+                if (!p) return;
+                // Swap; clamp lat to ±89 since lon can be ±180
+                const newLat = Math.max(-89, Math.min(89, p.lon));
+                const newLon = p.lat;
+                if (!window.confirm(`Swap "${p.label}" coords from (${p.lat.toFixed(3)}, ${p.lon.toFixed(3)}) to (${newLat.toFixed(3)}, ${newLon.toFixed(3)})?`)) return;
+                updatePin(selectedPin, { lat: newLat, lon: newLon });
+                setFlyTo((c) => ({ id: c.id + 1, lat: newLat, lon: newLon, altKm: 5 }));
+                showToast(`🔁 Swapped lat ↔ lon for "${p.label}"`);
+              },
+            }, {
+              id: "pinNegateLat" as const,
+              label: "🌐 Flip selected pin to opposite hemisphere (negate lat: N↔S)",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const p = pins.find((x) => x.id === selectedPin);
+                if (!p) return;
+                const newLat = -p.lat;
+                if (!window.confirm(`Flip "${p.label}" from ${formatLat(p.lat)} to ${formatLat(newLat)}?`)) return;
+                updatePin(selectedPin, { lat: newLat });
+                setFlyTo((c) => ({ id: c.id + 1, lat: newLat, lon: p.lon, altKm: 5 }));
+                showToast(`🌐 Flipped "${p.label}" lat to ${formatLat(newLat)}`);
+              },
+            }, {
+              id: "pinNegateLon" as const,
+              label: "🌐 Flip selected pin to opposite hemisphere (negate lon: E↔W)",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const p = pins.find((x) => x.id === selectedPin);
+                if (!p) return;
+                const newLon = -p.lon;
+                if (!window.confirm(`Flip "${p.label}" from ${formatLon(p.lon)} to ${formatLon(newLon)}?`)) return;
+                updatePin(selectedPin, { lon: newLon });
+                setFlyTo((c) => ({ id: c.id + 1, lat: p.lat, lon: newLon, altKm: 5 }));
+                showToast(`🌐 Flipped "${p.label}" lon to ${formatLon(newLon)}`);
+              },
+            }, {
               id: "pinMoveToView" as const,
               label: "📍 Move selected pin to current view position",
               group: "Tools" as const,
