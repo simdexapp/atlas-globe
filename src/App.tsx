@@ -7765,6 +7765,24 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: -46.692, lon: -72.638, altKm: 8 }));
               showToast(`💎 Marble Caves (Cuevas de Mármol) · sculpted into a marble peninsula on Lake General Carrera, Patagonian Chile · turquoise water reflects on swirled marble · ~6,000 years of wave erosion`);
             }},
+            // ===== Seasonal photography sites =====
+            // Famous seasonal-bloom or weather-dependent destinations.
+            { id: "flyValensoleLavender", label: "💜 Fly to Valensole Plateau (France — purple lavender fields, late June peak)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 43.8367, lon: 6.0136, altKm: 8 }));
+              showToast(`💜 Valensole Plateau · Provence, France · 800 m elevation, perfect for lavender · purple bloom peaks late June through mid-July (variable by year + cultivar) · ~80km² of cultivated lavender (and lavandin, the higher-yield hybrid) · main lavender harvest mid-July, processed at distilleries by August`);
+            }},
+            { id: "flyKeukenhof", label: "🌷 Fly to Keukenhof Gardens (Lisse, Netherlands — 7 million tulip bulbs, April-May)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 52.2697, lon: 4.5469, altKm: 4 }));
+              showToast(`🌷 Keukenhof · Lisse, Netherlands · world's largest flower garden · ~7 million tulip, daffodil, hyacinth bulbs hand-planted by 30 gardeners each autumn · open only ~8 weeks (mid-March → mid-May) · 1.5M visitors yearly during open season · surrounding bulb fields visible for 10+ km in striped rainbows from above`);
+            }},
+            { id: "flyYoshinoCherry", label: "🌸 Fly to Mt. Yoshino (Nara, Japan — 30,000 cherry trees in 4 layers up the mountain, April)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 34.3676, lon: 135.8628, altKm: 5 }));
+              showToast(`🌸 Mt. Yoshino (吉野山) · Nara, Japan · ~30,000 cherry trees planted over 1,300 years · 4 distinct elevation bands (Shimo/Naka/Kami/Oku-Senbon) bloom successively over 2-3 weeks in April · UNESCO World Heritage 2004 · since 7th century considered Japan's #1 hanami (cherry blossom viewing) site`);
+            }},
+            { id: "flyReykjavikAurora", label: "🌌 Fly to Reykjavík (Iceland — capital nearest the Arctic Circle, peak aurora season Sep-Mar)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 64.1466, lon: -21.9426, altKm: 8 }));
+              showToast(`🌌 Reykjavík · Iceland · 64.1°N, just south of the Arctic Circle, capital city closest to it · auroral oval passes overhead Sep-March on clear, geomagnetically active nights · "dark season" extends Nov-Jan with as little as 4 hours of weak twilight · pop. ~140k (the city + surrounding municipalities house ~64% of all Icelanders)`);
+            }},
             // ===== Iconic stadiums =====
             // Major sports venues — capacity, history, or cultural weight.
             { id: "flyMaracana", label: "🏟 Fly to Maracanã (Rio — was largest stadium on Earth at 200k peak; 1950 World Cup final)", group: "View", icon: Globe2, run: () => {
