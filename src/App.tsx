@@ -9241,6 +9241,102 @@ ${trkpts}
                 showToast(`🔷 Exported ${ring.length}-vertex polygon GeoJSON (RFC 7946 §3.1.6 closed ring)`);
               },
             }] : []),
+            // Markdown table — clipboard copy with file fallback. Same
+            // pattern as pinExportMarkdownTable (#97). Includes per-leg
+            // distance and bearing columns.
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureExportMarkdown" as const,
+              label: `📝 Export path as Markdown table (${measurePoints.length} vertices, copies to clipboard)`,
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                const rows: string[] = [];
+                let cum = 0;
+                for (let i = 0; i < measurePoints.length; i++) {
+                  const p = measurePoints[i];
+                  let legKm = 0;
+                  let bearing = "";
+                  let dir = "";
+                  if (i > 0) {
+                    const prev = measurePoints[i-1];
+                    legKm = haversineKm(prev.lat, prev.lon, p.lat, p.lon);
+                    cum += legKm;
+                    const b = bearingDeg(prev.lat, prev.lon, p.lat, p.lon);
+                    bearing = b.toFixed(0);
+                    dir = compassDir(b);
+                  }
+                  rows.push(`| ${i + 1} | ${p.lat.toFixed(5)} | ${p.lon.toFixed(5)} | ${legKm.toFixed(2)} | ${cum.toFixed(2)} | ${bearing} | ${dir} |`);
+                }
+                const md = `# Atlas measure path — ${measurePoints.length} vertices\n\n_Exported ${new Date().toISOString().slice(0, 10)} · Total: ${cum.toFixed(2)} km_\n\n| # | Lat | Lon | Leg km | Cumul. km | Bearing° | Compass |\n|---|-----|-----|--------|-----------|----------|---------|\n${rows.join("\n")}\n`;
+                navigator.clipboard?.writeText(md).then(
+                  () => showToast(`📝 Copied ${measurePoints.length}-vertex markdown table to clipboard`),
+                  () => {
+                    const blob = new Blob([md], { type: "text/markdown" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `measure-path-${Date.now()}.md`;
+                    a.click();
+                    setTimeout(() => URL.revokeObjectURL(url), 500);
+                    showToast(`📝 Downloaded markdown for ${measurePoints.length} vertices`);
+                  }
+                );
+              },
+            }] : []),
+            // SVG export — equirectangular projection of the path,
+            // sized to fit a 800x400 viewport. The plate carrée
+            // projection is the simplest: lon → x, -lat → y, scaled.
+            // Auto-fits to path bounding box with 10% padding.
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureExportSvg" as const,
+              label: `🎨 Export path as SVG (equirectangular projection, ${measurePoints.length} vertices)`,
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                // Compute bounding box
+                let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
+                for (const p of measurePoints) {
+                  if (p.lat < minLat) minLat = p.lat;
+                  if (p.lat > maxLat) maxLat = p.lat;
+                  if (p.lon < minLon) minLon = p.lon;
+                  if (p.lon > maxLon) maxLon = p.lon;
+                }
+                const padPct = 0.10;
+                const lonSpan = maxLon - minLon || 0.001;
+                const latSpan = maxLat - minLat || 0.001;
+                const padLon = lonSpan * padPct;
+                const padLat = latSpan * padPct;
+                minLon -= padLon; maxLon += padLon;
+                minLat -= padLat; maxLat += padLat;
+                const w = 800, h = 400;
+                // Project each point: lon → x, -lat → y, normalized to viewport
+                const pts = measurePoints.map(p => {
+                  const x = ((p.lon - minLon) / (maxLon - minLon)) * w;
+                  const y = (1 - (p.lat - minLat) / (maxLat - minLat)) * h;
+                  return `${x.toFixed(2)},${y.toFixed(2)}`;
+                }).join(" ");
+                const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">
+  <rect width="${w}" height="${h}" fill="#0a1120"/>
+  <polyline points="${pts}" stroke="#5cb5ff" stroke-width="2" fill="none" stroke-linejoin="round"/>
+  ${measurePoints.map((p, i) => {
+    const x = ((p.lon - minLon) / (maxLon - minLon)) * w;
+    const y = (1 - (p.lat - minLat) / (maxLat - minLat)) * h;
+    const color = i === 0 ? "#7cffb1" : i === measurePoints.length - 1 ? "#ff5a5a" : "#ffd66b";
+    return `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="3" fill="${color}"/>`;
+  }).join("\n  ")}
+  <text x="10" y="20" fill="#8a93a8" font-family="monospace" font-size="11">Atlas measure · ${measurePoints.length} vertices · ${formatLat(maxLat)} to ${formatLat(minLat)}</text>
+</svg>`;
+                const blob = new Blob([svg], { type: "image/svg+xml" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `measure-path-${Date.now()}.svg`;
+                a.click();
+                setTimeout(() => URL.revokeObjectURL(url), 500);
+                showToast(`🎨 Exported ${measurePoints.length}-vertex SVG (open in browser/Figma/Illustrator)`);
+              },
+            }] : []),
             // Save the active measure path with a name so it can be
             // restored / overlaid / shared later. Library lives in
             // localStorage so paths survive across sessions.
