@@ -7734,6 +7734,25 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: -46.692, lon: -72.638, altKm: 8 }));
               showToast(`💎 Marble Caves (Cuevas de Mármol) · sculpted into a marble peninsula on Lake General Carrera, Patagonian Chile · turquoise water reflects on swirled marble · ~6,000 years of wave erosion`);
             }},
+            // ===== World's busiest ports / shipping hubs =====
+            // The container terminals through which most of the world's
+            // physical goods pass.
+            { id: "flyPortShanghai", label: "🚢 Fly to Port of Shanghai (China — busiest container port on Earth, ~50M TEU/yr)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 30.6240, lon: 122.0680, altKm: 30 }));
+              showToast(`🚢 Port of Shanghai · world's busiest container port since 2010 · ~50 million TEU (twenty-foot equivalent units) per year · Yangshan Deep-Water Port (the offshore section) is connected by the 33km Donghai Bridge — one of the world's longest sea bridges`);
+            }},
+            { id: "flyPortSingapore", label: "🚢 Fly to Port of Singapore (busiest transshipment hub on Earth, ~37M TEU/yr)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 1.2670, lon: 103.8200, altKm: 12 }));
+              showToast(`🚢 Port of Singapore · world's busiest transshipment hub (cargo passing through to elsewhere) · ~37 million TEU/yr · Tuas Port (under construction since 2019, opening fully by 2040) will be world's largest fully-automated container terminal`);
+            }},
+            { id: "flyPortRotterdam", label: "🚢 Fly to Port of Rotterdam (largest in Europe, ~14M TEU/yr; 40 km long)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 51.9500, lon: 4.0900, altKm: 25 }));
+              showToast(`🚢 Port of Rotterdam · Netherlands · largest port in Europe · 40 km from city to North Sea via the Maasvlakte expansion (1973-2013) · ~14 million TEU/yr · was the world's busiest 1962-2004 (lost the title to Singapore then Shanghai)`);
+            }},
+            { id: "flyPortLongBeach", label: "🚢 Fly to Port of Long Beach + LA (USA — Western hemisphere's busiest, ~20M TEU combined)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 33.7400, lon: -118.2700, altKm: 12 }));
+              showToast(`🚢 Port of Long Beach + Port of Los Angeles · adjacent ports together handle ~20M TEU/year · busiest container complex in the Western Hemisphere · 40% of all containerized goods entering the US arrive here · made global headlines during the 2021 supply-chain anchored-ships gridlock`);
+            }},
             // ===== Iconic megacity skylines =====
             // Look down on the densest, tallest, most photographed
             // skyscraper clusters on Earth.
