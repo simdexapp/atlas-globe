@@ -7734,6 +7734,24 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: -46.692, lon: -72.638, altKm: 8 }));
               showToast(`💎 Marble Caves (Cuevas de Mármol) · sculpted into a marble peninsula on Lake General Carrera, Patagonian Chile · turquoise water reflects on swirled marble · ~6,000 years of wave erosion`);
             }},
+            // ===== Iconic ancient temples =====
+            // Major ancient religious complexes outside Europe / North America.
+            { id: "flyAngkorWat", label: "🛕 Fly to Angkor Wat (Cambodia — largest religious monument on Earth, 12th-century Khmer)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 13.4125, lon: 103.8670, altKm: 6 }));
+              showToast(`🛕 Angkor Wat · Siem Reap, Cambodia · built 1113-1150 by King Suryavarman II as Hindu temple to Vishnu, later transformed into Buddhist · 162 hectares, world's largest religious monument by area · the central tower stands ~65m · UNESCO World Heritage 1992 · appears on Cambodia's national flag`);
+            }},
+            { id: "flyKarnak", label: "🛕 Fly to Karnak Temple (Luxor, Egypt — largest religious building ever built)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 25.7188, lon: 32.6573, altKm: 4 }));
+              showToast(`🛕 Karnak Temple Complex · Luxor (ancient Thebes), Egypt · construction spanned 2,000 years (~2000 BCE - 30 BCE) by ~30 pharaohs · "largest religious building ever built" · the Great Hypostyle Hall has 134 columns, the largest 21m tall and 3m diameter · St. Peter's, Notre-Dame and Milan Cathedral could fit in the precinct combined`);
+            }},
+            { id: "flyBorobudur", label: "🛕 Fly to Borobudur (Java, Indonesia — world's largest Buddhist temple, 9th c.)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: -7.6079, lon: 110.2038, altKm: 4 }));
+              showToast(`🛕 Borobudur · Magelang, Central Java · built 750-825 CE by the Sailendra dynasty · world's largest Buddhist temple · 9 stacked platforms (6 square + 3 circular), 2,672 relief panels and 504 Buddha statues · abandoned for centuries, hidden under volcanic ash + jungle, rediscovered 1814 by Stamford Raffles · UNESCO 1991`);
+            }},
+            { id: "flyTikal", label: "🛕 Fly to Tikal (Guatemala — Maya city in jungle, central Petén Basin, peaked 600-900 CE)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 17.2220, lon: -89.6238, altKm: 6 }));
+              showToast(`🛕 Tikal · Petén jungle, Guatemala · among the largest Maya city-states · pop. peaked at 60-90k around 700 CE · 5 large pyramids (Temple IV at 70m is the tallest pre-Columbian structure in the Americas) · abandoned by ~900 CE for unknown reasons · used as the Rebel base on Yavin 4 in Star Wars: A New Hope (1977)`);
+            }},
             // ===== Iconic prisons / penal colony sites =====
             // Historically significant places of incarceration; some are
             // tourist destinations now, others have a darker legacy.
