@@ -9316,6 +9316,53 @@ ${trkpts}
                 showToast(`⏱ ${total.toFixed(0)} km in ${hours}h needs ${kmh.toFixed(1)} km/h (${mph} mph · ${knots} kt) — ${compare}`);
               },
             }] : []),
+            // Snap every vertex to the nearest 0.1° grid. Useful for
+            // cleaning up free-hand drawn paths or normalizing
+            // coordinates for round-number sharing.
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureSnapToGrid" as const,
+              label: "📐 Snap each vertex to nearest 0.1° grid (round to 1 decimal)",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                const snapped = measurePoints.map(p => ({
+                  lat: Math.round(p.lat * 10) / 10,
+                  lon: Math.round(p.lon * 10) / 10,
+                }));
+                setMeasurePoints(snapped);
+                showToast(`📐 Snapped ${snapped.length} vertices to 0.1° grid (~11km resolution)`);
+              },
+            }] : []),
+            // Copy path as a JS / TS array literal — useful for testing,
+            // documenting, or pasting into code.
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureCopyAsArray" as const,
+              label: `💾 Copy path as JS array literal (${measurePoints.length} {lat,lon} objects)`,
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                const lines = measurePoints.map(p => `  { lat: ${p.lat.toFixed(5)}, lon: ${p.lon.toFixed(5)} },`);
+                const code = `const path = [\n${lines.join("\n")}\n];`;
+                navigator.clipboard?.writeText(code).then(
+                  () => showToast(`💾 Copied as JS array (${code.length} chars)`),
+                  () => showToast(`💾 ${code.slice(0, 60)}…`)
+                );
+              },
+            }] : []),
+            // Fly to a random vertex of the path. Useful for "show me an
+            // arbitrary point in this path" exploration.
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureRandomVertex" as const,
+              label: "🎲 Fly to a random vertex of the path",
+              group: "View" as const,
+              icon: Crosshair,
+              run: () => {
+                const idx = Math.floor(Math.random() * measurePoints.length);
+                const p = measurePoints[idx];
+                setFlyTo((c) => ({ id: c.id + 1, lat: p.lat, lon: p.lon, altKm: 50 }));
+                showToast(`🎲 Vertex #${idx + 1}/${measurePoints.length} · ${formatLat(p.lat)} ${formatLon(p.lon)}`);
+              },
+            }] : []),
             // Straight-line distance from start to end of path — useful for
             // comparing 'as the crow flies' vs the meandering path total.
             ...(measureMode && measurePoints.length >= 3 ? [{
