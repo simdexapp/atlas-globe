@@ -714,6 +714,10 @@ const KEYBOARD_HINTS = [
   { keys: "Shift+L", desc: "🎚 Show list of all currently-on layers" },
   { keys: "Shift+I", desc: "🛰 Show current imagery info (source, opacity, brightness)" },
   { keys: "Shift+W", desc: "☀ Toggle screen wake lock (keep display on for presentations)" },
+  { keys: "Shift+H", desc: "❓ Open shortcuts cheat sheet (alias for ?)" },
+  { keys: "Shift+A", desc: "🎚 Turn off ALL currently-on layers" },
+  { keys: "Shift+Y", desc: "📝 Copy as Markdown link (vs Y which copies plain URL)" },
+  { keys: "Shift+D", desc: "🔧 Dev info — storage, snapshot ages, JS heap" },
   // ===== Pan / zoom =====
   { keys: "↑ ↓ ← → / W X A D", desc: "Pan camera north / south / west / east" },
   { keys: "+ / =", desc: "Zoom in 2× (halve altitude)" },
@@ -4152,7 +4156,18 @@ function App() {
         case "arrowleft":
         case "a":
           event.preventDefault();
-          if (cameraStateRef.current) {
+          if (event.shiftKey && event.key.toLowerCase() === "a") {
+            // Shift+A — turn off ALL currently-on layers in one go.
+            // Plain A still pans west. Useful for resetting after
+            // experimenting with layer combinations.
+            const onCount = (Object.values(layers) as boolean[]).filter(Boolean).length;
+            if (onCount === 0) { showToast("🎚 No layers currently on"); return; }
+            const allOff = Object.fromEntries(
+              (Object.keys(layers) as Array<keyof LayerVisibility>).map(k => [k, false])
+            ) as LayerVisibility;
+            setLayers(allOff);
+            showToast(`🎚 Turned off all ${onCount} layer${onCount === 1 ? "" : "s"}`);
+          } else if (cameraStateRef.current) {
             const c = cameraStateRef.current;
             const step = Math.max(0.5, c.altKm * 0.05);
             let newLon = c.lon - step;
@@ -4163,7 +4178,31 @@ function App() {
         case "arrowright":
         case "d":
           event.preventDefault();
-          if (cameraStateRef.current) {
+          if (event.shiftKey && event.key.toLowerCase() === "d") {
+            // Shift+D — dev info dump. Snapshot ages, storage usage,
+            // pin/bookmark counts, current memory pressure. Useful for
+            // debugging. Plain D pans east.
+            let storageBytes = 0;
+            try {
+              for (const k in localStorage) {
+                if (Object.prototype.hasOwnProperty.call(localStorage, k)) {
+                  const v = localStorage.getItem(k);
+                  if (v) storageBytes += k.length + v.length;
+                }
+              }
+            } catch { /* ignore */ }
+            const storageKb = (storageBytes / 1024).toFixed(1);
+            const aircraftAgeS = aircraftSnapshot ? Math.round((Date.now() - aircraftSnapshot.fetchedAt) / 1000) : null;
+            const parts: string[] = [`storage ${storageKb} KB`, `${pins.length} pins`, `${bookmarks.length} bookmarks`];
+            if (aircraftAgeS !== null) parts.push(`aircraft ${aircraftAgeS}s old`);
+            if (earthquakes.length) parts.push(`${earthquakes.length} quakes`);
+            // ts-ignore — non-standard, optional API
+            const memInfo = (performance as Performance & { memory?: { usedJSHeapSize: number } }).memory;
+            if (memInfo?.usedJSHeapSize) {
+              parts.push(`JS heap ${(memInfo.usedJSHeapSize / 1048576).toFixed(0)} MB`);
+            }
+            showToast(`🔧 ${parts.join(" · ")}`);
+          } else if (cameraStateRef.current) {
             const c = cameraStateRef.current;
             const step = Math.max(0.5, c.altKm * 0.05);
             let newLon = c.lon + step;
@@ -4186,7 +4225,14 @@ function App() {
           break;
         case "h":
           event.preventDefault();
-          setHideUi((v) => !v);
+          if (event.shiftKey) {
+            // Shift+H — open the keyboard-shortcuts cheat sheet.
+            // Same effect as ? (the Slack/GitHub convention) but more
+            // discoverable since H suggests "help".
+            setShowShortcuts(true);
+          } else {
+            setHideUi((v) => !v);
+          }
           break;
         case "s":
           event.preventDefault();
@@ -4345,16 +4391,26 @@ function App() {
           break;
         case "y":
           // Yank — copy a deep-link URL to the current view.
+          // Shift+Y — copy as Markdown link (clickable in Discord/Slack/
+          // Notion/GitHub/etc).
           event.preventDefault();
           if (cameraStateRef.current) {
             const cur = cameraStateRef.current;
             const url = new URL(window.location.href);
             url.hash = `#@${cur.lat.toFixed(4)},${cur.lon.toFixed(4)},${cur.altKm.toFixed(1)}km`;
             const link = url.toString();
-            navigator.clipboard?.writeText(link).then(
-              () => showToast(`🔗 Share-link copied`),
-              () => showToast(`🔗 ${link}`)
-            );
+            if (event.shiftKey) {
+              const md = `[${formatLat(cur.lat)} ${formatLon(cur.lon)} on Atlas Globe](${link})`;
+              navigator.clipboard?.writeText(md).then(
+                () => showToast(`📝 Markdown link copied`),
+                () => showToast(`📝 ${md}`)
+              );
+            } else {
+              navigator.clipboard?.writeText(link).then(
+                () => showToast(`🔗 Share-link copied`),
+                () => showToast(`🔗 ${link}`)
+              );
+            }
           }
           break;
         case "q":
