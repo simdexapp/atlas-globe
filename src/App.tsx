@@ -7334,6 +7334,23 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: -46.692, lon: -72.638, altKm: 8 }));
               showToast(`💎 Marble Caves (Cuevas de Mármol) · sculpted into a marble peninsula on Lake General Carrera, Patagonian Chile · turquoise water reflects on swirled marble · ~6,000 years of wave erosion`);
             }},
+            // ===== Iconic music recording / performance sites =====
+            { id: "flyAbbeyRoad", label: "🎵 Fly to Abbey Road Studios (London — where the Beatles recorded most of their albums)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 51.5320, lon: -0.1779, altKm: 3 }));
+              showToast(`🎵 Abbey Road Studios · London · opened 1931 by EMI · the Beatles recorded all but one of their studio albums here · the iconic zebra crossing on the album cover (Aug 8 1969) is now a Grade II listed landmark · Pink Floyd, Radiohead, Adele also recorded here`);
+            }},
+            { id: "flySunStudio", label: "🎵 Fly to Sun Studio (Memphis — birthplace of rock 'n' roll, 1950s)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 35.1383, lon: -90.0479, altKm: 3 }));
+              showToast(`🎵 Sun Studio · Memphis, TN · founded 1950 by Sam Phillips · Elvis Presley's first recordings (1953-54) · also B.B. King, Howlin' Wolf, Jerry Lee Lewis, Johnny Cash, Roy Orbison · the "Million Dollar Quartet" jam session of Dec 4 1956 happened here`);
+            }},
+            { id: "flyWoodstockSite", label: "🎵 Fly to Woodstock site (Bethel, NY — 400,000-person 1969 music festival)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 41.7011, lon: -74.8806, altKm: 8 }));
+              showToast(`🎵 Woodstock Music & Art Fair · Max Yasgur's dairy farm, Bethel NY · Aug 15-18 1969 · ~400,000 attendees · headliners: Hendrix, Joplin, The Who, Santana, Crosby Stills Nash · originally planned for Wallkill, NY (which banned it), then moved here at the last minute`);
+            }},
+            { id: "flyCavernClub", label: "🎵 Fly to The Cavern Club (Liverpool — the Beatles played 292 times here, 1961-63)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 53.4080, lon: -2.9874, altKm: 3 }));
+              showToast(`🎵 The Cavern Club · Mathew St, Liverpool · opened 1957 as a jazz club · the Beatles played 292 shows between Feb 1961 and Aug 1963 · also hosted the Rolling Stones, The Who, Elton John, Queen · demolished 1973, rebuilt 1984 with original bricks`);
+            }},
             // ===== Oldest universities of the world =====
             // Continuously-operating institutions with centuries of history.
             { id: "flyKaraouine", label: "📚 Fly to University of al-Karaouine, Fez (oldest continuously-operating university on Earth, founded 859 CE)", group: "View", icon: Globe2, run: () => {
