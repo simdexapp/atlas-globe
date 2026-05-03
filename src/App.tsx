@@ -10330,6 +10330,38 @@ ${trkpts}
               url.hash = `#@${c.lat.toFixed(4)},${c.lon.toFixed(4)},${c.altKm.toFixed(1)}km`;
               window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url.toString())}`, "_blank", "noopener,noreferrer");
             }},
+            { id: "shareMastodon", label: "🐘 Share to Mastodon (prompts for instance)", group: "Tools", icon: Share2, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              // Mastodon doesn't have a single canonical share URL since
+              // every instance is independent. We prompt for the user's
+              // home instance (e.g. mastodon.social) and use its share
+              // intent. Default to mastodon.social if blank.
+              const instance = window.prompt("Your Mastodon instance hostname (e.g. mastodon.social, fosstodon.org):", "mastodon.social");
+              if (!instance) return;
+              const cleanInstance = instance.replace(/^https?:\/\//, "").replace(/\/+$/, "").trim();
+              if (!cleanInstance) { showToast("Invalid instance hostname"); return; }
+              const url = new URL(window.location.href);
+              url.hash = `#@${c.lat.toFixed(4)},${c.lon.toFixed(4)},${c.altKm.toFixed(1)}km`;
+              const text = `Looking at ${formatLat(c.lat)} ${formatLon(c.lon)} on Atlas Globe ${url.toString()}`;
+              window.open(`https://${cleanInstance}/share?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
+            }},
+            { id: "shareThreads", label: "@ Share to Threads (Meta)", group: "Tools", icon: Share2, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const url = new URL(window.location.href);
+              url.hash = `#@${c.lat.toFixed(4)},${c.lon.toFixed(4)},${c.altKm.toFixed(1)}km`;
+              const text = `Looking at ${formatLat(c.lat)} ${formatLon(c.lon)} on Atlas Globe ${url.toString()}`;
+              window.open(`https://threads.net/intent/post?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
+            }},
+            { id: "shareHackerNews", label: "🟧 Share to Hacker News (submit)", group: "Tools", icon: Share2, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const url = new URL(window.location.href);
+              url.hash = `#@${c.lat.toFixed(4)},${c.lon.toFixed(4)},${c.altKm.toFixed(1)}km`;
+              const title = `${formatLat(c.lat)} ${formatLon(c.lon)} — Atlas Globe`;
+              window.open(`https://news.ycombinator.com/submitlink?u=${encodeURIComponent(url.toString())}&t=${encodeURIComponent(title)}`, "_blank", "noopener,noreferrer");
+            }},
             { id: "shareDiscordMarkdown", label: "🎮 Copy Discord/Slack-friendly markdown link", group: "Tools", icon: Share2, run: () => {
               const c = cameraStateRef.current;
               if (!c) return;
