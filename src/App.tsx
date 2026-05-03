@@ -19584,7 +19584,14 @@ function PinInfoCard({ pin, onClose, onDelete, onUpdate, onFly }: { pin: Pin; on
 // streams the app already polls. Shows aircraft / earthquakes / volcanoes /
 // storms / launches counts plus the camera-view local time. Updates
 // automatically as parent state changes (no internal polling needed).
-function LiveStatsWidget({
+// Memoized — props are 7 primitives + 1 layers object + 1 callback.
+// Layers object only changes when a layer is toggled (parent uses
+// setLayers(prev => {...prev, [k]: !prev[k]})), so layers identity is
+// stable during camera moves. onToggleLayer is the parent's
+// useCallback-wrapped toggleLayer. Camera primitives only drive
+// re-renders when they actually change. Net: skips re-renders on
+// every parent re-render that doesn't affect any of these props.
+const LiveStatsWidget = memo(function LiveStatsWidget({
   aircraftCount,
   quakesCount,
   volcanoesCount,
@@ -19703,7 +19710,7 @@ function LiveStatsWidget({
       <div className="atlasLiveStatsFoot">UTC {utcHM} · {Math.abs(cameraLat).toFixed(1)}°{cameraLat >= 0 ? "N" : "S"} {Math.abs(cameraLon).toFixed(1)}°{cameraLon >= 0 ? "E" : "W"}</div>
     </div>
   );
-}
+});
 
 // Nearby aircraft widget — top 5 aircraft closest to the current camera
 // position, with callsign + altitude + bearing. Each row is clickable to
