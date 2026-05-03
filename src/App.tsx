@@ -9746,6 +9746,81 @@ ${trkpts}
                 showToast(`📦 Path bounds: ${(maxLat-minLat).toFixed(1)}° × ${(maxLon-minLon).toFixed(1)}° (${formatDistKm(widthKm, unitsImperial)} W-E × ${formatDistKm(heightKm, unitsImperial)} N-S)`);
               },
             }] : []),
+            // Path uniformity: longest leg / shortest leg ratio.
+            // 1.0 = perfectly even legs, higher = more lopsided.
+            ...(measureMode && measurePoints.length >= 3 ? [{
+              id: "measureLegRatio" as const,
+              label: "📐 Leg-length uniformity ratio (longest / shortest)",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                const legs: number[] = [];
+                for (let i = 1; i < measurePoints.length; i++) {
+                  legs.push(haversineKm(measurePoints[i-1].lat, measurePoints[i-1].lon, measurePoints[i].lat, measurePoints[i].lon));
+                }
+                const min = Math.min(...legs);
+                const max = Math.max(...legs);
+                const ratio = min > 0 ? max / min : Infinity;
+                const verdict = ratio < 1.5 ? "very even"
+                  : ratio < 3 ? "moderately even"
+                  : ratio < 10 ? "somewhat lopsided"
+                  : "very lopsided";
+                showToast(`📐 Leg ratio: ${ratio === Infinity ? "∞" : ratio.toFixed(1)}× (longest ${formatDistKm(max, unitsImperial)} / shortest ${formatDistKm(min, unitsImperial)}) — ${verdict}`);
+              },
+            }] : []),
+            // Total turn angle — sum of bearing changes between consecutive
+            // legs. A perfectly straight line = 0°. A full loop ≈ 360°.
+            // Useful for spotting how "wiggly" a path is.
+            ...(measureMode && measurePoints.length >= 3 ? [{
+              id: "measureBearingChange" as const,
+              label: "🔄 Total turn angle along path (sum of bearing changes)",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                let totalTurn = 0;
+                let lastBearing: number | null = null;
+                for (let i = 1; i < measurePoints.length; i++) {
+                  const a = measurePoints[i-1], b = measurePoints[i];
+                  const bearing = bearingDeg(a.lat, a.lon, b.lat, b.lon);
+                  if (lastBearing !== null) {
+                    let diff = bearing - lastBearing;
+                    // Normalize to ±180
+                    while (diff > 180) diff -= 360;
+                    while (diff < -180) diff += 360;
+                    totalTurn += Math.abs(diff);
+                  }
+                  lastBearing = bearing;
+                }
+                const verdict = totalTurn < 30 ? "essentially straight"
+                  : totalTurn < 180 ? "gently curving"
+                  : totalTurn < 720 ? "moderately winding"
+                  : "very winding";
+                showToast(`🔄 Total turn angle: ${totalTurn.toFixed(0)}° across ${measurePoints.length - 2} interior vertices — ${verdict}`);
+              },
+            }] : []),
+            // Winding direction — for a closed loop, computes the signed
+            // area to determine clockwise (negative) vs counterclockwise
+            // (positive). Plate carrée approximation; OK for small areas.
+            ...(measureMode && measurePoints.length >= 4 ? [{
+              id: "measureWindingDirection" as const,
+              label: "↻ Winding direction of path (CW vs CCW, by signed area)",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                // Shoelace formula in lat/lon space (plate carrée)
+                let signedArea = 0;
+                for (let i = 0; i < measurePoints.length; i++) {
+                  const a = measurePoints[i];
+                  const b = measurePoints[(i + 1) % measurePoints.length];
+                  signedArea += (b.lon - a.lon) * (b.lat + a.lat);
+                }
+                signedArea /= 2;
+                const cw = signedArea > 0;
+                const isClosed = haversineKm(measurePoints[0].lat, measurePoints[0].lon, measurePoints[measurePoints.length - 1].lat, measurePoints[measurePoints.length - 1].lon) < 50;
+                const note = isClosed ? "" : " (path doesn't close — winding is approximate)";
+                showToast(`↻ Winding: ${cw ? "clockwise" : "counterclockwise"} (signed area ${signedArea.toFixed(2)} deg²)${note}`);
+              },
+            }] : []),
             // Reverse the measured path's direction — handy if you built it
             // from B→A but want bearings/directions reported A→B.
             ...(measureMode && measurePoints.length >= 2 ? [{
