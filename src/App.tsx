@@ -8921,6 +8921,85 @@ ${trkpts}
                 showToast(`🧭 Out: ${out.toFixed(0)}° ${compassDir(out)} · Return: ${back.toFixed(0)}° ${compassDir(back)}`);
               },
             }] : []),
+            // Fit the camera viewport to frame the whole path. Computes
+            // the bounding-box centroid and an altitude proportional to
+            // the box diagonal × 1.4. Useful after loading a saved path
+            // or after generating one programmatically.
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureFitToView" as const,
+              label: "🎯 Fit camera to frame the whole path (auto-altitude)",
+              group: "View" as const,
+              icon: Crosshair,
+              run: () => {
+                let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
+                for (const p of measurePoints) {
+                  if (p.lat < minLat) minLat = p.lat;
+                  if (p.lat > maxLat) maxLat = p.lat;
+                  if (p.lon < minLon) minLon = p.lon;
+                  if (p.lon > maxLon) maxLon = p.lon;
+                }
+                const cLat = (minLat + maxLat) / 2;
+                const cLon = (minLon + maxLon) / 2;
+                // Bounding-box diagonal in km via haversine of opposite corners
+                const diagKm = haversineKm(minLat, minLon, maxLat, maxLon);
+                const altKm = Math.max(50, diagKm * 1.4);
+                setFlyTo((c) => ({ id: c.id + 1, lat: cLat, lon: cLon, altKm }));
+                showToast(`🎯 Framed ${measurePoints.length}-vertex path · centroid ${formatLat(cLat)} ${formatLon(cLon)} · alt ${formatDistKm(altKm, unitsImperial)}`);
+              },
+            }] : []),
+            // Find the vertex closest to current camera position.
+            // Useful when reviewing a long path — "where am I in this trip?".
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureNearestVertexToView" as const,
+              label: "🔭 Find vertex of path closest to current camera view",
+              group: "View" as const,
+              icon: Crosshair,
+              run: () => {
+                const c = cameraStateRef.current;
+                if (!c) { showToast("Camera position unknown"); return; }
+                let bestIdx = 0;
+                let bestKm = haversineKm(c.lat, c.lon, measurePoints[0].lat, measurePoints[0].lon);
+                for (let i = 1; i < measurePoints.length; i++) {
+                  const km = haversineKm(c.lat, c.lon, measurePoints[i].lat, measurePoints[i].lon);
+                  if (km < bestKm) { bestKm = km; bestIdx = i; }
+                }
+                showToast(`🔭 Nearest vertex: #${bestIdx + 1}/${measurePoints.length} · ${formatDistKm(bestKm, unitsImperial)} from view · ${formatLat(measurePoints[bestIdx].lat)} ${formatLon(measurePoints[bestIdx].lon)}`);
+              },
+            }] : []),
+            // Locate which leg contains a given km mark from start.
+            // Counterpart to measureSampleAtPercent — works in km not %.
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureLegAtKm" as const,
+              label: "🎯 Find which leg contains a given km mark from start (prompt)",
+              group: "View" as const,
+              icon: Crosshair,
+              run: () => {
+                let total = 0;
+                const cum: number[] = [0];
+                for (let i = 1; i < measurePoints.length; i++) {
+                  total += haversineKm(measurePoints[i-1].lat, measurePoints[i-1].lon, measurePoints[i].lat, measurePoints[i].lon);
+                  cum.push(total);
+                }
+                const input = window.prompt(`Km mark from start (0 to ${total.toFixed(1)}):`, (total / 2).toFixed(1));
+                if (!input) return;
+                const targetKm = parseFloat(input);
+                if (!Number.isFinite(targetKm) || targetKm < 0 || targetKm > total) {
+                  showToast(`Enter a number between 0 and ${total.toFixed(1)}`);
+                  return;
+                }
+                let legIdx = 1;
+                for (let i = 1; i < cum.length; i++) {
+                  if (cum[i] >= targetKm) { legIdx = i; break; }
+                }
+                const a = measurePoints[legIdx - 1];
+                const b = measurePoints[legIdx];
+                const segStart = cum[legIdx - 1];
+                const segEnd = cum[legIdx];
+                const intoLeg = targetKm - segStart;
+                const remainingInLeg = segEnd - targetKm;
+                showToast(`🎯 ${formatDistKm(targetKm, unitsImperial)} mark is in leg #${legIdx} (${formatLat(a.lat)} → ${formatLat(b.lat)}) · ${formatDistKm(intoLeg, unitsImperial)} into leg, ${formatDistKm(remainingInLeg, unitsImperial)} remaining in leg`);
+              },
+            }] : []),
             // Straight-line distance from start to end of path — useful for
             // comparing 'as the crow flies' vs the meandering path total.
             ...(measureMode && measurePoints.length >= 3 ? [{
