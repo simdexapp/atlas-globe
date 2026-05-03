@@ -7053,6 +7053,47 @@ function App() {
               setFlyTo((c) => ({ id: c.id + 1, lat: decl, lon: subLon, altKm: 5000 }));
               showToast(`☀ Subsolar point: ${formatLat(decl)} ${formatLon(subLon)} (sun directly overhead here)`);
             }},
+            // Show subsolar coords + distance from current view, without flying.
+            { id: "factSubsolarShow", label: "☀ Show subsolar point + distance from view (without flying)", group: "Tools", icon: SunIcon, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) { showToast("Camera position unknown"); return; }
+              const now = new Date();
+              const dayOfYear = Math.floor((now.getTime() - new Date(Date.UTC(now.getUTCFullYear(), 0, 0)).getTime()) / 86400000);
+              const decl = 23.44 * Math.sin((360/365 * (dayOfYear - 81)) * Math.PI / 180);
+              const utcHr = now.getUTCHours() + now.getUTCMinutes() / 60 + now.getUTCSeconds() / 3600;
+              const subLon = -15 * (utcHr - 12);
+              const km = haversineKm(c.lat, c.lon, decl, subLon);
+              showToast(`☀ Subsolar: ${formatLat(decl)} ${formatLon(subLon)} · ${formatDistKm(km, unitsImperial)} from current view`);
+            }},
+            // Antisolar point — exactly opposite to subsolar; midnight at
+            // the zenith. Useful to know "where is it darkest right now".
+            { id: "factAntisolarFly", label: "🌑 Fly to antisolar point (midnight at zenith — opposite of where sun is overhead)", group: "Tools", icon: SunIcon, run: () => {
+              const now = new Date();
+              const dayOfYear = Math.floor((now.getTime() - new Date(Date.UTC(now.getUTCFullYear(), 0, 0)).getTime()) / 86400000);
+              const decl = 23.44 * Math.sin((360/365 * (dayOfYear - 81)) * Math.PI / 180);
+              const utcHr = now.getUTCHours() + now.getUTCMinutes() / 60 + now.getUTCSeconds() / 3600;
+              const subLon = -15 * (utcHr - 12);
+              const antiLat = -decl;
+              const antiLon = subLon > 0 ? subLon - 180 : subLon + 180;
+              setFlyTo((c) => ({ id: c.id + 1, lat: antiLat, lon: antiLon, altKm: 5000 }));
+              showToast(`🌑 Antisolar: ${formatLat(antiLat)} ${formatLon(antiLon)} · midnight directly overhead, deepest dark of the night side`);
+            }},
+            // Days until next full moon — uses synodic month (29.530588853 d).
+            // Reference new moon: 2000-01-06 18:14 UTC (precise epoch).
+            // Full moon is half a synodic period later.
+            { id: "factDaysToFullMoon", label: "🌕 Days until next full moon", group: "Tools", icon: SunIcon, run: () => {
+              const SYNODIC_MS = 29.530588853 * 86400000;
+              const REF_NEW_MOON_MS = Date.UTC(2000, 0, 6, 18, 14, 0); // 2000-01-06 18:14 UTC
+              const now = Date.now();
+              const sinceRef = now - REF_NEW_MOON_MS;
+              const phase = ((sinceRef % SYNODIC_MS) + SYNODIC_MS) % SYNODIC_MS; // 0 = new
+              const HALF = SYNODIC_MS / 2;
+              const toFull = phase <= HALF ? HALF - phase : SYNODIC_MS + HALF - phase;
+              const daysToFull = toFull / 86400000;
+              const fullMoonDate = new Date(now + toFull);
+              const dayName = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][fullMoonDate.getDay()];
+              showToast(`🌕 Next full moon in ${daysToFull.toFixed(1)} days · ${dayName} ${fullMoonDate.toLocaleDateString()}`);
+            }},
             // ===== Country quick-facts =====
             // Look up the country at current view + show capital +
             // currency + calling code in one toast. Uses cached reverse-
