@@ -7687,6 +7687,25 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: -46.692, lon: -72.638, altKm: 8 }));
               showToast(`💎 Marble Caves (Cuevas de Mármol) · sculpted into a marble peninsula on Lake General Carrera, Patagonian Chile · turquoise water reflects on swirled marble · ~6,000 years of wave erosion`);
             }},
+            // ===== Iconic megacity skylines =====
+            // Look down on the densest, tallest, most photographed
+            // skyscraper clusters on Earth.
+            { id: "flyHongKongHarbour", label: "🌃 Fly to Victoria Harbour, Hong Kong (densest skyscraper cluster on Earth)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 22.2940, lon: 114.1700, altKm: 4 }));
+              showToast(`🌃 Victoria Harbour, Hong Kong · world's densest skyscraper cluster — 1,500+ buildings over 100m, more than any other city · Symphony of Lights nightly show illuminates 40+ skyscrapers · narrow strip between Hong Kong Island and Kowloon · ICC tower (484m, 2010) is HK's tallest`);
+            }},
+            { id: "flyManhattanSkyline", label: "🌃 Fly to Manhattan skyline (NYC — most-photographed urban skyline)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 40.7589, lon: -73.9851, altKm: 4 }));
+              showToast(`🌃 Manhattan, NYC · 100+ buildings over 200m · most-photographed urban skyline in the world · Empire State Building (381m, 1931) was world's tallest 1931-1971 · One World Trade (541m, 2014) is current tallest in Western Hemisphere · 488m Central Park West Towers (2024) is the slimmest skyscraper at 24:1 aspect`);
+            }},
+            { id: "flyDubaiMarina", label: "🌃 Fly to Dubai Marina (UAE — fastest-built skyline; 25 years from desert to vertical city)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 25.0820, lon: 55.1370, altKm: 4 }));
+              showToast(`🌃 Dubai Marina · UAE · world's largest man-made marina · 200+ residential towers built in just 25 years (1999-now) on land that was empty desert · nearby Burj Khalifa (828m, 2010) is the world's tallest building · Princess Tower (414m) was world's tallest residential when built`);
+            }},
+            { id: "flyShanghaiPudong", label: "🌃 Fly to Shanghai Pudong / Lujiazui (China — Asia's most futuristic skyline, all built post-1990)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 31.2380, lon: 121.5060, altKm: 4 }));
+              showToast(`🌃 Lujiazui, Pudong, Shanghai · was farmland in 1990, now houses 4 of the world's 20 tallest buildings (Shanghai Tower 632m, World Financial Center 492m, Jin Mao 421m, Oriental Pearl Tower) · across the Huangpu River from the historic Bund · iconic from "Mission: Impossible 3"`);
+            }},
             // ===== Iconic massive monuments / colossal statues =====
             // The world's tallest standing statues + monumental carvings.
             { id: "flyStatueOfUnity", label: "🗿 Fly to Statue of Unity (Gujarat, India — tallest statue on Earth at 182m)", group: "View", icon: Globe2, run: () => {
