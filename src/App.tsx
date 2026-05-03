@@ -14056,6 +14056,27 @@ ${trkpts}
                 showToast(`🔁 Duplicated → "${clone.label}"`);
               },
             }, {
+              id: "pinDuplicateNearby" as const,
+              label: "📍 Duplicate selected pin offset 1km north (creates a marker pair)",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const p = pins.find((x) => x.id === selectedPin);
+                if (!p) return;
+                // 1 degree of latitude ≈ 111.32 km. So 1km north = +1/111.32°.
+                const offsetLat = p.lat + 1 / 111.32;
+                const clone: Pin = {
+                  ...p,
+                  id: `pin-clone-${Date.now()}`,
+                  label: `${p.label} (offset)`,
+                  lat: Math.min(89.9, offsetLat),
+                  createdAt: Date.now(),
+                };
+                setPins((prev) => [...prev, clone]);
+                setSelectedPin(clone.id);
+                showToast(`📍 Duplicated 1km N → "${clone.label}"`);
+              },
+            }, {
               id: "pinMoveToView" as const,
               label: "📍 Move selected pin to current view position",
               group: "Tools" as const,
@@ -15381,6 +15402,48 @@ ${wpts}
                   .slice(0, 3);
                 const list = ranked.map(({ p, km }) => `"${p.label}" (${formatDistKm(km, unitsImperial)})`).join(" · ");
                 showToast(`📍 Top 3 outliers from centroid (${formatLat(cLat)} ${formatLon(cLon)}): ${list}`);
+              },
+            }] : []),
+            // Find pins by name pattern. Substring match (case-insensitive)
+            // or full regex if the input is wrapped in /slashes/. Selects
+            // and flies to the first match; reports total matches.
+            ...(pins.length >= 1 ? [{
+              id: "pinSearchByPattern" as const,
+              label: "🔎 Find pin by name (substring or /regex/)…",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const q = window.prompt("Pin name (substring or /regex/, case-insensitive):", "");
+                if (!q) return;
+                let matcher: RegExp;
+                const regexLike = q.match(/^\/(.+)\/([gimsuy]*)$/);
+                try {
+                  matcher = regexLike
+                    ? new RegExp(regexLike[1], regexLike[2].includes("i") ? regexLike[2] : regexLike[2] + "i")
+                    : new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+                } catch (e) {
+                  showToast(`🔎 Invalid regex: ${(e as Error).message}`);
+                  return;
+                }
+                const matches = pins.filter(p => matcher.test(p.label));
+                if (matches.length === 0) { showToast(`🔎 No pins match "${q}"`); return; }
+                const first = matches[0];
+                setSelectedPin(first.id);
+                setFlyTo((p) => ({ id: p.id + 1, lat: first.lat, lon: first.lon, altKm: 5 }));
+                showToast(`🔎 Found ${matches.length} match${matches.length === 1 ? "" : "es"} · flew to "${first.label}"`);
+              },
+            }, {
+              id: "pinShowAlphabetical" as const,
+              label: "🔤 List all pins alphabetically (top 12 in toast)",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                if (pins.length === 0) { showToast("No pins to list"); return; }
+                const sorted = [...pins].sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+                const top = sorted.slice(0, 12).map(p => p.label).join(" · ");
+                const more = sorted.length > 12 ? ` +${sorted.length - 12} more` : "";
+                console.log(`🔤 All ${sorted.length} pins alphabetically:\n${sorted.map((p, i) => `${i + 1}. ${p.label}`).join("\n")}`);
+                showToast(`🔤 ${sorted.length} pins A→Z: ${top}${more}`);
               },
             }] : []),
             // Cluster report: groups of 3+ pins within 50km of each other.
