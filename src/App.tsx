@@ -9430,6 +9430,40 @@ ${trkpts}
                 showToast(`🎲 Vertex #${idx + 1}/${measurePoints.length} · ${formatLat(p.lat)} ${formatLon(p.lon)}`);
               },
             }] : []),
+            // Build a measure path from all user bookmarks, in their
+            // current array order. Replaces any existing path.
+            ...(measureMode && bookmarks.filter(b => b.savedAt > 0).length >= 2 ? [{
+              id: "measureFromBookmarks" as const,
+              label: `📚 Replace measure path with all ${bookmarks.filter(b => b.savedAt > 0).length} user bookmarks (in order)`,
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                const userBookmarks = bookmarks.filter(b => b.savedAt > 0);
+                const path = userBookmarks.map(b => ({ lat: b.lat, lon: b.lon }));
+                let total = 0;
+                for (let i = 1; i < path.length; i++) {
+                  total += haversineKm(path[i-1].lat, path[i-1].lon, path[i].lat, path[i].lon);
+                }
+                setMeasurePoints(path);
+                showToast(`📚 Built ${path.length}-vertex path from bookmarks · ${formatDistKm(total, unitsImperial)} total`);
+              },
+            }] : []),
+            // Build a measure path from all pins, in their current array order.
+            ...(measureMode && pins.length >= 2 ? [{
+              id: "measureFromPins" as const,
+              label: `📍 Replace measure path with all ${pins.length} pins (in array order)`,
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                const path = pins.map(p => ({ lat: p.lat, lon: p.lon }));
+                let total = 0;
+                for (let i = 1; i < path.length; i++) {
+                  total += haversineKm(path[i-1].lat, path[i-1].lon, path[i].lat, path[i].lon);
+                }
+                setMeasurePoints(path);
+                showToast(`📍 Built ${path.length}-vertex path from pins · ${formatDistKm(total, unitsImperial)} total (use a pin reorder command first to change order)`);
+              },
+            }] : []),
             // Straight-line distance from start to end of path — useful for
             // comparing 'as the crow flies' vs the meandering path total.
             ...(measureMode && measurePoints.length >= 3 ? [{
