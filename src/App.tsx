@@ -7765,6 +7765,25 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: -46.692, lon: -72.638, altKm: 8 }));
               showToast(`💎 Marble Caves (Cuevas de Mármol) · sculpted into a marble peninsula on Lake General Carrera, Patagonian Chile · turquoise water reflects on swirled marble · ~6,000 years of wave erosion`);
             }},
+            // ===== Iconic mountain passes =====
+            // Historic crossings or modern engineering tours through
+            // major ranges.
+            { id: "flyKhyberPass", label: "🏔 Fly to Khyber Pass (Pakistan/Afghanistan border — Silk Road artery for 2,000+ years)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 34.0828, lon: 71.1525, altKm: 6 }));
+              showToast(`🏔 Khyber Pass · 1,070 m, between Peshawar (Pakistan) and Jalalabad (Afghanistan) · 53 km long, 5-200m wide · used as Silk Road branch and military invasion route since Darius I (515 BCE), Alexander, the Mughals, the British (3 Anglo-Afghan Wars), Soviet & US/NATO forces · the modern Khyber Train Safari runs the historic British-era line`);
+            }},
+            { id: "flyKhardungLa", label: "🏔 Fly to Khardung La (India — claimed highest motorable pass at 5,359m)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 34.2787, lon: 77.6043, altKm: 6 }));
+              showToast(`🏔 Khardung La · Ladakh, Indian Himalayas · official elevation 5,359m (signage claims 5,602m, disputed) · gateway to the Nubra Valley · road built 1976, opened to civilians 1988 · until ~2010, claimed "world's highest motorable road" — newer Tibetan and Bolivian roads have since topped it · oxygen runs ~50% of sea level`);
+            }},
+            { id: "flyStelvioPass", label: "🏔 Fly to Stelvio Pass (Italy — 48 hairpin switchbacks, 2,757m, Top Gear's 'best driving road')", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 46.5283, lon: 10.4544, altKm: 5 }));
+              showToast(`🏔 Stelvio Pass (Passo dello Stelvio) · Italian Alps, 2,757m · 48 hairpin switchbacks on the eastern (Prato) side, all numbered · 2nd-highest paved Alpine pass after the Col de l'Iseran · famously named "best driving road in the world" by Top Gear (2008) · regular feature in the Giro d'Italia · WWI front line ran along the ridge`);
+            }},
+            { id: "flyGreatStBernardPass", label: "🏔 Fly to Great St. Bernard Pass (Switzerland/Italy — Roman road, hospice with rescue dogs since 1049)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 45.8689, lon: 7.1707, altKm: 6 }));
+              showToast(`🏔 Great St. Bernard Pass · Pennine Alps, 2,469m · Roman road since 1st century BCE · the Hospice of Great St. Bernard, founded 1049 by Bernard of Menthon, has helped travelers for ~1,000 years · the iconic St. Bernard rescue dog breed was developed here · Napoleon's army crossed in May 1800 (35,000 men + horses + cannons) before Marengo`);
+            }},
             // ===== Geographic extreme cities =====
             // The southernmost / northernmost / highest permanent
             // human settlements.
