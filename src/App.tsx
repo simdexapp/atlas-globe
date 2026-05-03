@@ -709,6 +709,11 @@ const KEYBOARD_HINTS = [
   { keys: "Shift+J", desc: "◀ Jump 5 pins back (vs 1 with j)" },
   { keys: "Shift+K", desc: "▶ Jump 5 pins forward (vs 1 with k)" },
   { keys: "Shift+B", desc: "📚 Show toast list of all user bookmarks" },
+  // ===== Inspect / status shortcuts =====
+  { keys: "Shift+T", desc: "🎨 Cycle UI theme BACKWARDS (T cycles forward)" },
+  { keys: "Shift+L", desc: "🎚 Show list of all currently-on layers" },
+  { keys: "Shift+I", desc: "🛰 Show current imagery info (source, opacity, brightness)" },
+  { keys: "Shift+W", desc: "☀ Toggle screen wake lock (keep display on for presentations)" },
   // ===== Pan / zoom =====
   { keys: "↑ ↓ ← → / W X A D", desc: "Pan camera north / south / west / east" },
   { keys: "+ / =", desc: "Zoom in 2× (halve altitude)" },
@@ -3934,7 +3939,21 @@ function App() {
           break;
         case "l":
           event.preventDefault();
-          setInspectorTab("layers");
+          if (event.shiftKey) {
+            // Shift+L — toast list of all currently-on layers. Quick
+            // overview without opening the panel. Plain L still opens
+            // the layers tab in the inspector.
+            const onLayers = (Object.entries(layers) as Array<[keyof LayerVisibility, boolean]>)
+              .filter(([, on]) => on)
+              .map(([k]) => k);
+            if (onLayers.length === 0) {
+              showToast("🎚 No layers currently on (open Layers tab to enable some)");
+            } else {
+              showToast(`🎚 ${onLayers.length} layer${onLayers.length === 1 ? "" : "s"} on: ${onLayers.join(", ")}`);
+            }
+          } else {
+            setInspectorTab("layers");
+          }
           break;
         case "m":
           event.preventDefault();
@@ -3995,7 +4014,13 @@ function App() {
           break;
         case "i":
           event.preventDefault();
-          setInspectorTab("imagery");
+          if (event.shiftKey) {
+            // Shift+I — toast a summary of current imagery settings.
+            // Source, layer, date, zoom. Plain I opens the imagery tab.
+            showToast(`🛰 Imagery: source=${imagery.source} · layer=${imagery.layerId} · date=${imagery.date} · zoom=${imagery.zoom}`);
+          } else {
+            setInspectorTab("imagery");
+          }
           break;
         case "g":
           event.preventDefault();
@@ -4076,7 +4101,29 @@ function App() {
         case "arrowup":
         case "w":
           event.preventDefault();
-          if (cameraStateRef.current) {
+          if (event.shiftKey && event.key.toLowerCase() === "w") {
+            // Shift+W — toggle screen wake lock to keep the display on
+            // during long presentations / tours / kiosk use. Plain W
+            // still pans north. Wake Lock API is HTTPS-only and not in
+            // every browser yet; gracefully fall back to a toast.
+            const nav = navigator as Navigator & { wakeLock?: { request: (type: "screen") => Promise<{ release: () => Promise<void>; addEventListener: (e: string, h: () => void) => void }> } };
+            const winAny = window as Window & { __atlasWakeLock?: { release: () => Promise<void> } | null };
+            if (!nav.wakeLock) {
+              showToast("⚠ Screen Wake Lock not supported in this browser");
+              return;
+            }
+            if (winAny.__atlasWakeLock) {
+              winAny.__atlasWakeLock.release();
+              winAny.__atlasWakeLock = null;
+              showToast("💤 Screen wake lock released — display can sleep");
+            } else {
+              nav.wakeLock.request("screen").then((sentinel) => {
+                winAny.__atlasWakeLock = sentinel;
+                sentinel.addEventListener("release", () => { winAny.__atlasWakeLock = null; });
+                showToast("☀ Screen wake lock acquired — display will stay on");
+              }).catch((e: Error) => showToast(`⚠ Wake lock failed: ${e.message}`));
+            }
+          } else if (cameraStateRef.current) {
             const c = cameraStateRef.current;
             const step = Math.max(0.5, c.altKm * 0.05);
             setFlyTo((p) => ({ id: p.id + 1, lat: Math.min(89, c.lat + step), lon: c.lon, altKm: c.altKm }));
@@ -4126,7 +4173,16 @@ function App() {
           break;
         case "t":
           event.preventDefault();
-          cycleTheme();
+          if (event.shiftKey) {
+            // Shift+T — cycle theme BACKWARDS through the same order
+            // (dark → mono → solar → cyber → oled → light → dark).
+            // Useful for reversing if you went one too far with T.
+            const order: Array<"dark" | "light" | "oled" | "cyber" | "solar" | "mono"> =
+              ["dark", "light", "oled", "cyber", "solar", "mono"];
+            setUiTheme((t) => order[(order.indexOf(t) - 1 + order.length) % order.length]);
+          } else {
+            cycleTheme();
+          }
           break;
         case "h":
           event.preventDefault();
@@ -4363,7 +4419,7 @@ function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [cycleTheme, mode, resetView, saveCurrentBookmark, showSearch, showShortcuts, switchToAtlas, switchToSurface, measureMode, showToast, bookmarks, pins, selectedPin, deletePin, captureAtScale, layers.graticule, layers.borders]);
+  }, [cycleTheme, mode, resetView, saveCurrentBookmark, showSearch, showShortcuts, switchToAtlas, switchToSurface, measureMode, showToast, bookmarks, pins, selectedPin, deletePin, captureAtScale, layers, imagery, unitsImperial]);
 
   const rootStyle: CSSProperties = {
     "--accent": "#5cb5ff",
