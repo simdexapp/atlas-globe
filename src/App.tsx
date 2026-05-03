@@ -4425,6 +4425,26 @@ function App() {
     [layers.storms, activeStorms]
   );
 
+  // Stable callback for NearbyAircraftWidget — without this, every
+  // parent re-render would create a new arrow function, breaking
+  // the React.memo equality check on the widget.
+  const onSelectNearbyAircraft = useCallback((icao: string) => {
+    setSelectedAircraftId(icao);
+    const a = aircraftSnapshot?.aircraft.find(x => x.icao24 === icao);
+    if (a) setFlyTo((c) => ({ id: c.id + 1, lat: a.lat, lon: a.lon, altKm: 50 }));
+  }, [aircraftSnapshot]);
+
+  // Stable target+callback for SelectedPinNavWidget — derive the pin
+  // once per (selectedPin, pins) change so both the targetPin prop
+  // and the onFly closure can have stable identity.
+  const selectedNavPin = useMemo(
+    () => selectedPin ? pins.find(p => p.id === selectedPin) ?? null : null,
+    [selectedPin, pins]
+  );
+  const onFlyToSelectedPin = useCallback(() => {
+    if (selectedNavPin) setFlyTo((c) => ({ id: c.id + 1, lat: selectedNavPin.lat, lon: selectedNavPin.lon, altKm: 5 }));
+  }, [selectedNavPin]);
+
   return (
     <div className={`atlas${hideUi ? " hideUi" : ""} theme-${uiTheme}`} style={rootStyle} data-customize-active={customizeUiMode ? "" : undefined}>
       {/* Skip-to-content link — visually hidden until focused by Tab.
@@ -16126,36 +16146,23 @@ ${wpts}
             cameraLat={cameraState.lat}
             cameraLon={cameraState.lon}
             unitsImperial={unitsImperial}
-            onSelect={(icao) => {
-              setSelectedAircraftId(icao);
-              const a = aircraftSnapshot.aircraft.find(x => x.icao24 === icao);
-              if (a) setFlyTo((c) => ({ id: c.id + 1, lat: a.lat, lon: a.lon, altKm: 50 }));
-            }}
+            onSelect={onSelectNearbyAircraft}
           />
         </Draggable>
       )}
 
-      {layers.selectedPinNav && (() => {
-        // Resolve the currently-selected pin if any. The widget renders
-        // an empty-state message when no pin is selected so the toggle
-        // surface stays visible (otherwise the widget would silently
-        // vanish and users would think the toggle did nothing).
-        const target = selectedPin ? pins.find(p => p.id === selectedPin) ?? null : null;
-        return (
-          <Draggable id="selectedPinNav" customizeMode={customizeUiMode} position={widgetPositions.selectedPinNav} onMove={setWidgetPosition}>
-            <SelectedPinNavWidget
-              targetPin={target}
-              cameraLat={cameraState.lat}
-              cameraLon={cameraState.lon}
-              cameraAltKm={cameraState.altKm}
-              unitsImperial={unitsImperial}
-              onFly={() => {
-                if (target) setFlyTo((c) => ({ id: c.id + 1, lat: target.lat, lon: target.lon, altKm: 5 }));
-              }}
-            />
-          </Draggable>
-        );
-      })()}
+      {layers.selectedPinNav && (
+        <Draggable id="selectedPinNav" customizeMode={customizeUiMode} position={widgetPositions.selectedPinNav} onMove={setWidgetPosition}>
+          <SelectedPinNavWidget
+            targetPin={selectedNavPin}
+            cameraLat={cameraState.lat}
+            cameraLon={cameraState.lon}
+            cameraAltKm={cameraState.altKm}
+            unitsImperial={unitsImperial}
+            onFly={onFlyToSelectedPin}
+          />
+        </Draggable>
+      )}
 
       {layers.sunMoonInfo && (
         <Draggable id="sunMoonInfo" customizeMode={customizeUiMode} position={widgetPositions.sunMoonInfo} onMove={setWidgetPosition}>
@@ -19346,7 +19353,12 @@ function LiveStatsWidget({
 // position, with callsign + altitude + bearing. Each row is clickable to
 // select the aircraft (open the inspector card + fly there). Recomputes
 // whenever camera moves OR aircraft snapshot updates.
-function NearbyAircraftWidget({
+// Memoized — props are 4 primitives + 1 array (aircraft). The array
+// only changes on each poll (~60s); camera changes drive the actual
+// re-render needs via useMemo on cameraLat/cameraLon. Without this,
+// every parent re-render (toast, layer toggle, etc.) was running the
+// whole filter+sort over thousands of aircraft.
+const NearbyAircraftWidget = memo(function NearbyAircraftWidget({
   aircraft,
   cameraLat,
   cameraLon,
@@ -19400,14 +19412,17 @@ function NearbyAircraftWidget({
       )}
     </div>
   );
-}
+});
 
 // Selected pin nav — GPS-style live guidance to the currently-selected
 // pin. Shows distance + bearing + compass cardinal + a button to fly to
 // the pin. Updates as the camera moves. When no pin is selected, an
 // empty-state message tells the user how to select one — keeps the
 // widget visible so the toggle surface remains discoverable.
-function SelectedPinNavWidget({
+// Memoized — props are 1 object (targetPin) + 3 primitives + 1
+// callback. Cuts re-renders on parent state changes that don't
+// affect the pin-nav (toast lifecycle, layer toggles, etc.).
+const SelectedPinNavWidget = memo(function SelectedPinNavWidget({
   targetPin,
   cameraLat,
   cameraLon,
@@ -19476,7 +19491,7 @@ function SelectedPinNavWidget({
       </button>
     </div>
   );
-}
+});
 
 // Sun/Moon info widget — live solar altitude+azimuth at the current
 // view's lat/lon, plus moon phase + age. Updates every minute. No
