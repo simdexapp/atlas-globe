@@ -9116,6 +9116,84 @@ ${trkpts}
                 showToast(`🎯 ${formatDistKm(targetKm, unitsImperial)} mark is in leg #${legIdx} (${formatLat(a.lat)} → ${formatLat(b.lat)}) · ${formatDistKm(intoLeg, unitsImperial)} into leg, ${formatDistKm(remainingInLeg, unitsImperial)} remaining in leg`);
               },
             }] : []),
+            // Replace the path with just first + last vertex — straight-line
+            // collapse. Useful as a baseline for measureCrowFlies comparisons,
+            // or as the starting point for a fresh routing iteration.
+            ...(measureMode && measurePoints.length >= 3 ? [{
+              id: "measureExtractEndpoints" as const,
+              label: "📏 Replace path with just start + end (straight-line collapse)",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                const first = measurePoints[0];
+                const last = measurePoints[measurePoints.length - 1];
+                const removed = measurePoints.length - 2;
+                setMeasurePoints([first, last]);
+                showToast(`📏 Collapsed to start + end · removed ${removed} intermediate vertex${removed === 1 ? "" : "es"}`);
+              },
+            }] : []),
+            // Keep only the first half of the path by cumulative length.
+            // Useful for planning out-and-back trips or splitting a route
+            // into two days.
+            ...(measureMode && measurePoints.length >= 3 ? [{
+              id: "measureSplitFirstHalf" as const,
+              label: "✂ Keep only the first half of the path by length (truncate at midpoint)",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                let total = 0;
+                const cum: number[] = [0];
+                for (let i = 1; i < measurePoints.length; i++) {
+                  total += haversineKm(measurePoints[i-1].lat, measurePoints[i-1].lon, measurePoints[i].lat, measurePoints[i].lon);
+                  cum.push(total);
+                }
+                const halfKm = total / 2;
+                // Find the leg that crosses the midpoint
+                let cutIdx = 1;
+                for (let i = 1; i < cum.length; i++) {
+                  if (cum[i] >= halfKm) { cutIdx = i; break; }
+                }
+                // Interpolate the exact midpoint within that leg
+                const a = measurePoints[cutIdx - 1];
+                const b = measurePoints[cutIdx];
+                const segLen = cum[cutIdx] - cum[cutIdx - 1];
+                const f = segLen > 0 ? (halfKm - cum[cutIdx - 1]) / segLen : 0;
+                const midLat = a.lat + (b.lat - a.lat) * f;
+                const midLon = a.lon + (b.lon - a.lon) * f;
+                const firstHalf = [...measurePoints.slice(0, cutIdx), { lat: midLat, lon: midLon }];
+                setMeasurePoints(firstHalf);
+                showToast(`✂ Kept first half: ${firstHalf.length} vertices, ${formatDistKm(halfKm, unitsImperial)}`);
+              },
+            }] : []),
+            // Speed-required calculator: prompts for hours, computes the
+            // average speed needed to traverse the current path in that time.
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureSpeedRequired" as const,
+              label: "⏱ Speed required to traverse path in N hours (prompt)",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                let total = 0;
+                for (let i = 1; i < measurePoints.length; i++) {
+                  total += haversineKm(measurePoints[i-1].lat, measurePoints[i-1].lon, measurePoints[i].lat, measurePoints[i].lon);
+                }
+                const input = window.prompt(`Path is ${formatDistKm(total, unitsImperial)}. Traverse in how many hours?`, "8");
+                if (!input) return;
+                const hours = parseFloat(input);
+                if (!Number.isFinite(hours) || hours <= 0) { showToast("Enter a positive number"); return; }
+                const kmh = total / hours;
+                const knots = Math.round(kmh * 0.539957);
+                const mph = Math.round(kmh * 0.621371);
+                // Compare to common speeds
+                const compare = kmh < 6 ? "slower than walking pace"
+                  : kmh < 25 ? "cycling speed"
+                  : kmh < 110 ? "highway car speed"
+                  : kmh < 350 ? "high-speed train territory"
+                  : kmh < 950 ? "commercial jet cruise"
+                  : "supersonic";
+                showToast(`⏱ ${total.toFixed(0)} km in ${hours}h needs ${kmh.toFixed(1)} km/h (${mph} mph · ${knots} kt) — ${compare}`);
+              },
+            }] : []),
             // Straight-line distance from start to end of path — useful for
             // comparing 'as the crow flies' vs the meandering path total.
             ...(measureMode && measurePoints.length >= 3 ? [{
