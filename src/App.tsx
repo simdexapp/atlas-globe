@@ -5657,7 +5657,62 @@ function App() {
               const altDiffFt = Math.abs(a1.altitudeM - a2.altitudeM) / 0.3048;
               showToast(`📡 Closest pair: ${(a1.callsign || a1.icao24).trim()} ↔ ${(a2.callsign || a2.icao24).trim()} — ${formatDistKm(bestKm, unitsImperial)} horizontal · ${Math.round(altDiffFt).toLocaleString()}ft vertical`);
             }},
-            // Decode the airline from the SELECTED aircraft's callsign
+            // ===== Flight-phase classification commands =====
+            // Identify aircraft in specific phases of flight (just-took-off,
+            // climb-out, cruise, descent, approach). Counterparts to the
+            // generic aircraftVerticalRate breakdown.
+            { id: "aircraftJustTookOff", label: "🛫 Aircraft just-took-off (1k-10k ft, climbing >1000 fpm)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              // 1000 fpm = 5 m/s; 1k-10k ft = 305-3048 m altitude
+              const departing = aircraftSnapshot.aircraft.filter(a => {
+                if (a.onGround) return false;
+                if (a.altitudeM < 305 || a.altitudeM > 3048) return false;
+                return (a.verticalRateMs ?? 0) > 5;
+              });
+              if (departing.length === 0) { showToast("🛫 No aircraft in initial climb-out right now"); return; }
+              const sample = departing.slice(0, 5).map(a => `${(a.callsign || a.icao24).trim()} ${Math.round(a.altitudeM / 0.3048).toLocaleString()}ft`).join(" · ");
+              const more = departing.length > 5 ? ` +${departing.length - 5} more` : "";
+              showToast(`🛫 ${departing.length} just took off: ${sample}${more}`);
+            }},
+            { id: "aircraftCruisingHigh", label: "✈ Aircraft at high cruise (FL300+ with vertical rate near zero)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              // FL300 = 30,000 ft = 9144 m; "near zero" vrate = within ±1.5 m/s
+              const cruising = aircraftSnapshot.aircraft.filter(a => {
+                if (a.onGround) return false;
+                if (a.altitudeM < 9144) return false;
+                const v = a.verticalRateMs ?? 0;
+                return Math.abs(v) < 1.5;
+              });
+              const total = aircraftSnapshot.aircraft.filter(a => !a.onGround).length;
+              const pct = total > 0 ? (cruising.length / total * 100).toFixed(1) : "0";
+              showToast(`✈ ${cruising.length.toLocaleString()} cruising at FL300+ (${pct}% of ${total.toLocaleString()} airborne)`);
+            }},
+            { id: "aircraftDescentPhase", label: "📉 Aircraft in descent phase (>10k ft, descending faster than 1500 fpm)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              // 1500 fpm = -7.6 m/s; >10k ft = >3048 m
+              const descending = aircraftSnapshot.aircraft.filter(a => {
+                if (a.onGround) return false;
+                if (a.altitudeM < 3048) return false;
+                return (a.verticalRateMs ?? 0) < -7.6;
+              });
+              if (descending.length === 0) { showToast("📉 No aircraft in steep descent right now"); return; }
+              // Sort by altitude (closest to landing first)
+              descending.sort((a, b) => a.altitudeM - b.altitudeM);
+              const sample = descending.slice(0, 5).map(a => {
+                const fpm = Math.round((a.verticalRateMs ?? 0) * -196.85);
+                return `${(a.callsign || a.icao24).trim()} ${Math.round(a.altitudeM / 0.3048 / 1000)}k ft @ ${fpm.toLocaleString()}fpm`;
+              }).join(" · ");
+              showToast(`📉 ${descending.length} in descent: ${sample}`);
+            }},
+            { id: "aircraftSnapshotInfo", label: "📡 Aircraft snapshot health (source, age, total counts)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot) { showToast("📡 No aircraft snapshot loaded yet"); return; }
+              const ageS = (Date.now() - aircraftSnapshot.fetchedAt) / 1000;
+              const total = aircraftSnapshot.aircraft.length;
+              const airborne = aircraftSnapshot.aircraft.filter(a => !a.onGround).length;
+              const onGround = total - airborne;
+              const ageStr = ageS < 60 ? `${ageS.toFixed(0)}s` : `${(ageS / 60).toFixed(1)}m`;
+              showToast(`📡 Source: ${aircraftSnapshot.source} · Age: ${ageStr} · Total: ${total.toLocaleString()} (${airborne.toLocaleString()} airborne, ${onGround.toLocaleString()} on ground)`);
+            }},
             // prefix. Useful for "what airline is this?" without leaving
             // the app to look it up.
             ...(selectedAircraftId && aircraftSnapshot ? (() => {
