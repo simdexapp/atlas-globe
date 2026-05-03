@@ -217,6 +217,9 @@ type LayerVisibility = {
   // Persists across sessions via localStorage. Single global note
   // (not tied to lat/lon).
   scratchpad: boolean;
+  // Pin counter widget — total pin count + per-color breakdown,
+  // as small color-coded chips. Updates whenever pins change.
+  pinCounter: boolean;
 };
 
 type GlobeSettings = {
@@ -561,6 +564,7 @@ const defaultLayers: LayerVisibility = {
   tripMeter: false,
   toastHistory: false,
   scratchpad: false,
+  pinCounter: false,
   // 3D OSM Buildings tileset is heavy and renders with edge outlines
   // that disable imagery draping underneath, painting the screen with
   // dark olive boxes at low altitudes (the user's tear repro). Off by
@@ -5229,6 +5233,7 @@ function App() {
             { id: "toggleTripMeter", label: layers.tripMeter ? "Hide Trip meter widget" : "⏱ Show Trip meter widget (cumulative ground-distance camera has covered this session)", group: "Widgets", icon: Compass, run: () => toggleLayer("tripMeter") },
             { id: "toggleToastHistory", label: layers.toastHistory ? "Hide Toast history widget" : "📜 Show Toast history widget (last 8 toast messages, click to copy)", group: "Widgets", icon: Compass, run: () => toggleLayer("toastHistory") },
             { id: "toggleScratchpad", label: layers.scratchpad ? "Hide Scratchpad widget" : "📝 Show Scratchpad widget (freeform notes, persists across sessions)", group: "Widgets", icon: Compass, run: () => toggleLayer("scratchpad") },
+            { id: "togglePinCounter", label: layers.pinCounter ? "Hide Pin counter widget" : "📍 Show Pin counter widget (total + per-color breakdown chips)", group: "Widgets", icon: BookmarkPlus, run: () => toggleLayer("pinCounter") },
             { id: "tripMeterReset", label: "⏱ Reset trip meter to zero", group: "Tools", icon: Compass, run: () => {
               tripMeterRef.current = { totalKm: 0, lastLat: NaN, lastLon: NaN, startTime: Date.now() };
               setCameraState((c) => ({ ...c })); // force widget re-render
@@ -16927,6 +16932,64 @@ ${wpts}
               aria-label="Personal scratchpad text"
             />
           </div>
+        </Draggable>
+      )}
+
+      {/* Pin counter widget — total + per-color breakdown chips.
+          Each chip is clickable to fly to that color's centroid. */}
+      {layers.pinCounter && (
+        <Draggable id="pinCounter" customizeMode={customizeUiMode} position={widgetPositions.pinCounter} onMove={setWidgetPosition}>
+          {(() => {
+            // Bin by color
+            const byColor = new Map<string, Pin[]>();
+            for (const p of pins) {
+              const arr = byColor.get(p.color);
+              if (arr) arr.push(p); else byColor.set(p.color, [p]);
+            }
+            const sorted = Array.from(byColor.entries()).sort((a, b) => b[1].length - a[1].length);
+            return (
+              <div className="atlasPinCounterWidget" role="status" aria-label="Pin counter">
+                <div className="atlasPinCounterHead">
+                  <BookmarkPlus size={12} />
+                  <strong>Pins</strong>
+                  <span>{pins.length}</span>
+                </div>
+                {pins.length === 0 ? (
+                  <div className="atlasPinCounterEmpty">No pins yet · click a pin tool, drop coords, or press Shift+P</div>
+                ) : (
+                  <ul className="atlasPinCounterChips">
+                    {sorted.map(([color, group]) => (
+                      <li key={color}>
+                        <button
+                          type="button"
+                          className="atlasPinCounterChip"
+                          style={{ borderColor: color }}
+                          onClick={() => {
+                            // Spherical mean centroid of this color's pins
+                            let x = 0, y = 0, z = 0;
+                            for (const p of group) {
+                              const phi = p.lat * Math.PI / 180, lam = p.lon * Math.PI / 180;
+                              x += Math.cos(phi) * Math.cos(lam);
+                              y += Math.cos(phi) * Math.sin(lam);
+                              z += Math.sin(phi);
+                            }
+                            const lat = Math.atan2(z, Math.sqrt(x*x + y*y)) * 180 / Math.PI;
+                            const lon = Math.atan2(y, x) * 180 / Math.PI;
+                            setFlyTo((c) => ({ id: c.id + 1, lat, lon, altKm: 5000 }));
+                            showToast(`📍 Flew to centroid of ${group.length} ${color} pin${group.length === 1 ? "" : "s"}`);
+                          }}
+                          title={`${group.length} ${color} pin${group.length === 1 ? "" : "s"} — click to fly to centroid`}
+                        >
+                          <span className="atlasPinCounterDot" style={{ background: color }} />
+                          <span className="atlasPinCounterCount">{group.length}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            );
+          })()}
         </Draggable>
       )}
 
