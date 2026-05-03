@@ -7765,6 +7765,24 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: -46.692, lon: -72.638, altKm: 8 }));
               showToast(`💎 Marble Caves (Cuevas de Mármol) · sculpted into a marble peninsula on Lake General Carrera, Patagonian Chile · turquoise water reflects on swirled marble · ~6,000 years of wave erosion`);
             }},
+            // ===== Iconic stadiums =====
+            // Major sports venues — capacity, history, or cultural weight.
+            { id: "flyMaracana", label: "🏟 Fly to Maracanã (Rio — was largest stadium on Earth at 200k peak; 1950 World Cup final)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: -22.9122, lon: -43.2302, altKm: 2 }));
+              showToast(`🏟 Estádio do Maracanã · Rio de Janeiro · opened 1950 for the World Cup final between Brazil and Uruguay (Brazil lost in front of ~200,000 people, the "Maracanazo") · was the world's largest stadium until 1973 · current capacity ~78,000 after safety renovations · hosted 2014 World Cup final + 2016 Olympics opening`);
+            }},
+            { id: "flyWembley", label: "🏟 Fly to Wembley Stadium (London — UK's national football stadium, 90k capacity)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 51.5560, lon: -0.2796, altKm: 2 }));
+              showToast(`🏟 Wembley Stadium · London · current building 2007 (replaced 1923 original "Twin Towers" stadium) · 90,000 capacity (largest in UK, 2nd-largest in Europe) · iconic 134m steel arch is Europe's longest unsupported roof structure · hosts FA Cup final, England football, NFL games, major concerts`);
+            }},
+            { id: "flyMCG", label: "🏟 Fly to Melbourne Cricket Ground (Australia — 100k+ capacity, since 1853)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: -37.8200, lon: 144.9833, altKm: 2 }));
+              showToast(`🏟 Melbourne Cricket Ground (MCG, "the G") · Australia · founded 1853, current ~100,000 capacity makes it 11th-largest stadium worldwide and largest in the Southern Hemisphere · hosts Boxing Day Test, AFL Grand Final · Olympic Games 1956, Commonwealth Games 2006 · birthplace of Test cricket (1877) and Australian rules football (1858)`);
+            }},
+            { id: "flyYankeeStadium", label: "🏟 Fly to Yankee Stadium (Bronx — current 2009 stadium replaces 1923 original)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 40.8296, lon: -73.9262, altKm: 2 }));
+              showToast(`🏟 Yankee Stadium · Bronx, NYC · current building 2009, $2.3B (most expensive stadium ever built when opened) · replaces 1923 "House That Ruth Built" across the street · 47,000 capacity, +Monument Park honoring 22 retired Yankees including Ruth/Gehrig/DiMaggio/Mantle · also hosts NYCFC soccer, college football classics, concerts`);
+            }},
             // ===== Iconic public squares =====
             // Major civic spaces — political, historical, or cultural focal points.
             { id: "flyTiananmen", label: "🏛 Fly to Tiananmen Square (Beijing — one of the world's largest public squares, 440k m²)", group: "View", icon: Globe2, run: () => {
