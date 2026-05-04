@@ -7905,6 +7905,24 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: -46.692, lon: -72.638, altKm: 8 }));
               showToast(`💎 Marble Caves (Cuevas de Mármol) · sculpted into a marble peninsula on Lake General Carrera, Patagonian Chile · turquoise water reflects on swirled marble · ~6,000 years of wave erosion`);
             }},
+            // ===== Iconic river deltas =====
+            // Geographically distinctive river deltas, visible from space.
+            { id: "flyOkavango", label: "🏞 Fly to Okavango Delta (Botswana — world's largest inland delta, 18,000 km²)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: -19.5000, lon: 23.0000, altKm: 200 }));
+              showToast(`🏞 Okavango Delta · NW Botswana · 18,000 km² fan-shaped inland delta · Okavango River drains into the Kalahari rather than reaching the sea · expands to 22,000 km² in seasonal floods (Apr-Sep) · UNESCO World Heritage 2014 · world's largest concentration of African elephants and one of the highest-density wildlife habitats`);
+            }},
+            { id: "flyLenaDelta", label: "🏞 Fly to Lena River Delta (Siberia — largest Arctic delta, 30,000 km²)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 72.5000, lon: 126.5000, altKm: 300 }));
+              showToast(`🏞 Lena Delta · Sakha Republic, NE Siberia · 30,000 km² fan opens into the Laptev Sea · the largest delta in the Arctic · river is frozen 7-9 months a year · spectacular spring thaw breakup creates ice jams and flooding · Lena Delta Reserve is Russia's largest nature preserve at 14,330 km²`);
+            }},
+            { id: "flyMississippiDelta", label: "🏞 Fly to Mississippi River Delta (Louisiana — bird-foot delta losing land to the Gulf)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 29.1500, lon: -89.2500, altKm: 80 }));
+              showToast(`🏞 Mississippi River Delta · Louisiana Gulf Coast · classic "bird-foot" delta morphology · drains 40% of continental US (3.2M km²) · loses ~75 km² of land per year to the Gulf due to subsidence + sea-level rise + reduced sediment from upstream dams · Hurricane Katrina (2005) accelerated the damage`);
+            }},
+            { id: "flySundarbans", label: "🏞 Fly to Sundarbans / Ganges-Brahmaputra Delta (Bangladesh + India — world's largest delta, 100k km²)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 22.0000, lon: 89.5000, altKm: 200 }));
+              showToast(`🏞 Sundarbans · Ganges-Brahmaputra-Meghna delta · ~100,000 km² spread across Bangladesh + West Bengal, India — world's largest delta · home to ~120M people, more than most countries · 10,000 km² of mangrove forest · last refuge of the Bengal tiger (the only tigers that swim regularly + eat saltwater fish) · UNESCO 1987`);
+            }},
             // ===== Iconic opera / theatre houses =====
             // Storied performance venues with centuries of history.
             { id: "flyLaScala", label: "🎭 Fly to La Scala (Milan — opened 1778, the world's most famous opera house)", group: "View", icon: Globe2, run: () => {
