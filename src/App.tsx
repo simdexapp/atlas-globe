@@ -1973,6 +1973,18 @@ function App() {
   const skipPersistRef = useRef(true);
   const uiHiddenRef = useRef(false);
   uiHiddenRef.current = hideUi;
+  // Mirror frequently-changing state into refs so the global keydown
+  // handler can read fresh values without listing them as effect deps
+  // (which would force addEventListener/removeEventListener cycles on
+  // every layer toggle, every pin add, every bookmark save, etc.).
+  const layersRef = useRef(layers);
+  layersRef.current = layers;
+  const pinsRef = useRef(pins);
+  pinsRef.current = pins;
+  const bookmarksRef = useRef(bookmarks);
+  bookmarksRef.current = bookmarks;
+  const imageryRef = useRef(imagery);
+  imageryRef.current = imagery;
 
   // After initial mount, force a window resize so r3f's <Canvas> ResizeObserver
   // picks up the actual viewport size. Without this, on some browsers the first
@@ -3915,6 +3927,14 @@ function App() {
       if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
       if (event.metaKey || event.ctrlKey) return;
 
+      // Read frequently-changing state from refs so the closure
+      // doesn't capture them as effect deps. The refs are kept fresh
+      // by the parent's render-phase assignments (layersRef.current = layers).
+      const layers = layersRef.current;
+      const pins = pinsRef.current;
+      const bookmarks = bookmarksRef.current;
+      const imagery = imageryRef.current;
+
       switch (event.key.toLowerCase()) {
         case "escape":
           if (commandPaletteOpen) setCommandPaletteOpen(false);
@@ -4524,7 +4544,13 @@ function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [cycleTheme, mode, resetView, saveCurrentBookmark, showSearch, showShortcuts, switchToAtlas, switchToSurface, measureMode, showToast, bookmarks, pins, selectedPin, deletePin, captureAtScale, layers, imagery, unitsImperial]);
+    // Note: bookmarks, pins, layers, imagery are intentionally OMITTED
+    // from this dep list — they're read via *Ref.current inside the
+    // handler. Listing them as deps would force a remove/add cycle on
+    // every layer toggle, every pin add, every bookmark save — many
+    // re-binds per session for no reason since the listener body
+    // can already see fresh values via the refs.
+  }, [cycleTheme, mode, resetView, saveCurrentBookmark, showSearch, showShortcuts, switchToAtlas, switchToSurface, measureMode, showToast, selectedPin, deletePin, captureAtScale, unitsImperial]);
 
   const rootStyle: CSSProperties = {
     "--accent": "#5cb5ff",
