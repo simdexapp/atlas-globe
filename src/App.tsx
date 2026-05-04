@@ -223,6 +223,12 @@ type LayerVisibility = {
   // Bookmarks list widget — small floating list of the user's most-
   // recent bookmarks (last 8) with click-to-fly. Skips city presets.
   bookmarksList: boolean;
+  // Moon phase widget — current illumination %, age in days, next full moon.
+  // Reads only from system clock so works fully offline.
+  moonPhase: boolean;
+  // Seasons widget — current astronomical season for the camera's
+  // hemisphere, day-of-year, days until next equinox/solstice.
+  seasons: boolean;
 };
 
 type GlobeSettings = {
@@ -569,6 +575,8 @@ const defaultLayers: LayerVisibility = {
   scratchpad: false,
   pinCounter: false,
   bookmarksList: false,
+  moonPhase: false,
+  seasons: false,
   // 3D OSM Buildings tileset is heavy and renders with edge outlines
   // that disable imagery draping underneath, painting the screen with
   // dark olive boxes at low altitudes (the user's tear repro). Off by
@@ -11551,6 +11559,8 @@ ${trkpts}
             { id: "widgetSkyTonight", label: layers.skyTonight ? "Hide tonight-in-the-sky widget" : "Show tonight in the sky (moon, planets, sun, ISS)", group: "Widgets", icon: Telescope, run: () => toggleLayer("skyTonight") },
             { id: "widgetWorldClocks", label: layers.worldClocks ? "Hide world clocks widget" : "Show world clocks (6 financial centers, market status)", group: "Widgets", icon: Compass, run: () => toggleLayer("worldClocks") },
             { id: "widgetViewHistory", label: layers.viewHistory ? "Hide view history widget" : `Show view history (${viewHistory.length} recent views)`, group: "Widgets", icon: RotateCcw, run: () => toggleLayer("viewHistory") },
+            { id: "widgetMoonPhase", label: layers.moonPhase ? "Hide moon-phase widget" : "Show moon-phase widget (illumination, age, next full)", group: "Widgets", icon: SunIcon, run: () => toggleLayer("moonPhase") },
+            { id: "widgetSeasons", label: layers.seasons ? "Hide seasons widget" : "Show seasons widget (current season + days to next equinox/solstice)", group: "Widgets", icon: SunIcon, run: () => toggleLayer("seasons") },
             // Ambient Earth — kiosk/big-screen mode. Hides UI chrome,
             // starts auto-orbit, shows comprehensive live-data overlay.
             // Made for office TVs, conference displays, screensavers.
@@ -18528,6 +18538,115 @@ ${wpts}
                     ))}
                   </ul>
                 )}
+              </div>
+            );
+          })()}
+        </Draggable>
+      )}
+
+      {/* Moon-phase widget — current illumination, age in days, label,
+          next full moon countdown. Pure-client-side computation using
+          Conway's modified algorithm — anchor 2000-01-06 18:14 UTC
+          (a known new moon) plus modular synodic-month arithmetic. */}
+      {layers.moonPhase && (
+        <Draggable id="moonPhase" customizeMode={customizeUiMode} position={widgetPositions.moonPhase} onMove={setWidgetPosition}>
+          {(() => {
+            const synodic = 29.530588853;
+            const newMoonRef = Date.UTC(2000, 0, 6, 18, 14) / 86400000;
+            const today = Date.now() / 86400000;
+            const phase = ((today - newMoonRef) % synodic + synodic) % synodic;
+            const pct = phase / synodic;
+            const ageDays = phase;
+            let label = "New moon", emoji = "🌑";
+            if (pct < 0.03 || pct > 0.97) { label = "New moon"; emoji = "🌑"; }
+            else if (pct < 0.22) { label = "Waxing crescent"; emoji = "🌒"; }
+            else if (pct < 0.28) { label = "First quarter"; emoji = "🌓"; }
+            else if (pct < 0.47) { label = "Waxing gibbous"; emoji = "🌔"; }
+            else if (pct < 0.53) { label = "Full moon"; emoji = "🌕"; }
+            else if (pct < 0.72) { label = "Waning gibbous"; emoji = "🌖"; }
+            else if (pct < 0.78) { label = "Last quarter"; emoji = "🌗"; }
+            else { label = "Waning crescent"; emoji = "🌘"; }
+            const illum = Math.round(50 * (1 - Math.cos(2 * Math.PI * pct)));
+            const daysToFull = Math.ceil(((0.5 - pct) * synodic + synodic) % synodic);
+            const daysToNew = Math.ceil(((1.0 - pct) * synodic + synodic) % synodic);
+            return (
+              <div className="atlasMoonPhaseWidget" role="status" aria-label="Moon phase">
+                <div className="atlasMoonPhaseHead">
+                  <SunIcon size={12} />
+                  <strong>Moon phase</strong>
+                </div>
+                <div className="atlasMoonPhaseBig">
+                  <span className="atlasMoonPhaseEmoji" aria-hidden="true">{emoji}</span>
+                  <div className="atlasMoonPhaseLabels">
+                    <div className="atlasMoonPhaseName">{label}</div>
+                    <div className="atlasMoonPhaseIllum">{illum}% illuminated</div>
+                  </div>
+                </div>
+                <div className="atlasMoonPhaseMeta">
+                  <span>{ageDays.toFixed(1)}d old</span>
+                  <span>· next 🌕 in {daysToFull}d</span>
+                  <span>· next 🌑 in {daysToNew}d</span>
+                </div>
+              </div>
+            );
+          })()}
+        </Draggable>
+      )}
+
+      {/* Seasons widget — astronomical season for the camera's hemisphere
+          (flips at the equator), day-of-year, days until the next equinox
+          / solstice. Approximate dates: Mar 20, Jun 21, Sep 22, Dec 21
+          (good to ±1 day across years; precise enough for a UI widget). */}
+      {layers.seasons && (
+        <Draggable id="seasons" customizeMode={customizeUiMode} position={widgetPositions.seasons} onMove={setWidgetPosition}>
+          {(() => {
+            const now = new Date();
+            const yr = now.getUTCFullYear();
+            const dayOfYear = Math.floor((Date.UTC(yr, now.getUTCMonth(), now.getUTCDate()) - Date.UTC(yr, 0, 1)) / 86400000) + 1;
+            // Northern-hemisphere season events (DOY): Mar equinox ~79,
+            // Jun solstice ~172, Sep equinox ~265, Dec solstice ~355.
+            const events = [
+              { name: "March equinox",     emoji: "🌱", doy: 79  },
+              { name: "June solstice",     emoji: "☀",  doy: 172 },
+              { name: "September equinox", emoji: "🍂", doy: 265 },
+              { name: "December solstice", emoji: "❄",  doy: 355 },
+            ];
+            // Find next event after today
+            const futureEvents = events.map(e => {
+              let daysAway = e.doy - dayOfYear;
+              if (daysAway <= 0) daysAway += 365;
+              return { ...e, daysAway };
+            }).sort((a, b) => a.daysAway - b.daysAway);
+            const nextEvent = futureEvents[0];
+            // Hemisphere-specific season label
+            const isN = cameraState.lat >= 0;
+            // Northern: spring after Mar eq (79), summer after Jun sol (172),
+            // autumn after Sep eq (265), winter after Dec sol (355).
+            let nSeason = "Winter";
+            if (dayOfYear >= 79 && dayOfYear < 172) nSeason = "Spring";
+            else if (dayOfYear >= 172 && dayOfYear < 265) nSeason = "Summer";
+            else if (dayOfYear >= 265 && dayOfYear < 355) nSeason = "Autumn";
+            const sSeason = nSeason === "Spring" ? "Autumn" : nSeason === "Summer" ? "Winter" : nSeason === "Autumn" ? "Spring" : "Summer";
+            const season = isN ? nSeason : sSeason;
+            const seasonEmoji = season === "Spring" ? "🌱" : season === "Summer" ? "☀" : season === "Autumn" ? "🍂" : "❄";
+            const hemiLabel = isN ? "N hemisphere" : "S hemisphere";
+            return (
+              <div className="atlasSeasonsWidget" role="status" aria-label="Seasons">
+                <div className="atlasSeasonsHead">
+                  <SunIcon size={12} />
+                  <strong>Seasons</strong>
+                  <span>day {dayOfYear}/365</span>
+                </div>
+                <div className="atlasSeasonsBig">
+                  <span className="atlasSeasonsEmoji" aria-hidden="true">{seasonEmoji}</span>
+                  <div className="atlasSeasonsLabels">
+                    <div className="atlasSeasonsName">{season}</div>
+                    <div className="atlasSeasonsHemi">{hemiLabel}</div>
+                  </div>
+                </div>
+                <div className="atlasSeasonsMeta">
+                  <span>{nextEvent.emoji} {nextEvent.name} in {nextEvent.daysAway}d</span>
+                </div>
               </div>
             );
           })()}
