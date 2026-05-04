@@ -904,6 +904,14 @@ function App() {
   // counts, exports. Memoizing here means we walk the bookmarks
   // array once per change instead of once per use site per render.
   const userBookmarks = useMemo(() => bookmarks.filter(b => b.savedAt > 0), [bookmarks]);
+  // Top-8 most-recent user bookmarks, sorted newest-first. Used by
+  // the BookmarksList widget on every Atlas re-render. Memoizing the
+  // sort + slice (vs running them per render) skips ~O(n log n) work
+  // when n is small but eliminates the allocation churn.
+  const recentBookmarksTop8 = useMemo(
+    () => [...userBookmarks].sort((a, b) => b.savedAt - a.savedAt).slice(0, 8),
+    [userBookmarks]
+  );
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("globe");
   const [hideUi, setHideUi] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
@@ -1393,6 +1401,16 @@ function App() {
     if (eonetHidden.size === 0) return eonetEvents;
     return eonetEvents.filter((e) => !eonetHidden.has(e.category));
   }, [eonetEvents, eonetHidden]);
+
+  // O(1) EONET event lookup by id. Replaces the .find() linear scan
+  // in the selected-event popover render (which ran on every Atlas
+  // re-render while an event was selected). Same pattern as
+  // aircraftById / pinsById / launchById.
+  const eonetById = useMemo(() => {
+    const m = new Map<string, EonetEvent>();
+    for (const e of eonetEvents) m.set(e.id, e);
+    return m;
+  }, [eonetEvents]);
 
   // O(1) launch lookup by id. Replaces .find() linear scans for the
   // selected-launch popover render (~1 per Atlas re-render while a
@@ -20556,9 +20574,9 @@ ${wpts}
       {layers.bookmarksList && (
         <Draggable id="bookmarksList" customizeMode={customizeUiMode} position={widgetPositions.bookmarksList} onMove={setWidgetPosition}>
           {(() => {
-            // Use the memoized parent userBookmarks (skips the .filter
-            // walk on every Atlas re-render) and only sort+slice here.
-            const recentBookmarks = [...userBookmarks].sort((a, b) => b.savedAt - a.savedAt).slice(0, 8);
+            // Use the memoized parent recentBookmarksTop8 — sort + slice
+            // happens once per bookmarks change, not per Atlas re-render.
+            const recentBookmarks = recentBookmarksTop8;
             return (
               <div className="atlasBookmarksListWidget" role="status" aria-label="Recent bookmarks">
                 <div className="atlasBookmarksListHead">
@@ -21719,7 +21737,9 @@ ${wpts}
       )}
 
       {selectedEonetId && (() => {
-        const ev = eonetEvents.find((x) => x.id === selectedEonetId);
+        // O(1) lookup via eonetById Map (vs the previous .find() linear
+        // scan over the EONET event list on every Atlas re-render).
+        const ev = eonetById.get(selectedEonetId);
         if (!ev) return null;
         const ageHrs = Math.max(0, (Date.now() - ev.date) / 3_600_000);
         const ageLabel = ageHrs < 1 ? `${Math.round(ageHrs * 60)} min ago`
