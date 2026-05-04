@@ -8554,6 +8554,99 @@ function App() {
                 showToast(`✋ Nudged "${sp.label}" ${dist}${unitsImperial ? "mi" : "km"} ${dir}`);
               },
             }] : []),
+            // Drop pins at 5 of Earth's most extreme geographic points —
+            // Challenger Deep (deepest ocean point), Everest (highest land),
+            // Mt Chimborazo (farthest from Earth's centre due to equatorial
+            // bulge), Point Nemo (most isolated ocean point), Pole of
+            // Inaccessibility Antarctica.
+            { id: "pinDropAtFamousPoints", label: "🌋 Drop 5 pins at Earth's most extreme geographic points (Challenger Deep, Everest, etc.)", group: "Tools", icon: BookmarkPlus, run: () => {
+              const points = [
+                { name: "Challenger Deep, Mariana Trench (10,935m below sea level — deepest)", lat:  11.3733, lon: 142.5917, color: "#5cb5ff" },
+                { name: "Mt Everest summit (8,848.86m above sea level — highest land)",         lat:  27.9881, lon:  86.9250, color: "#ffffff" },
+                { name: "Mt Chimborazo, Ecuador (farthest from Earth's centre due to bulge)",   lat:  -1.4690, lon: -78.8170, color: "#ffd66b" },
+                { name: "Point Nemo (most isolated ocean point — 2,688km to nearest land)",     lat: -48.8767, lon:-123.3933, color: "#5cb5ff" },
+                { name: "Pole of Inaccessibility, Antarctica (farthest from any coastline)",    lat: -82.1000, lon:  55.0000, color: "#a8a8ff" },
+              ];
+              const stamp = Date.now();
+              const newPins: Pin[] = points.map((p, i) => ({
+                id: `pin-extreme-${i}-${stamp}`,
+                lat: p.lat, lon: p.lon, label: `🌋 ${p.name}`,
+                color: p.color, createdAt: stamp + i,
+              }));
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`🌋 Dropped pins at 5 extreme points — Chimborazo's summit is farther from Earth's centre than Everest's, due to the equatorial bulge`);
+            }},
+            // Drop a pin at a city by name (search MAJOR + REGIONAL).
+            // Useful for "drop a pin at Tokyo" without having to fly there.
+            { id: "pinDropAtCityByName", label: "🏙 Drop a pin at a city by name (search MAJOR + REGIONAL cities)", group: "Tools", icon: BookmarkPlus, run: () => {
+              const query = window.prompt("City name (case-insensitive substring search):");
+              if (!query) return;
+              const q = query.trim().toLowerCase();
+              if (!q) return;
+              const allCities = [...MAJOR_CITIES, ...REGIONAL_CITIES];
+              const exact = allCities.find(c => c.name.toLowerCase() === q);
+              const match = exact || allCities.find(c => c.name.toLowerCase().includes(q));
+              if (!match) { showToast(`🏙 No city matching "${query}"`); return; }
+              const id = `pin-city-${Date.now()}`;
+              const newPin: Pin = { id, lat: match.lat, lon: match.lon, label: `🏙 ${match.name}, ${match.country}`, color: "#5cb5ff", createdAt: Date.now() };
+              setPins((prev) => [...prev, newPin]);
+              setSelectedPin(id);
+              setFlyTo((p) => ({ id: p.id + 1, lat: match.lat, lon: match.lon, altKm: 30 }));
+              showToast(`🏙 Dropped pin at ${match.name}, ${match.country}${exact ? "" : " (substring match)"}`);
+            }},
+            // Bulk-set color of all pins whose label matches a substring.
+            // Useful for organizing pin collections — "color all my Asia
+            // trip pins green" by setting color where label contains "Asia".
+            { id: "pinSetColorByLabel", label: "🎨 Bulk-set color of pins matching label substring", group: "Tools", icon: BookmarkPlus, run: () => {
+              if (pins.length === 0) { showToast("No pins to recolor"); return; }
+              const query = window.prompt("Label substring to match (case-insensitive):");
+              if (!query) return;
+              const q = query.trim().toLowerCase();
+              if (!q) return;
+              const matchCount = pins.filter(p => p.label.toLowerCase().includes(q)).length;
+              if (matchCount === 0) { showToast(`🎨 No pins with label containing "${query}"`); return; }
+              const colorRaw = window.prompt(`Found ${matchCount} pin${matchCount === 1 ? "" : "s"}. New color (hex like #5cb5ff or pick: blue/yellow/pink/green/orange/purple/red/white):`, "blue");
+              if (!colorRaw) return;
+              // Map color names to PIN_COLORS values
+              const named: Record<string, string> = {
+                blue: "#5cb5ff", yellow: "#ffd66b", pink: "#ff7be0", green: "#7cffb1",
+                orange: "#ff8a4d", purple: "#a8a8ff", red: "#ff5a5a", white: "#ffffff",
+              };
+              const color = named[colorRaw.trim().toLowerCase()] || colorRaw.trim();
+              if (!/^#[0-9a-fA-F]{6}$/.test(color)) { showToast(`Invalid color "${colorRaw}" — use #rrggbb hex or named color`); return; }
+              setPins(prev => prev.map(p => p.label.toLowerCase().includes(q) ? { ...p, color } : p));
+              showToast(`🎨 Recolored ${matchCount} pin${matchCount === 1 ? "" : "s"} matching "${query}" to ${color}`);
+            }},
+            // Swap positions of selected pin and its nearest neighbor pin.
+            // Useful for fixing accidentally-swapped pins or rearranging.
+            ...(selectedPin && pins.length >= 2 ? [{
+              id: "pinSwapWithNearest" as const,
+              label: "🔄 Swap selected pin's position with nearest other pin",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const sp = pinsById.get(selectedPin);
+                if (!sp) { showToast("Selected pin no longer exists"); return; }
+                let nearest = pins.find(p => p.id !== selectedPin) ?? null;
+                if (!nearest) { showToast("No other pins to swap with"); return; }
+                let nearestKm = haversineKm(sp.lat, sp.lon, nearest.lat, nearest.lon);
+                for (const p of pins) {
+                  if (p.id === selectedPin) continue;
+                  const km = haversineKm(sp.lat, sp.lon, p.lat, p.lon);
+                  if (km < nearestKm) { nearestKm = km; nearest = p; }
+                }
+                if (!nearest) return;
+                const otherId = nearest.id;
+                const otherLat = nearest.lat;
+                const otherLon = nearest.lon;
+                setPins(prev => prev.map(p => {
+                  if (p.id === selectedPin) return { ...p, lat: otherLat, lon: otherLon };
+                  if (p.id === otherId) return { ...p, lat: sp.lat, lon: sp.lon };
+                  return p;
+                }));
+                showToast(`🔄 Swapped "${sp.label}" with "${nearest.label}" (${formatDistKm(nearestKm, unitsImperial)} apart)`);
+              },
+            }] : []),
             // Find the extreme pin in each cardinal direction (N/S/E/W)
             // and fly to whichever the user picks. Useful for "where's
             // the southernmost pin in my collection?" type questions.
