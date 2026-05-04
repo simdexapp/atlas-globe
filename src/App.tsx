@@ -14247,6 +14247,112 @@ ${trkpts}
               window.speechSynthesis.speak(u);
               showToast(`🔊 ${text}`);
             }},
+            // Speak the current moon phase, illumination, and days
+            // until the next full + new moon. Same calculation as the
+            // moonPhase widget — Conway synodic algorithm.
+            { id: "announceMoonPhase", label: "🔊 Speak current moon phase + illumination + days to next full / new moon", group: "Tools", icon: Sparkles, run: () => {
+              if (typeof window === "undefined" || !window.speechSynthesis) { showToast("🔊 SpeechSynthesis not available in this browser"); return; }
+              const synodic = 29.530588853;
+              const newMoonRef = Date.UTC(2000, 0, 6, 18, 14) / 86400000;
+              const today = Date.now() / 86400000;
+              const phase = ((today - newMoonRef) % synodic + synodic) % synodic;
+              const pct = phase / synodic;
+              const ageDays = phase;
+              let label = "new moon";
+              if (pct < 0.03 || pct > 0.97) label = "new moon";
+              else if (pct < 0.22) label = "waxing crescent";
+              else if (pct < 0.28) label = "first quarter";
+              else if (pct < 0.47) label = "waxing gibbous";
+              else if (pct < 0.53) label = "full moon";
+              else if (pct < 0.72) label = "waning gibbous";
+              else if (pct < 0.78) label = "last quarter";
+              else label = "waning crescent";
+              const illum = Math.round(50 * (1 - Math.cos(2 * Math.PI * pct)));
+              const daysToFull = Math.ceil(((0.5 - pct) * synodic + synodic) % synodic);
+              const daysToNew = Math.ceil(((1.0 - pct) * synodic + synodic) % synodic);
+              const text = `Current moon phase: ${label}, ${illum} percent illuminated, ${ageDays.toFixed(1)} days old. Next full moon in ${daysToFull} days, next new moon in ${daysToNew} days.`;
+              window.speechSynthesis.cancel();
+              const u = new SpeechSynthesisUtterance(text);
+              u.rate = voiceRate;
+              u.pitch = voicePitch;
+              window.speechSynthesis.speak(u);
+              showToast(`🔊 ${text}`);
+            }},
+            // Speak which season the camera's hemisphere is in plus
+            // days until the next equinox or solstice.
+            { id: "announceSeason", label: "🔊 Speak current season at view's hemisphere + days to next equinox/solstice", group: "Tools", icon: Sparkles, run: () => {
+              if (typeof window === "undefined" || !window.speechSynthesis) { showToast("🔊 SpeechSynthesis not available in this browser"); return; }
+              const c = cameraStateRef.current;
+              if (!c) { showToast("Camera position unknown"); return; }
+              const now = new Date();
+              const yr = now.getUTCFullYear();
+              const dayOfYear = Math.floor((Date.UTC(yr, now.getUTCMonth(), now.getUTCDate()) - Date.UTC(yr, 0, 1)) / 86400000) + 1;
+              const events = [
+                { name: "March equinox",     doy: 79  },
+                { name: "June solstice",     doy: 172 },
+                { name: "September equinox", doy: 265 },
+                { name: "December solstice", doy: 355 },
+              ];
+              const futureEvents = events.map(e => ({ ...e, daysAway: e.doy - dayOfYear < 0 ? e.doy - dayOfYear + 365 : e.doy - dayOfYear }));
+              futureEvents.sort((a, b) => a.daysAway - b.daysAway);
+              const nextEvent = futureEvents[0];
+              const isN = c.lat >= 0;
+              let nSeason = "winter";
+              if (dayOfYear >= 79 && dayOfYear < 172) nSeason = "spring";
+              else if (dayOfYear >= 172 && dayOfYear < 265) nSeason = "summer";
+              else if (dayOfYear >= 265 && dayOfYear < 355) nSeason = "autumn";
+              const sSeason = nSeason === "spring" ? "autumn" : nSeason === "summer" ? "winter" : nSeason === "autumn" ? "spring" : "summer";
+              const season = isN ? nSeason : sSeason;
+              const hemi = isN ? "northern" : "southern";
+              const text = `Current season in the ${hemi} hemisphere: ${season}. Day ${dayOfYear} of 365. Next event: ${nextEvent.name} in ${nextEvent.daysAway} days.`;
+              window.speechSynthesis.cancel();
+              const u = new SpeechSynthesisUtterance(text);
+              u.rate = voiceRate;
+              u.pitch = voicePitch;
+              window.speechSynthesis.speak(u);
+              showToast(`🔊 ${text}`);
+            }},
+            // Speak the trip-meter stats — total distance covered + time elapsed.
+            { id: "announceTripMeter", label: "🔊 Speak trip-meter stats (total ground distance + elapsed time)", group: "Tools", icon: Sparkles, run: () => {
+              if (typeof window === "undefined" || !window.speechSynthesis) { showToast("🔊 SpeechSynthesis not available in this browser"); return; }
+              const tm = tripMeterRef.current;
+              const elapsedMin = Math.round((Date.now() - tm.startTime) / 60000);
+              const km = tm.totalKm;
+              const distText = unitsImperial ? `${(km * 0.621371).toFixed(0)} miles` : `${km.toFixed(0)} kilometers`;
+              const text = km < 0.1
+                ? `Trip meter: zero distance covered. ${elapsedMin} minutes since session start.`
+                : `Trip meter: ${distText} of ground covered, ${elapsedMin} minutes since session start.`;
+              window.speechSynthesis.cancel();
+              const u = new SpeechSynthesisUtterance(text);
+              u.rate = voiceRate;
+              u.pitch = voicePitch;
+              window.speechSynthesis.speak(u);
+              showToast(`🔊 ${text}`);
+            }},
+            // Speak the current UTC time + local solar time at view's longitude.
+            { id: "announceClockUtc", label: "🔊 Speak current UTC time + local solar time at view longitude", group: "Tools", icon: Sparkles, run: () => {
+              if (typeof window === "undefined" || !window.speechSynthesis) { showToast("🔊 SpeechSynthesis not available in this browser"); return; }
+              const c = cameraStateRef.current;
+              if (!c) { showToast("Camera position unknown"); return; }
+              const now = new Date();
+              const utcH = now.getUTCHours();
+              const utcM = now.getUTCMinutes();
+              const utcText = `${utcH < 12 ? utcH || 12 : utcH > 12 ? utcH - 12 : 12}:${String(utcM).padStart(2, "0")} ${utcH < 12 ? "AM" : "PM"} UTC`;
+              const offsetH = c.lon / 15;
+              const localMs = now.getTime() + offsetH * 3_600_000;
+              const localD = new Date(localMs);
+              const lhh = localD.getUTCHours();
+              const lmm = localD.getUTCMinutes();
+              const localText = `${lhh < 12 ? lhh || 12 : lhh > 12 ? lhh - 12 : 12}:${String(lmm).padStart(2, "0")} ${lhh < 12 ? "AM" : "PM"} local solar`;
+              const offsetText = offsetH >= 0 ? `plus ${Math.abs(offsetH).toFixed(1)}` : `minus ${Math.abs(offsetH).toFixed(1)}`;
+              const text = `${utcText} now. Local solar time at this longitude: ${localText}, UTC ${offsetText} hours.`;
+              window.speechSynthesis.cancel();
+              const u = new SpeechSynthesisUtterance(text);
+              u.rate = voiceRate;
+              u.pitch = voicePitch;
+              window.speechSynthesis.speak(u);
+              showToast(`🔊 ${text}`);
+            }},
             { id: "wikiNearby", label: "🗺 Wikipedia articles near this view (top 8 within 50km)", group: "Tools", icon: Sparkles, run: async () => {
               const c = cameraStateRef.current;
               if (!c) return;
