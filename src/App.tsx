@@ -12559,6 +12559,127 @@ ${trkpts}
                 showToast(`📝 Exported ${measurePoints.length}-vertex path as plain text (${(text.length/1024).toFixed(1)} KB)`);
               },
             }] : []),
+            // WKT (Well-Known Text) export — OGC standard format for
+            // spatial databases (PostGIS, Spatialite, etc.) and many
+            // GIS desktop tools. Produces a single LINESTRING.
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureExportWkt" as const,
+              label: "🗺 Copy measure path as WKT (Well-Known Text — for PostGIS / spatial DBs)",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                // WKT LINESTRING(lon lat, lon lat, ...). Note: WKT uses
+                // lon-lat order (X-then-Y), opposite of how we usually
+                // think (lat-lon). PostGIS expects this order.
+                const coords = measurePoints.map(p => `${p.lon.toFixed(6)} ${p.lat.toFixed(6)}`).join(", ");
+                const wkt = `LINESTRING(${coords})`;
+                navigator.clipboard?.writeText(wkt).then(
+                  () => showToast(`🗺 Copied WKT (${wkt.length} chars) — paste into PostGIS / QGIS / Shapely`),
+                  () => showToast(`🗺 ${wkt.slice(0, 100)}…`)
+                );
+              },
+            }] : []),
+            // Google encoded polyline format — extremely compact ASCII
+            // encoding (~3 chars per vertex). Used by Google Maps, Mapbox,
+            // and many JS mapping libraries. Standard polyline algorithm.
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureExportPolylineEncoded" as const,
+              label: "🗺 Copy measure path as Google encoded polyline (compact format for Google Maps / Mapbox)",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                // Google encoded polyline algorithm.
+                // https://developers.google.com/maps/documentation/utilities/polylinealgorithm
+                function encode(num: number): string {
+                  num = num < 0 ? ~(num << 1) : (num << 1);
+                  let result = "";
+                  while (num >= 0x20) {
+                    result += String.fromCharCode((0x20 | (num & 0x1f)) + 63);
+                    num >>= 5;
+                  }
+                  result += String.fromCharCode(num + 63);
+                  return result;
+                }
+                let prevLat = 0, prevLon = 0;
+                let polyline = "";
+                for (const p of measurePoints) {
+                  const lat = Math.round(p.lat * 1e5);
+                  const lon = Math.round(p.lon * 1e5);
+                  polyline += encode(lat - prevLat);
+                  polyline += encode(lon - prevLon);
+                  prevLat = lat;
+                  prevLon = lon;
+                }
+                navigator.clipboard?.writeText(polyline).then(
+                  () => showToast(`🗺 Copied encoded polyline (${polyline.length} chars for ${measurePoints.length} vertices) — ${(polyline.length / measurePoints.length).toFixed(1)} chars/vertex`),
+                  () => showToast(`🗺 ${polyline.slice(0, 100)}…`)
+                );
+              },
+            }] : []),
+            // Sample position at N km along the path. Interpolates
+            // between vertices using the cumulative-distance array.
+            // Useful for "where is the 100km mark on this route?" type
+            // questions. Drops a pin at the sample point.
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureSampleAtKm" as const,
+              label: "📍 Sample position at N km along path (interpolates + drops a pin)",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                // Build cumulative-distance array
+                const cumKm: number[] = [0];
+                for (let i = 1; i < measurePoints.length; i++) {
+                  cumKm.push(cumKm[i-1] + haversineKm(measurePoints[i-1].lat, measurePoints[i-1].lon, measurePoints[i].lat, measurePoints[i].lon));
+                }
+                const total = cumKm[cumKm.length - 1];
+                const distRaw = window.prompt(`Sample position at how many ${unitsImperial ? "miles" : "km"} along path? (Total: ${total.toFixed(1)}km)`, (total / 2).toFixed(1));
+                if (!distRaw) return;
+                const dist = parseFloat(distRaw);
+                if (!Number.isFinite(dist) || dist < 0) { showToast("Distance must be ≥ 0"); return; }
+                const targetKm = unitsImperial ? dist * 1.609344 : dist;
+                if (targetKm > total) { showToast(`${dist}${unitsImperial ? "mi" : "km"} exceeds path length (${total.toFixed(1)}km)`); return; }
+                // Find segment containing targetKm
+                let segIdx = 1;
+                while (segIdx < cumKm.length && cumKm[segIdx] < targetKm) segIdx++;
+                const a = measurePoints[segIdx - 1];
+                const b = measurePoints[segIdx];
+                const segStartKm = cumKm[segIdx - 1];
+                const segLenKm = cumKm[segIdx] - segStartKm;
+                const t = segLenKm > 0 ? (targetKm - segStartKm) / segLenKm : 0;
+                // Linear interpolation in lat/lon (small-distance approx)
+                const lat = a.lat + (b.lat - a.lat) * t;
+                let lon = a.lon + (b.lon - a.lon) * t;
+                while (lon > 180) lon -= 360;
+                while (lon < -180) lon += 360;
+                // Drop a pin at the sample point + fly to it
+                const id = `pin-sample-${Date.now()}`;
+                const newPin: Pin = { id, lat, lon, label: `📍 Sample @ ${dist}${unitsImperial ? "mi" : "km"} along path`, color: "#ffd66b", createdAt: Date.now() };
+                setPins(prev => [...prev, newPin]);
+                setSelectedPin(id);
+                setFlyTo((p) => ({ id: p.id + 1, lat, lon, altKm: 30 }));
+                showToast(`📍 Sample @ ${dist}${unitsImperial ? "mi" : "km"}: ${formatLat(lat)} ${formatLon(lon)} (segment ${segIdx})`);
+              },
+            }] : []),
+            // Close the path by appending the start vertex as the last
+            // vertex. Useful for converting an open path into a closed
+            // polygon for area calculations or geofencing.
+            ...(measureMode && measurePoints.length >= 3 ? [{
+              id: "measureCloseLoop" as const,
+              label: "🔁 Close path by appending start vertex as the last (open → closed loop)",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                const start = measurePoints[0];
+                const end = measurePoints[measurePoints.length - 1];
+                if (Math.abs(start.lat - end.lat) < 0.0001 && Math.abs(start.lon - end.lon) < 0.0001) {
+                  showToast("🔁 Path is already closed (start = end)");
+                  return;
+                }
+                const closingKm = haversineKm(end.lat, end.lon, start.lat, start.lon);
+                setMeasurePoints(prev => [...prev, { lat: start.lat, lon: start.lon }]);
+                showToast(`🔁 Closed loop — added start vertex as #${measurePoints.length + 1} (closing leg ${formatDistKm(closingKm, unitsImperial)})`);
+              },
+            }] : []),
             // Global metric/imperial unit toggle. Affects the measure pill,
             // distance commands, area calculations, elevation lookups.
             { id: "toggleUnits", label: unitsImperial ? "Units → metric (km, m, km²)" : "Units → imperial (mi, ft, mi²)", group: "View", icon: Compass, hint: "U", run: () => setUnitsImperial((v) => { showToast(v ? "Units: metric" : "Units: imperial"); return !v; }) },
