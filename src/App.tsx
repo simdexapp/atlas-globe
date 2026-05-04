@@ -7595,6 +7595,89 @@ function App() {
               setPins((prev) => [...prev, ...newPins]);
               showToast(`🔴 Dropped pins for 6 Mars-analogue sites — places NASA + ESA use to train astronauts and test rover hardware`);
             }},
+            { id: "pinHistoricalBattles", label: "⚔ Drop pins for 6 famous historical battle sites", group: "Tools", icon: BookmarkPlus, run: () => {
+              // Battles selected for global recognition + historical
+              // pivot points. Stalingrad is widely considered the
+              // bloodiest battle in human history (estimated 2M+ casualties).
+              const battles = [
+                { name: "Battle of Hastings (1066, William the Conqueror — Norman Conquest of England)", lat: 50.9119, lon:    0.4878 },
+                { name: "Battle of Waterloo (1815, end of Napoleon — Wellington & Blücher)",             lat: 50.6803, lon:    4.4067 },
+                { name: "Battle of Gettysburg (1863, US Civil War turning point)",                        lat: 39.8076, lon:  -77.2266 },
+                { name: "Battle of Stalingrad (1942-43, bloodiest battle in history — 2M+ casualties)",    lat: 48.7080, lon:   44.5133 },
+                { name: "Battle of Midway (1942, Pacific War turning point — IJN lost 4 carriers)",        lat: 28.2072, lon: -177.3735 },
+                { name: "D-Day Normandy (1944, largest seaborne invasion — 156k Allied troops)",            lat: 49.4144, lon:   -0.8400 },
+              ];
+              const stamp = Date.now();
+              const newPins: Pin[] = battles.map((b, i) => ({
+                id: `pin-battle-${i}-${stamp}`,
+                lat: b.lat, lon: b.lon, label: `⚔ ${b.name}`,
+                color: "#ff5a5a", createdAt: stamp + i,
+              }));
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`⚔ Dropped pins for 6 famous battles — Stalingrad alone exceeded all WWII Allied casualties combined`);
+            }},
+            { id: "pinMajorCoralReefs", label: "🐠 Drop pins for 5 of the world's largest coral reef systems", group: "Tools", icon: BookmarkPlus, run: () => {
+              // The Great Barrier Reef is the largest living structure
+              // on Earth (visible from space). The Belize Barrier Reef
+              // is the largest in the Northern Hemisphere.
+              const reefs = [
+                { name: "Great Barrier Reef, Australia (2,300km long — largest living structure)",   lat: -18.2871, lon: 147.6992 },
+                { name: "Mesoamerican Reef, Belize/Mexico/Honduras (1,000km — largest in N hemisphere)", lat:  18.0000, lon: -87.7500 },
+                { name: "New Caledonia Barrier Reef (1,500km — 2nd longest worldwide)",                lat: -22.0000, lon: 165.0000 },
+                { name: "Maldives Atolls (26 ring-shaped reef systems, central Indian Ocean)",         lat:   3.2028, lon:  73.2207 },
+                { name: "Red Sea Reefs, Egypt/Saudi Arabia (heat-resistant — climate refuge)",          lat:  25.0000, lon:  35.0000 },
+              ];
+              const stamp = Date.now();
+              const newPins: Pin[] = reefs.map((r, i) => ({
+                id: `pin-reef-${i}-${stamp}`,
+                lat: r.lat, lon: r.lon, label: `🐠 ${r.name}`,
+                color: "#7cffb1", createdAt: stamp + i,
+              }));
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`🐠 Dropped pins for 5 major coral reef systems — Great Barrier Reef is the largest living structure on Earth, visible from space`);
+            }},
+            { id: "pinCarnivalCities", label: "🎭 Drop pins for 6 of the world's largest carnival cities", group: "Tools", icon: BookmarkPlus, run: () => {
+              // Rio's Carnival draws 2M+ daily participants. New Orleans
+              // Mardi Gras and Trinidad Carnival are the largest in the
+              // Americas / Caribbean respectively.
+              const cities = [
+                { name: "Rio de Janeiro, Brazil (largest in world — 2M+ daily participants)",  lat: -22.9068, lon:  -43.1729 },
+                { name: "Trinidad & Tobago Carnival (Caribbean's largest, calypso/soca origin)", lat:  10.6918, lon:  -61.2225 },
+                { name: "Venice Carnival, Italy (oldest — masquerade tradition since 1162)",    lat:  45.4408, lon:   12.3155 },
+                { name: "New Orleans Mardi Gras, USA (1857 — largest US carnival, parades + krewes)", lat: 29.9511, lon:  -90.0715 },
+                { name: "Cologne Carnival, Germany (5th season — 1.5M attendees Rose Monday)",   lat:  50.9375, lon:    6.9603 },
+                { name: "Notting Hill Carnival, London (Europe's biggest — 2M+ attendees)",      lat:  51.5141, lon:   -0.2070 },
+              ];
+              const stamp = Date.now();
+              const newPins: Pin[] = cities.map((c, i) => ({
+                id: `pin-carnival-${i}-${stamp}`,
+                lat: c.lat, lon: c.lon, label: `🎭 ${c.name}`,
+                color: "#ff7be0", createdAt: stamp + i,
+              }));
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`🎭 Dropped pins for 6 carnival cities — Rio draws 2M+ people daily, Venice's masquerade tradition dates to 1162`);
+            }},
+            { id: "pinFilmStudioCapitals", label: "🎬 Drop pins for 6 of the world's most famous film-production hubs", group: "Tools", icon: BookmarkPlus, run: () => {
+              // Bollywood (Mumbai) produces ~1,800 films/year — more than
+              // any other industry. Hollywood produces ~600. Pinewood
+              // Studios (UK) hosted James Bond + many Star Wars films.
+              const studios = [
+                { name: "Hollywood, Los Angeles USA (~600 films/yr, founded 1910s)",                lat:  34.0900, lon: -118.3286 },
+                { name: "Bollywood, Mumbai India (~1,800 films/yr — most prolific industry)",        lat:  19.1366, lon:   72.8262 },
+                { name: "Cinecittà, Rome Italy (1937 — Italian neo-realism, Ben-Hur, La Dolce Vita)", lat:  41.8378, lon:   12.5781 },
+                { name: "Pinewood Studios, UK (1936 — every James Bond + Star Wars saga)",            lat:  51.5444, lon:   -0.5544 },
+                { name: "Studio Babelsberg, Potsdam Germany (1912 — oldest large-scale film studio)", lat:  52.3850, lon:   13.1078 },
+                { name: "Hengdian World Studios, Zhejiang China (largest film studio by area, 7000 acres)", lat: 29.1303, lon: 120.2972 },
+              ];
+              const stamp = Date.now();
+              const newPins: Pin[] = studios.map((s, i) => ({
+                id: `pin-studio-${i}-${stamp}`,
+                lat: s.lat, lon: s.lon, label: `🎬 ${s.name}`,
+                color: "#a8a8ff", createdAt: stamp + i,
+              }));
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`🎬 Dropped pins for 6 film-production hubs — Bollywood produces 3× as many films per year as Hollywood`);
+            }},
             { id: "pinOldestCities", label: "🏯 Drop pins for 7 of the world's oldest continuously-inhabited cities", group: "Tools", icon: BookmarkPlus, run: () => {
               const cities = [
                 { name: "Damascus, Syria (~9000 BCE)",         lat: 33.5138, lon:  36.2765 },
