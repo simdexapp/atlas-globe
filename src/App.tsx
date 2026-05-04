@@ -706,6 +706,8 @@ const KEYBOARD_HINTS = [
   { keys: "O", desc: "Toggle camera auto-orbit (Atlas mode)" },
   { keys: "Space", desc: "▶/⏸ Play/pause auto-orbit (Atlas mode — universal play/pause)" },
   { keys: "Backspace", desc: "⏪ Back to previous view (browser back-button convention)" },
+  { keys: "'", desc: "🕐 Drop a timestamped 'now' pin at view center (HH:MM:SS label)" },
+  { keys: ";", desc: "📋 Cycle inspector tab (globe → layers → bookmarks → data → imagery)" },
   { keys: "C", desc: "Copy current view's coordinates to clipboard" },
   { keys: "Y", desc: "Yank — copy share-link to current view" },
   { keys: "Q", desc: "Quick exit any active tool (measure / pin / customize)" },
@@ -747,6 +749,7 @@ const KEYBOARD_HINTS = [
   { keys: "[", desc: "Step Surface clock back 1 hour" },
   { keys: "]", desc: "Step Surface clock forward 1 hour" },
   { keys: ",", desc: "Step Surface clock back 6 hours (faster scrub)" },
+  { keys: "Shift+. (>)", desc: "Step Surface clock forward 6 hours (faster scrub)" },
   { keys: ".", desc: "Reset Surface clock to real-time UTC" },
   // ===== Layer quick-toggles =====
   { keys: "1", desc: "Toggle aircraft layer" },
@@ -4639,6 +4642,52 @@ function App() {
             updateGlobe({ realTimeSun: false });
             setSurfaceManualHour((hr + 24) % 24);
             showToast("⏪⏪ Clock -6h");
+          }
+          break;
+        case ">":
+          // Shift+. (which produces ">" on US layouts) — clock +6h on
+          // Surface mode. Symmetric companion to comma's -6h. Same
+          // rationale: faster scrub than ] which steps +1h.
+          event.preventDefault();
+          if (mode === "surface") {
+            const now = new Date();
+            const hr = now.getUTCHours() + 6 + (now.getUTCMinutes() / 60);
+            updateGlobe({ realTimeSun: false });
+            setSurfaceManualHour(hr % 24);
+            showToast("⏩⏩ Clock +6h");
+          }
+          break;
+        case "'":
+          // Apostrophe — drop a timestamped "now" pin at view center.
+          // Useful for marking moments during a tour ("I was here at this
+          // time"). Pin label embeds wall-clock HH:MM:SS so the order of
+          // pins maps to a real-time scrubbing trail.
+          event.preventDefault();
+          {
+            const c = cameraStateRef.current;
+            if (!c) { showToast("Camera position unknown"); return; }
+            const ts = new Date();
+            const hh = String(ts.getHours()).padStart(2, "0");
+            const mm = String(ts.getMinutes()).padStart(2, "0");
+            const ss = String(ts.getSeconds()).padStart(2, "0");
+            const id = `pin-now-${ts.getTime()}`;
+            const newPin: Pin = { id, lat: c.lat, lon: c.lon, label: `🕐 ${hh}:${mm}:${ss}`, color: "#ffd66b", createdAt: ts.getTime() };
+            setPins((prev) => [...prev, newPin]);
+            setSelectedPin(id);
+            showToast(`🕐 Dropped timestamped pin ${hh}:${mm}:${ss} at ${formatLat(c.lat)} ${formatLon(c.lon)}`);
+          }
+          break;
+        case ";":
+          // Semicolon — cycle inspector tab through globe → layers →
+          // bookmarks → data → imagery → globe. Quick way to flip
+          // between tabs without reaching for the rail icons.
+          event.preventDefault();
+          {
+            const order: InspectorTab[] = ["globe", "layers", "bookmarks", "data", "imagery"];
+            const idx = order.indexOf(inspectorTab);
+            const next = order[(idx + 1) % order.length];
+            setInspectorTab(next);
+            showToast(`📋 Inspector: ${next}`);
           }
           break;
         default:
