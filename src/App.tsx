@@ -12218,6 +12218,136 @@ ${trkpts}
                 }, 4000);
               },
             }] : []),
+            // Find the leg with the largest longitude change. Companion
+            // to measureMaxLatChange (#178). Useful for spotting long
+            // E-W transits (trans-Pacific, trans-Atlantic).
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureMaxLonChange" as const,
+              label: "🧭 Find leg with biggest longitude change (east-west transit)",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                let maxIdx = 1;
+                let maxDeg = 0;
+                for (let i = 1; i < measurePoints.length; i++) {
+                  // Handle antimeridian crossing — pick smaller of the two arcs
+                  let d = Math.abs(measurePoints[i].lon - measurePoints[i-1].lon);
+                  if (d > 180) d = 360 - d;
+                  if (d > maxDeg) { maxDeg = d; maxIdx = i; }
+                }
+                const a = measurePoints[maxIdx - 1];
+                const b = measurePoints[maxIdx];
+                const dir = b.lon > a.lon ? "east" : "west";
+                const km = haversineKm(a.lat, a.lon, b.lat, b.lon);
+                showToast(`🧭 Leg ${maxIdx}: ${maxDeg.toFixed(2)}° longitude change ${dir}, ${formatDistKm(km, unitsImperial)} (${formatLon(a.lon)} → ${formatLon(b.lon)})`);
+              },
+            }] : []),
+            // Fly the camera to fit the entire path's bounding box at
+            // a comfortable framing altitude. Computes width + height
+            // of the box and scales altitude to encompass both.
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureFitToBoundingBox" as const,
+              label: "🎯 Fit camera to bounding box of measure path (frame everything in view)",
+              group: "View" as const,
+              icon: Crosshair,
+              run: () => {
+                let minLat = measurePoints[0].lat, maxLat = minLat;
+                let minLon = measurePoints[0].lon, maxLon = minLon;
+                for (const p of measurePoints) {
+                  if (p.lat < minLat) minLat = p.lat;
+                  if (p.lat > maxLat) maxLat = p.lat;
+                  if (p.lon < minLon) minLon = p.lon;
+                  if (p.lon > maxLon) maxLon = p.lon;
+                }
+                const cLat = (minLat + maxLat) / 2;
+                const cLon = (minLon + maxLon) / 2;
+                const widthKm = haversineKm(cLat, minLon, cLat, maxLon);
+                const heightKm = haversineKm(minLat, cLon, maxLat, cLon);
+                const maxDim = Math.max(widthKm, heightKm);
+                // Camera altitude scaled so the box subtends ~half the screen.
+                // 0.7× max-dim is a good rule of thumb for an immersive view.
+                const altKm = Math.min(20000, Math.max(50, maxDim * 0.7));
+                setFlyTo((p) => ({ id: p.id + 1, lat: cLat, lon: cLon, altKm }));
+                showToast(`🎯 Fit to bounding box: ${formatDistKm(widthKm, unitsImperial)} W-E × ${formatDistKm(heightKm, unitsImperial)} N-S, framing at ${altKm.toFixed(0)}km altitude`);
+              },
+            }] : []),
+            // Test how circular the path is — compute distance from
+            // each vertex to the centroid, then report mean radius +
+            // standard deviation + circularity score (low CV = round).
+            // Useful for validating "is this a circle/ring path?"
+            ...(measureMode && measurePoints.length >= 4 ? [{
+              id: "measureCircleCheck" as const,
+              label: "⭕ Circularity check (mean radius + variance from centroid — is it a circle?)",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                // Spherical centroid via 3D unit vectors
+                let sx = 0, sy = 0, sz = 0;
+                for (const p of measurePoints) {
+                  const lat = p.lat * Math.PI / 180;
+                  const lon = p.lon * Math.PI / 180;
+                  sx += Math.cos(lat) * Math.cos(lon);
+                  sy += Math.cos(lat) * Math.sin(lon);
+                  sz += Math.sin(lat);
+                }
+                const len = Math.sqrt(sx*sx + sy*sy + sz*sz);
+                if (len === 0) { showToast("Centroid undefined (vertices cancel out)"); return; }
+                const cLat = Math.asin(sz/len) * 180 / Math.PI;
+                const cLon = Math.atan2(sy/len, sx/len) * 180 / Math.PI;
+                // Distance from each vertex to centroid
+                const radii = measurePoints.map(p => haversineKm(cLat, cLon, p.lat, p.lon));
+                const meanR = radii.reduce((a, b) => a + b, 0) / radii.length;
+                const minR = Math.min(...radii);
+                const maxR = Math.max(...radii);
+                const variance = radii.reduce((a, x) => a + (x - meanR) ** 2, 0) / radii.length;
+                const stddev = Math.sqrt(variance);
+                const cv = (stddev / meanR * 100); // CV%
+                const verdict = cv < 2 ? "essentially perfect circle"
+                  : cv < 5 ? "very close to circular"
+                  : cv < 15 ? "roughly circular"
+                  : cv < 30 ? "loosely round"
+                  : "not circular";
+                showToast(`⭕ Mean radius ${formatDistKm(meanR, unitsImperial)} (min ${formatDistKm(minR, unitsImperial)}, max ${formatDistKm(maxR, unitsImperial)}), CV ${cv.toFixed(1)}% — ${verdict}`);
+              },
+            }] : []),
+            // Plain-text export — human-readable list of all vertices
+            // with cumulative distance + bearing. Good for emailing,
+            // pasting in chat, or printing out a "route brief".
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureExportPlainText" as const,
+              label: "📝 Export measure path as plain text (human-readable, with cumulative distance + bearing)",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                let cumKm = 0;
+                const lines: string[] = [];
+                lines.push(`Atlas Globe measure path · ${measurePoints.length} vertices · ${new Date().toISOString().slice(0, 19)}Z`);
+                lines.push("");
+                lines.push("# | Latitude       | Longitude      | Cumulative   | Bearing");
+                lines.push("---+----------------+----------------+--------------+--------");
+                for (let i = 0; i < measurePoints.length; i++) {
+                  const p = measurePoints[i];
+                  let bearing = "  start";
+                  if (i > 0) {
+                    cumKm += haversineKm(measurePoints[i-1].lat, measurePoints[i-1].lon, p.lat, p.lon);
+                    bearing = `${Math.round(bearingDeg(measurePoints[i-1].lat, measurePoints[i-1].lon, p.lat, p.lon))}° ${compassDir(bearingDeg(measurePoints[i-1].lat, measurePoints[i-1].lon, p.lat, p.lon))}`;
+                  }
+                  const cumText = i === 0 ? "       0 km" : `${cumKm.toFixed(1).padStart(8)} km`;
+                  lines.push(`${String(i+1).padStart(2)} | ${formatLat(p.lat).padStart(14)} | ${formatLon(p.lon).padStart(14)} | ${cumText} | ${bearing}`);
+                }
+                lines.push("");
+                lines.push(`Total distance: ${formatDistKm(cumKm, unitsImperial)}`);
+                const text = lines.join("\n");
+                const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = `atlas-measure-${new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-")}.txt`;
+                link.click();
+                setTimeout(() => URL.revokeObjectURL(url), 500);
+                showToast(`📝 Exported ${measurePoints.length}-vertex path as plain text (${(text.length/1024).toFixed(1)} KB)`);
+              },
+            }] : []),
             // Global metric/imperial unit toggle. Affects the measure pill,
             // distance commands, area calculations, elevation lookups.
             { id: "toggleUnits", label: unitsImperial ? "Units → metric (km, m, km²)" : "Units → imperial (mi, ft, mi²)", group: "View", icon: Compass, hint: "U", run: () => setUnitsImperial((v) => { showToast(v ? "Units: metric" : "Units: imperial"); return !v; }) },
