@@ -1421,6 +1421,17 @@ function App() {
     }
     return stats;
   }, [aircraftSnapshot]);
+  // O(1) aircraft lookup by ICAO24. Replaces ~19 .find() linear scans
+  // throughout the codebase — at typical n=2000-7000 aircraft per
+  // snapshot, each scan is ~3.5kk comparisons (worst case). Hover tip
+  // and selected-aircraft popover were doing this on every camera-state
+  // re-render (5×/sec) the whole time the user lingered on an aircraft.
+  // Map build is O(n) and runs once per snapshot fetch (~30s cadence).
+  const aircraftById = useMemo(() => {
+    const m = new Map<string, Aircraft>();
+    for (const a of aircraftSnapshot?.aircraft ?? []) m.set(a.icao24, a);
+    return m;
+  }, [aircraftSnapshot]);
   const [selectedAircraftId, setSelectedAircraftId] = useState<string | null>(null);
   const [timelapseOpen, setTimelapseOpen] = useState(false);
   const [timelapseFrames, setTimelapseFrames] = useState<TimelapseFrame[]>([]);
@@ -2016,6 +2027,16 @@ function App() {
   imageryRef.current = imagery;
   const viewHistoryRef = useRef(viewHistory);
   viewHistoryRef.current = viewHistory;
+  // O(1) pin lookup by id. Replaces ~6 .find() linear scans throughout
+  // the codebase. Pin lists are smaller than aircraft (typically <100)
+  // but selected-pin operations run frequently (every keystroke for
+  // J/K/E/Shift+E/Shift+X) so the savings compound during heavy use.
+  // Map rebuilds only when `pins` changes — not on every camera move.
+  const pinsById = useMemo(() => {
+    const m = new Map<string, Pin>();
+    for (const p of pins) m.set(p.id, p);
+    return m;
+  }, [pins]);
 
   // After initial mount, force a window resize so r3f's <Canvas> ResizeObserver
   // picks up the actual viewport size. Without this, on some browsers the first
@@ -4706,8 +4727,11 @@ function App() {
   // once per (selectedPin, pins) change so both the targetPin prop
   // and the onFly closure can have stable identity.
   const selectedNavPin = useMemo(
-    () => selectedPin ? pins.find(p => p.id === selectedPin) ?? null : null,
-    [selectedPin, pins]
+    // O(1) lookup via the pinsById Map (vs the previous .find linear
+    // scan over every pin). Stable identity once memoized — important
+    // for SelectedPinNavWidget which is React.memo'd.
+    () => selectedPin ? pinsById.get(selectedPin) ?? null : null,
+    [selectedPin, pinsById]
   );
   const onFlyToSelectedPin = useCallback(() => {
     if (selectedNavPin) setFlyTo((c) => ({ id: c.id + 1, lat: selectedNavPin.lat, lon: selectedNavPin.lon, altKm: 5 }));
@@ -4830,7 +4854,11 @@ function App() {
                 showToast("Screenshot saved");
               }}
               selectedAircraft={selectedAircraftId && aircraftSnapshot ? (() => {
-                const a = aircraftSnapshot.aircraft.find((x) => x.icao24 === selectedAircraftId);
+                // O(1) lookup via aircraftById Map. Runs on every Atlas
+                // re-render while an aircraft is selected (persistent
+                // selection state) — the previous .find() was a linear
+                // scan over up to 7000 entries each render.
+                const a = aircraftById.get(selectedAircraftId);
                 return a ? { icao24: a.icao24, callsign: a.callsign, lat: a.lat, lon: a.lon, altitudeM: a.altitudeM, headingDeg: a.headingDeg, velocityMs: a.velocityMs } : null;
               })() : null}
               selectedAircraftHistory={selectedAircraftId ? (aircraftHistoryRef.current.get(selectedAircraftId) ?? []).map((p) => ({ lat: p.lat, lon: p.lon, alt: p.alt })) : undefined}
@@ -16916,11 +16944,14 @@ ${trkpts}
             // Quick-rename selected pin without opening the inspector.
             ...(selectedPin ? [{
               id: "pinRenameSelected" as const,
-              label: `Rename selected pin: "${pins.find(p => p.id === selectedPin)?.label || ""}"…`,
+              // O(1) label lookup via pinsById Map. The previous .find()
+              // ran on every palette-items array rebuild (each Atlas
+              // re-render @ ~5×/sec) for the label string interpolation.
+              label: `Rename selected pin: "${pinsById.get(selectedPin)?.label || ""}"…`,
               group: "Tools" as const,
               icon: BookmarkPlus,
               run: () => {
-                const cur = pins.find(p => p.id === selectedPin);
+                const cur = pinsById.get(selectedPin);
                 if (!cur) return;
                 const name = window.prompt("New name for this pin:", cur.label);
                 if (!name || name === cur.label) return;
@@ -17029,7 +17060,8 @@ ${trkpts}
             }] : []),
             // Copy selected pin as JSON to clipboard. Useful for moving
             // a pin between Atlas instances or sharing it as text.
-            ...(selectedPin && pins.find(p => p.id === selectedPin) ? [{
+            // O(1) lookup via pinsById Map (was a .find linear scan).
+            ...(selectedPin && pinsById.has(selectedPin) ? [{
               id: "pinExportSelectedJson" as const,
               label: "📋 Copy selected pin as JSON to clipboard",
               group: "Tools" as const,
@@ -18713,7 +18745,10 @@ ${wpts}
       )}
 
       {hoveredAircraftId && hoverPos && aircraftSnapshot && !selectedAircraftId && (() => {
-        const a = aircraftSnapshot.aircraft.find((x) => x.icao24 === hoveredAircraftId);
+        // O(1) lookup via aircraftById Map (vs the previous O(n) .find()
+        // over up to 7000 aircraft, which ran on every camera-state
+        // re-render at 5×/sec while hovering).
+        const a = aircraftById.get(hoveredAircraftId);
         if (!a) return null;
         return (
           <div className="atlasHoverTip" style={{ left: hoverPos.x + 14, top: hoverPos.y + 14 }}>
