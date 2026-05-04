@@ -17134,6 +17134,114 @@ ${trkpts}
               setTimeout(() => URL.revokeObjectURL(url), 500);
               showToast(`📊 Exported ${aircraftSnapshot.aircraft.length} aircraft snapshot to CSV`);
             }},
+            // GeoJSON FeatureCollection — every airborne aircraft as a Point
+            // feature with full props. Compatible with QGIS, kepler.gl,
+            // Mapbox, Leaflet, and most GIS tooling. Fast to import.
+            { id: "aircraftExportGeoJson", label: aircraftSnapshot && aircraftSnapshot.aircraft.length > 0 ? `🗺 Export ${aircraftSnapshot.aircraft.length} live aircraft as GeoJSON (snapshot)` : "Export live aircraft as GeoJSON (no aircraft loaded)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const fc = {
+                type: "FeatureCollection",
+                metadata: { source: aircraftSnapshot.source, fetchedAt: new Date(aircraftSnapshot.fetchedAt).toISOString(), count: aircraftSnapshot.aircraft.length },
+                features: aircraftSnapshot.aircraft.map(a => ({
+                  type: "Feature",
+                  geometry: { type: "Point", coordinates: [a.lon, a.lat, a.altitudeM] },
+                  properties: {
+                    icao24: a.icao24, callsign: a.callsign, country: a.country, registration: a.registration,
+                    type: a.type, category: a.category,
+                    altitudeM: a.altitudeM, velocityMs: a.velocityMs, headingDeg: a.headingDeg,
+                    verticalRateMs: a.verticalRateMs, onGround: a.onGround, squawk: a.squawk,
+                    lastContactUnix: a.lastContact,
+                  },
+                })),
+              };
+              const blob = new Blob([JSON.stringify(fc, null, 0)], { type: "application/geo+json" });
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement("a");
+              link.href = url;
+              link.download = `atlas-aircraft-${new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-")}.geojson`;
+              link.click();
+              setTimeout(() => URL.revokeObjectURL(url), 500);
+              showToast(`🗺 Exported ${aircraftSnapshot.aircraft.length} aircraft as GeoJSON`);
+            }},
+            // KML for Google Earth — drops every aircraft as a Placemark
+            // with altitude=above-sea-level so you see them flying at
+            // realistic heights when imported into GE.
+            { id: "aircraftExportKml", label: aircraftSnapshot && aircraftSnapshot.aircraft.length > 0 ? `🌍 Export ${aircraftSnapshot.aircraft.length} live aircraft as KML (Google Earth)` : "Export live aircraft as KML (no aircraft loaded)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const escape = (s: string) => (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+              const placemarks = aircraftSnapshot.aircraft.map(a => {
+                const cs = (a.callsign || a.icao24).trim();
+                const desc = `${a.registration ? `Reg: ${a.registration}\n` : ""}${a.type ? `Type: ${a.type}\n` : ""}Alt: ${Math.round(a.altitudeM / 0.3048).toLocaleString()} ft\nSpeed: ${Math.round(a.velocityMs * 1.944)} kt\nHeading: ${Math.round(a.headingDeg)}°`;
+                return `<Placemark><name>${escape(cs)}</name><description>${escape(desc)}</description><Point><altitudeMode>absolute</altitudeMode><coordinates>${a.lon.toFixed(6)},${a.lat.toFixed(6)},${Math.round(a.altitudeM)}</coordinates></Point></Placemark>`;
+              }).join("");
+              const kml = `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>Atlas Globe — live aircraft snapshot ${new Date().toISOString().slice(0, 19)}Z</name>${placemarks}</Document></kml>`;
+              const blob = new Blob([kml], { type: "application/vnd.google-earth.kml+xml" });
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement("a");
+              link.href = url;
+              link.download = `atlas-aircraft-${new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-")}.kml`;
+              link.click();
+              setTimeout(() => URL.revokeObjectURL(url), 500);
+              showToast(`🌍 Exported ${aircraftSnapshot.aircraft.length} aircraft as KML for Google Earth`);
+            }},
+            // Find the most-distant pair of airborne aircraft globally and
+            // fly to their spherical midpoint. Companion to aircraftClosestPair
+            // (which finds the nearest pair). O(n²) but capped at n=2000 to
+            // stay under ~500ms even on the worst snapshots.
+            { id: "aircraftFurthestPair", label: "📏 Find the most-distant pair of airborne aircraft globally and fly to midpoint", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length < 2) { showToast("Need ≥2 aircraft loaded"); return; }
+              const ac = aircraftSnapshot.aircraft.filter(x => !x.onGround);
+              if (ac.length < 2) { showToast("Need ≥2 airborne aircraft"); return; }
+              const sample = ac.length > 2000 ? ac.slice(0, 2000) : ac;
+              showToast(`📏 Scanning ${sample.length}² pairs for max distance…`);
+              let bestKm = -1;
+              let a1 = sample[0], a2 = sample[1];
+              for (let i = 0; i < sample.length; i++) {
+                for (let j = i + 1; j < sample.length; j++) {
+                  const km = haversineKm(sample[i].lat, sample[i].lon, sample[j].lat, sample[j].lon);
+                  if (km > bestKm) { bestKm = km; a1 = sample[i]; a2 = sample[j]; }
+                }
+              }
+              // Spherical midpoint via 3D unit vectors (handles antimeridian).
+              const aLatR = a1.lat * Math.PI/180, aLonR = a1.lon * Math.PI/180;
+              const bLatR = a2.lat * Math.PI/180, bLonR = a2.lon * Math.PI/180;
+              const ax = Math.cos(aLatR)*Math.cos(aLonR), ay = Math.cos(aLatR)*Math.sin(aLonR), az = Math.sin(aLatR);
+              const bx = Math.cos(bLatR)*Math.cos(bLonR), by = Math.cos(bLatR)*Math.sin(bLonR), bz = Math.sin(bLatR);
+              const mx = (ax+bx)/2, my = (ay+by)/2, mz = (az+bz)/2;
+              const mLen = Math.sqrt(mx*mx + my*my + mz*mz);
+              const mLat = Math.asin(mz/mLen) * 180 / Math.PI;
+              const mLon = Math.atan2(my/mLen, mx/mLen) * 180 / Math.PI;
+              // Earth diameter is ~20,000km — pull camera back proportionally.
+              const altKm = Math.min(20000, Math.max(2000, bestKm * 0.7));
+              setFlyTo((p) => ({ id: p.id + 1, lat: mLat, lon: mLon, altKm }));
+              const cs1 = (a1.callsign || a1.icao24).trim(), cs2 = (a2.callsign || a2.icao24).trim();
+              showToast(`📏 Furthest pair: ${cs1} ↔ ${cs2} — ${formatDistKm(bestKm, unitsImperial)} apart (${(bestKm/40075*100).toFixed(0)}% of Earth's circumference)`);
+            }},
+            // Data-quality check — find aircraft sharing a registration
+            // (shouldn't happen in real ADS-B; usually means a feeder
+            // misreported, or a stale-track-reuse issue). Useful for
+            // surfacing weird data, plane-spotting curiosities, or just
+            // a sanity check that the snapshot is healthy.
+            { id: "aircraftDuplicateRegistration", label: "🔍 Find aircraft sharing the same registration (data-quality / oddity scan)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const byReg = new Map<string, typeof aircraftSnapshot.aircraft>();
+              for (const a of aircraftSnapshot.aircraft) {
+                const reg = (a.registration || "").trim().toUpperCase();
+                if (!reg) continue;
+                if (!byReg.has(reg)) byReg.set(reg, []);
+                byReg.get(reg)!.push(a);
+              }
+              const dups = Array.from(byReg.entries()).filter(([, list]) => list.length > 1);
+              if (dups.length === 0) { showToast(`✅ No duplicate registrations across ${aircraftSnapshot.aircraft.length} aircraft (data is clean)`); return; }
+              dups.sort((a, b) => b[1].length - a[1].length);
+              const top = dups.slice(0, 5).map(([reg, list]) => `${reg} ×${list.length}`).join(" · ");
+              const totalAffected = dups.reduce((s, [, l]) => s + l.length, 0);
+              console.log(`🔍 Duplicate registrations across ${aircraftSnapshot.aircraft.length} aircraft:`);
+              dups.forEach(([reg, list]) => {
+                console.log(`  ${reg} appears ${list.length}× — ${list.map(a => `${a.icao24}/${(a.callsign || "—").trim()}`).join(", ")}`);
+              });
+              showToast(`🔍 ${dups.length} duplicate reg${dups.length === 1 ? "" : "s"} (${totalAffected} aircraft affected): ${top} — full list in console`);
+            }},
             { id: "earthquakesExportCsv", label: earthquakes.length > 0 ? `📊 Export ${earthquakes.length} earthquakes as CSV (24h USGS)` : "Export earthquakes as CSV (none loaded — toggle layer)", group: "Tools", icon: Sparkles, run: () => {
               if (earthquakes.length === 0) { showToast("Earthquakes layer not loaded"); return; }
               const escape = (s: string) => `"${(s || "").replace(/"/g, '""')}"`;
