@@ -16920,6 +16920,46 @@ ${wpts}
                 console.log(`🔤 All ${sorted.length} pins alphabetically:\n${sorted.map((p, i) => `${i + 1}. ${p.label}`).join("\n")}`);
                 showToast(`🔤 ${sorted.length} pins A→Z: ${top}${more}`);
               },
+            }, {
+              id: "pinFlyToOldest" as const,
+              label: "🕰 Fly to oldest pin (earliest createdAt)",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const oldest = pins.reduce((min, p) => p.createdAt < min.createdAt ? p : min);
+                const ageDays = (Date.now() - oldest.createdAt) / 86_400_000;
+                const ageStr = ageDays < 1 ? `${Math.round(ageDays * 24)}h` : ageDays < 365 ? `${Math.round(ageDays)}d` : `${Math.round(ageDays / 365)}y`;
+                setSelectedPin(oldest.id);
+                setFlyTo((p) => ({ id: p.id + 1, lat: oldest.lat, lon: oldest.lon, altKm: 5 }));
+                showToast(`🕰 Oldest pin: "${oldest.label}" · ${ageStr} ago`);
+              },
+            }, {
+              id: "pinFlyToNewest" as const,
+              label: "🆕 Fly to newest pin (latest createdAt)",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const newest = pins.reduce((max, p) => p.createdAt > max.createdAt ? p : max);
+                const ageS = Math.round((Date.now() - newest.createdAt) / 1000);
+                const ageStr = ageS < 60 ? `${ageS}s` : ageS < 3600 ? `${Math.round(ageS / 60)}m` : ageS < 86400 ? `${Math.round(ageS / 3600)}h` : `${Math.round(ageS / 86400)}d`;
+                setSelectedPin(newest.id);
+                setFlyTo((p) => ({ id: p.id + 1, lat: newest.lat, lon: newest.lon, altKm: 5 }));
+                showToast(`🆕 Newest pin: "${newest.label}" · ${ageStr} ago`);
+              },
+            }, {
+              id: "pinTimespan" as const,
+              label: "📅 Pin collection timespan (oldest → newest)",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const sorted = [...pins].sort((a, b) => a.createdAt - b.createdAt);
+                const first = sorted[0];
+                const last = sorted[sorted.length - 1];
+                const spanMs = last.createdAt - first.createdAt;
+                const spanDays = spanMs / 86_400_000;
+                const spanStr = spanDays < 1 ? `${(spanDays * 24).toFixed(1)} hours` : spanDays < 30 ? `${spanDays.toFixed(1)} days` : spanDays < 365 ? `${(spanDays / 30).toFixed(1)} months` : `${(spanDays / 365).toFixed(1)} years`;
+                showToast(`📅 ${pins.length} pins span ${spanStr} · "${first.label}" (oldest) → "${last.label}" (newest)`);
+              },
             }] : []),
             // Cluster report: groups of 3+ pins within 50km of each other.
             // Helps the user see where their pin density is concentrated.
