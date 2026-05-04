@@ -9989,6 +9989,59 @@ ${trkpts}
                 showToast(`📦 Path bounds: ${(maxLat-minLat).toFixed(1)}° × ${(maxLon-minLon).toFixed(1)}° (${formatDistKm(widthKm, unitsImperial)} W-E × ${formatDistKm(heightKm, unitsImperial)} N-S)`);
               },
             }] : []),
+            // Replace path with the 4-corner closed rectangle of its
+            // bounding box. Useful as a reference frame or for quick
+            // area calculations.
+            ...(measureMode && measurePoints.length >= 3 ? [{
+              id: "measureBoundingBoxToPath" as const,
+              label: "📦 Replace path with its bounding box (4-corner closed rectangle)",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                let minLat = measurePoints[0].lat, maxLat = measurePoints[0].lat;
+                let minLon = measurePoints[0].lon, maxLon = measurePoints[0].lon;
+                for (const p of measurePoints) {
+                  if (p.lat < minLat) minLat = p.lat;
+                  if (p.lat > maxLat) maxLat = p.lat;
+                  if (p.lon < minLon) minLon = p.lon;
+                  if (p.lon > maxLon) maxLon = p.lon;
+                }
+                // 4-corner closed rectangle (5 vertices, last == first)
+                const box = [
+                  { lat: minLat, lon: minLon },
+                  { lat: minLat, lon: maxLon },
+                  { lat: maxLat, lon: maxLon },
+                  { lat: maxLat, lon: minLon },
+                  { lat: minLat, lon: minLon },
+                ];
+                const removed = measurePoints.length - 4;
+                setMeasurePoints(box);
+                showToast(`📦 Replaced ${measurePoints.length}-vertex path with its bounding-box rectangle (4 corners, ${removed > 0 ? `removed ${removed} vertices` : `expanded to ${4 - measurePoints.length} more`})`);
+              },
+            }] : []),
+            // Closest approach — find the two non-consecutive vertices
+            // that are nearest to each other. For self-intersecting or
+            // dense paths, this finds the closest crossing or near-miss.
+            ...(measureMode && measurePoints.length >= 4 ? [{
+              id: "measureClosestApproach" as const,
+              label: "🔭 Find closest approach (nearest pair of non-consecutive vertices)",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                let bestKm = Infinity;
+                let bestI = 0, bestJ = 0;
+                for (let i = 0; i < measurePoints.length; i++) {
+                  // Skip consecutive vertices (those are just leg lengths)
+                  for (let j = i + 2; j < measurePoints.length; j++) {
+                    if (i === 0 && j === measurePoints.length - 1) continue; // closing leg in implicit loop
+                    const km = haversineKm(measurePoints[i].lat, measurePoints[i].lon, measurePoints[j].lat, measurePoints[j].lon);
+                    if (km < bestKm) { bestKm = km; bestI = i; bestJ = j; }
+                  }
+                }
+                if (bestKm === Infinity) { showToast("Path too short for non-consecutive comparisons"); return; }
+                showToast(`🔭 Closest approach: vertex #${bestI + 1} ↔ #${bestJ + 1} · ${formatDistKm(bestKm, unitsImperial)}`);
+              },
+            }] : []),
             // Path uniformity: longest leg / shortest leg ratio.
             // 1.0 = perfectly even legs, higher = more lopsided.
             ...(measureMode && measurePoints.length >= 3 ? [{
