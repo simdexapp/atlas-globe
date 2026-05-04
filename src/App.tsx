@@ -7931,6 +7931,24 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: -46.692, lon: -72.638, altKm: 8 }));
               showToast(`💎 Marble Caves (Cuevas de Mármol) · sculpted into a marble peninsula on Lake General Carrera, Patagonian Chile · turquoise water reflects on swirled marble · ~6,000 years of wave erosion`);
             }},
+            // ===== Iconic ski / winter resorts =====
+            // Major ski mountains famous for snow quality, history, or scale.
+            { id: "flyZermatt", label: "⛷ Fly to Zermatt (Switzerland — car-free village beneath the Matterhorn, 360km of pistes)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 46.0207, lon: 7.7491, altKm: 8 }));
+              showToast(`⛷ Zermatt · Pennine Alps, Valais Switzerland · 1,620m · car-free since 1947 (only electric vehicles allowed) · 360km of interconnected pistes between Switzerland + Italy via the Klein Matterhorn lift (3,883m, Europe's highest cable-car station) · year-round skiing on the glacier · Matterhorn (4,478m) looms above the village`);
+            }},
+            { id: "flyAspen", label: "⛷ Fly to Aspen / Snowmass (Colorado — old silver-mining town turned celebrity ski destination)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 39.1911, lon: -106.8175, altKm: 12 }));
+              showToast(`⛷ Aspen, CO · Roaring Fork Valley, 2,422m elevation · originally 1880s silver-mining boomtown, ski resort since 1946 · 4 mountains (Aspen Mtn, Aspen Highlands, Buttermilk, Snowmass) connected by free shuttle · 5,500+ skiable acres · X Games host since 2002 · most expensive lift tickets in North America`);
+            }},
+            { id: "flyWhistler", label: "⛷ Fly to Whistler Blackcomb (BC — largest ski resort in North America, 8,171 acres)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 50.1163, lon: -122.9574, altKm: 12 }));
+              showToast(`⛷ Whistler Blackcomb · Coast Mountains, British Columbia · 8,171 skiable acres (largest in North America) · Whistler (2,182m) + Blackcomb (2,440m) connected by Peak 2 Peak Gondola — longest free-span lift on Earth at 3.024 km · co-hosted alpine + sliding events for Vancouver 2010 Winter Olympics · 11.7m average annual snowfall`);
+            }},
+            { id: "flyNiseko", label: "⛷ Fly to Niseko United (Hokkaido — Japan's powder paradise, 15m+ annual snowfall)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 42.8580, lon: 140.6985, altKm: 8 }));
+              showToast(`⛷ Niseko United · Hokkaido, Japan · 15m+ average annual snowfall (one of the world's snowiest ski areas) · Siberian air picks up moisture from the Sea of Japan → dumps as ultra-light powder ("JaPow") · 4 interconnected resorts (Grand Hirafu, Hanazono, Niseko Village, An'nupuri) on Mt. Annupuri (1,308m) · Mt. Yotei (Hokkaido's "little Mt. Fuji") rises across the valley`);
+            }},
             // ===== Iconic river deltas =====
             // Geographically distinctive river deltas, visible from space.
             { id: "flyOkavango", label: "🏞 Fly to Okavango Delta (Botswana — world's largest inland delta, 18,000 km²)", group: "View", icon: Globe2, run: () => {
