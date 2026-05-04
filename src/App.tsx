@@ -760,6 +760,11 @@ const KEYBOARD_HINTS = [
   { keys: "↑ ↓ ← → / W X A D", desc: "Pan camera north / south / west / east" },
   { keys: "+ / =", desc: "Zoom in 2× (halve altitude)" },
   { keys: "- / _", desc: "Zoom out 2× (double altitude)" },
+  { keys: "PageUp", desc: "Zoom in 4× (faster than +)" },
+  { keys: "PageDown", desc: "Zoom out 4× (faster than −)" },
+  { keys: "Home", desc: "🌍 Fly to (0°, 0°) — equator + prime meridian (Gulf of Guinea)" },
+  { keys: "End", desc: "🏠 Fly to saved home location (set via palette)" },
+  { keys: "F1", desc: "Show shortcuts (universal Help convention)" },
   // ===== Time (Surface mode) =====
   { keys: "[", desc: "Step Surface clock back 1 hour" },
   { keys: "]", desc: "Step Surface clock forward 1 hour" },
@@ -4728,6 +4733,51 @@ function App() {
             showToast(`📋 Inspector: ${next}`);
           }
           break;
+        case "f1":
+          // F1 — open shortcuts cheat sheet. Universal Help convention
+          // (Windows / VS Code / most desktop apps). Most browsers do
+          // NOT bind F1 to native help, so this is safe to override.
+          event.preventDefault();
+          setShowShortcuts(true);
+          break;
+        case "home":
+          // Home — fly to (0, 0): equator + prime meridian. The
+          // canonical "centre of the world" reset, distinct from R
+          // which restores the user's last manual reset point.
+          event.preventDefault();
+          setFlyTo((p) => ({ id: p.id + 1, lat: 0, lon: 0, altKm: 12000 }));
+          showToast("🌍 Centre of world (0°, 0°) — Gulf of Guinea");
+          break;
+        case "end":
+          // End — fly to user's saved home location, if set. Quick
+          // way back to "my place" from anywhere on Earth. Errors
+          // gracefully if no home is saved.
+          event.preventDefault();
+          if (homeLocation) {
+            setFlyTo((p) => ({ id: p.id + 1, lat: homeLocation.lat, lon: homeLocation.lon, altKm: homeLocation.altKm }));
+            showToast(`🏠 Flying to ${homeLocation.name}`);
+          } else {
+            showToast("🏠 No home location set — use the palette to set one");
+          }
+          break;
+        case "pageup":
+          // PageUp — zoom in 4× (vs +/= which zoom 2×). Faster
+          // descent for power users who want to dive into a region.
+          event.preventDefault();
+          if (cameraStateRef.current) {
+            const c = cameraStateRef.current;
+            setFlyTo((p) => ({ id: p.id + 1, lat: c.lat, lon: c.lon, altKm: Math.max(0.05, c.altKm / 4) }));
+          }
+          break;
+        case "pagedown":
+          // PageDown — zoom out 4× (vs -/_ which zoom 2×). Quickly
+          // pull back to orbital view from a closeup.
+          event.preventDefault();
+          if (cameraStateRef.current) {
+            const c = cameraStateRef.current;
+            setFlyTo((p) => ({ id: p.id + 1, lat: c.lat, lon: c.lon, altKm: Math.min(50000, c.altKm * 4) }));
+          }
+          break;
         default:
       }
     };
@@ -4739,7 +4789,7 @@ function App() {
     // every layer toggle, every pin add, every bookmark save — many
     // re-binds per session for no reason since the listener body
     // can already see fresh values via the refs.
-  }, [cycleTheme, mode, resetView, saveCurrentBookmark, showSearch, showShortcuts, switchToAtlas, switchToSurface, measureMode, showToast, selectedPin, deletePin, captureAtScale, unitsImperial]);
+  }, [cycleTheme, mode, resetView, saveCurrentBookmark, showSearch, showShortcuts, switchToAtlas, switchToSurface, measureMode, showToast, selectedPin, deletePin, captureAtScale, unitsImperial, homeLocation, inspectorTab]);
 
   const rootStyle: CSSProperties = {
     "--accent": "#5cb5ff",
