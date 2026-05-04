@@ -238,6 +238,15 @@ type LayerVisibility = {
   // Educational: surfaces a non-obvious physics fact (you're moving
   // 1670 km/h east just standing still on the equator).
   earthRotation: boolean;
+  // Distance-to-poles widget — km from current view to North Pole,
+  // South Pole, equator. Uses haversine — surfaces "how far north am
+  // I right now?" answered in km, not just degrees.
+  distanceToPolesWidget: boolean;
+  // Local-gravity widget — gravitational acceleration g at the current
+  // latitude. Varies from 9.78 m/s² at equator to 9.83 at poles (due
+  // to Earth's oblate shape + centrifugal effect of rotation).
+  // Educational physics widget.
+  localGravity: boolean;
 };
 
 type GlobeSettings = {
@@ -588,6 +597,8 @@ const defaultLayers: LayerVisibility = {
   seasons: false,
   populationNearby: false,
   earthRotation: false,
+  distanceToPolesWidget: false,
+  localGravity: false,
   // 3D OSM Buildings tileset is heavy and renders with edge outlines
   // that disable imagery draping underneath, painting the screen with
   // dark olive boxes at low altitudes (the user's tear repro). Off by
@@ -12263,6 +12274,8 @@ ${trkpts}
             { id: "widgetSeasons", label: layers.seasons ? "Hide seasons widget" : "Show seasons widget (current season + days to next equinox/solstice)", group: "Widgets", icon: SunIcon, run: () => toggleLayer("seasons") },
             { id: "widgetPopulationNearby", label: layers.populationNearby ? "Hide population-nearby widget" : "🏙 Show population-nearby widget (sum of cities within 500km)", group: "Widgets", icon: BookmarkPlus, run: () => toggleLayer("populationNearby") },
             { id: "widgetEarthRotation", label: layers.earthRotation ? "Hide Earth-rotation widget" : "🌐 Show Earth-rotation widget (tangential velocity at current latitude)", group: "Widgets", icon: Compass, run: () => toggleLayer("earthRotation") },
+            { id: "widgetDistanceToPoles", label: layers.distanceToPolesWidget ? "Hide distance-to-poles widget" : "📐 Show distance-to-poles widget (km to N/S poles + equator from view)", group: "Widgets", icon: Compass, run: () => toggleLayer("distanceToPolesWidget") },
+            { id: "widgetLocalGravity", label: layers.localGravity ? "Hide local-gravity widget" : "⬇ Show local-gravity widget (g at current latitude — varies 9.78–9.83 m/s²)", group: "Widgets", icon: Compass, run: () => toggleLayer("localGravity") },
             // Ambient Earth — kiosk/big-screen mode. Hides UI chrome,
             // starts auto-orbit, shows comprehensive live-data overlay.
             // Made for office TVs, conference displays, screensavers.
@@ -19818,6 +19831,84 @@ ${wpts}
                 </div>
                 <div className="atlasEarthRotationFooter">
                   Local circumference: {circKm.toFixed(0)} km
+                </div>
+              </div>
+            );
+          })()}
+        </Draggable>
+      )}
+
+      {/* Distance-to-poles widget — straight-line haversine km from
+          view to North Pole, South Pole, and equator. Surfaces "how
+          far north am I right now?" answered in km, not just degrees.
+          Numbers update as the camera pans. */}
+      {layers.distanceToPolesWidget && (
+        <Draggable id="distanceToPolesWidget" customizeMode={customizeUiMode} position={widgetPositions.distanceToPolesWidget} onMove={setWidgetPosition}>
+          {(() => {
+            const cLat = cameraState.lat, cLon = cameraState.lon;
+            const toN = haversineKm(cLat, cLon, 90, 0);
+            const toS = haversineKm(cLat, cLon, -90, 0);
+            const toEq = haversineKm(cLat, cLon, 0, cLon);
+            const fmt = (km: number) => unitsImperial ? `${Math.round(km * 0.621371).toLocaleString()} mi` : `${Math.round(km).toLocaleString()} km`;
+            // Determine which is closer
+            const closest = toN < toS ? "N pole" : "S pole";
+            const closestKm = Math.min(toN, toS);
+            return (
+              <div className="atlasDistanceToPolesWidget" role="status" aria-label="Distance to poles">
+                <div className="atlasDistanceToPolesHead">
+                  <Compass size={12} />
+                  <strong>From view to…</strong>
+                </div>
+                <div className="atlasDistanceToPolesGrid">
+                  <div><span>NORTH POLE</span><strong>{fmt(toN)}</strong></div>
+                  <div><span>SOUTH POLE</span><strong>{fmt(toS)}</strong></div>
+                  <div><span>EQUATOR</span><strong>{fmt(toEq)}</strong></div>
+                </div>
+                <div className="atlasDistanceToPolesFooter">
+                  Closest: {closest} ({fmt(closestKm)})
+                </div>
+              </div>
+            );
+          })()}
+        </Draggable>
+      )}
+
+      {/* Local-gravity widget — gravitational acceleration g at current
+          latitude. International gravity formula (1980 GRS). Varies
+          0.5% from equator (9.7803) to poles (9.8322) due to Earth's
+          oblate shape and rotation centrifugal effect. */}
+      {layers.localGravity && (
+        <Draggable id="localGravity" customizeMode={customizeUiMode} position={widgetPositions.localGravity} onMove={setWidgetPosition}>
+          {(() => {
+            const phi = cameraState.lat * Math.PI / 180;
+            // GRS80 international gravity formula:
+            // g = 9.7803267715 · (1 + 0.0052790414·sin²φ + 0.0000232718·sin⁴φ + ...) m/s²
+            const sinPhi = Math.sin(phi);
+            const sin2 = sinPhi * sinPhi;
+            const sin4 = sin2 * sin2;
+            const g = 9.7803267715 * (1 + 0.0052790414 * sin2 + 0.0000232718 * sin4);
+            // Compare to equator
+            const gEq = 9.7803267715;
+            const gPole = 9.8321863685;
+            const pctOfEq = (g / gEq * 100);
+            const pctOfPole = (g / gPole * 100);
+            // 1kg "weighs" g newtons here
+            const weight1kg = g; // newtons
+            return (
+              <div className="atlasLocalGravityWidget" role="status" aria-label="Local gravity">
+                <div className="atlasLocalGravityHead">
+                  <Compass size={12} />
+                  <strong>Local gravity g</strong>
+                </div>
+                <div className="atlasLocalGravityBig">
+                  {g.toFixed(4)} <span>m/s²</span>
+                </div>
+                <div className="atlasLocalGravityMeta">
+                  <span>{pctOfEq.toFixed(3)}% of equator</span>
+                  <span>· {pctOfPole.toFixed(3)}% of poles</span>
+                </div>
+                <div className="atlasLocalGravityFooter">
+                  1 kg weighs {weight1kg.toFixed(3)} N here · 70 kg ≈ {(70 * g).toFixed(0)} N
                 </div>
               </div>
             );
