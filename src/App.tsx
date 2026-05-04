@@ -14696,6 +14696,98 @@ ${trkpts}
               window.speechSynthesis.speak(u);
               showToast(`🔊 ${text}`);
             }},
+            // Speak the next upcoming rocket launch — name, agency, and
+            // time until liftoff. Uses the memoized nextLaunch from
+            // parent scope (computed once per launches change).
+            { id: "announceNextLaunch", label: nextLaunch ? `🔊 Speak next rocket launch (${nextLaunch.name.split("|")[0].trim()})` : "🔊 Speak next launch (none upcoming)", group: "Tools", icon: Sparkles, run: () => {
+              if (typeof window === "undefined" || !window.speechSynthesis) { showToast("🔊 SpeechSynthesis not available in this browser"); return; }
+              if (!nextLaunch) { showToast("🚀 No upcoming launches loaded — turn on the launches layer (key 6)"); return; }
+              const hours = Math.max(0, (nextLaunch.netUnixMs - Date.now()) / 3_600_000);
+              const timeText = hours < 1
+                ? `${Math.round(hours * 60)} minutes`
+                : hours < 24 ? `${hours.toFixed(1)} hours` : `${(hours / 24).toFixed(1)} days`;
+              const cleanName = nextLaunch.name.split("|")[0].trim().replace(/[\(\)\[\]]/g, "");
+              const text = `Next rocket launch: ${cleanName}, in approximately ${timeText}.`;
+              window.speechSynthesis.cancel();
+              const u = new SpeechSynthesisUtterance(text);
+              u.rate = voiceRate;
+              u.pitch = voicePitch;
+              window.speechSynthesis.speak(u);
+              showToast(`🔊 ${text}`);
+            }},
+            // Speak which space objects are currently being tracked
+            // (ISS, Tiangong, Hubble) and their sub-satellite positions.
+            // Useful for screen-reader users following spacecraft live.
+            { id: "announceVisibleSatellites", label: "🔊 Speak status of tracked spacecraft (ISS / Tiangong / Hubble)", group: "Tools", icon: Sparkles, run: () => {
+              if (typeof window === "undefined" || !window.speechSynthesis) { showToast("🔊 SpeechSynthesis not available in this browser"); return; }
+              const parts: string[] = [];
+              if (issPosition) {
+                const ns = issPosition.lat >= 0 ? "north" : "south";
+                const ew = issPosition.lon >= 0 ? "east" : "west";
+                parts.push(`ISS over latitude ${Math.abs(issPosition.lat).toFixed(1)} ${ns}, longitude ${Math.abs(issPosition.lon).toFixed(1)} ${ew}`);
+              }
+              if (tiangongPosition) {
+                const ns = tiangongPosition.lat >= 0 ? "north" : "south";
+                const ew = tiangongPosition.lon >= 0 ? "east" : "west";
+                parts.push(`Tiangong over latitude ${Math.abs(tiangongPosition.lat).toFixed(1)} ${ns}, longitude ${Math.abs(tiangongPosition.lon).toFixed(1)} ${ew}`);
+              }
+              if (hubblePosition) {
+                const ns = hubblePosition.lat >= 0 ? "north" : "south";
+                const ew = hubblePosition.lon >= 0 ? "east" : "west";
+                parts.push(`Hubble over latitude ${Math.abs(hubblePosition.lat).toFixed(1)} ${ns}, longitude ${Math.abs(hubblePosition.lon).toFixed(1)} ${ew}`);
+              }
+              const text = parts.length === 0
+                ? "No spacecraft positions loaded. Toggle the ISS, Tiangong, or Hubble layers in the palette to start tracking."
+                : parts.join(". ") + ".";
+              window.speechSynthesis.cancel();
+              const u = new SpeechSynthesisUtterance(text);
+              u.rate = voiceRate;
+              u.pitch = voicePitch;
+              window.speechSynthesis.speak(u);
+              showToast(`🔊 ${text}`);
+            }},
+            // Speak unit system + a11y settings overview. Useful for
+            // confirming current accessibility configuration audibly.
+            { id: "announceA11ySettings", label: "🔊 Speak current accessibility settings (units, text size, contrast, voice)", group: "Tools", icon: Sparkles, run: () => {
+              if (typeof window === "undefined" || !window.speechSynthesis) { showToast("🔊 SpeechSynthesis not available in this browser"); return; }
+              const parts: string[] = [];
+              parts.push(`Units: ${unitsImperial ? "imperial (miles, feet)" : "metric (kilometres, metres)"}.`);
+              parts.push(`Text size: ${textScale}.`);
+              parts.push(`Voice rate: ${voiceRate.toFixed(2)} times, pitch: ${voicePitch.toFixed(2)}.`);
+              if (highContrast) parts.push("High-contrast mode on.");
+              if (colorBlindSafe) parts.push("Colorblind-safe palette on.");
+              if (boldText) parts.push("Bold text on.");
+              if (strongFocusRing) parts.push("Strong focus rings on.");
+              if (forceReducedMotion) parts.push("Reduced motion forced.");
+              if (voiceNarration) parts.push("Voice toast narration on.");
+              const text = parts.join(" ");
+              window.speechSynthesis.cancel();
+              const u = new SpeechSynthesisUtterance(text);
+              u.rate = voiceRate;
+              u.pitch = voicePitch;
+              window.speechSynthesis.speak(u);
+              showToast(`🔊 ${text}`);
+            }},
+            // Speak the current UI theme name. Useful for confirming
+            // theme without having to see the screen.
+            { id: "announceUiTheme", label: "🔊 Speak current UI theme name", group: "Tools", icon: Sparkles, run: () => {
+              if (typeof window === "undefined" || !window.speechSynthesis) { showToast("🔊 SpeechSynthesis not available in this browser"); return; }
+              const themeDesc: Record<string, string> = {
+                dark: "dark — the default deep-blue night theme",
+                light: "light — pale background for daytime use",
+                oled: "oled — pure black for AMOLED screens",
+                cyber: "cyber — neon magenta and cyan accents",
+                solar: "solar — warm amber on cream",
+                mono: "mono — monochrome grayscale",
+              };
+              const text = `Current UI theme: ${themeDesc[uiTheme] || uiTheme}.`;
+              window.speechSynthesis.cancel();
+              const u = new SpeechSynthesisUtterance(text);
+              u.rate = voiceRate;
+              u.pitch = voicePitch;
+              window.speechSynthesis.speak(u);
+              showToast(`🔊 ${text}`);
+            }},
             { id: "wikiNearby", label: "🗺 Wikipedia articles near this view (top 8 within 50km)", group: "Tools", icon: Sparkles, run: async () => {
               const c = cameraStateRef.current;
               if (!c) return;
