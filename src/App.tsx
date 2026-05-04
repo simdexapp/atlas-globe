@@ -10593,6 +10593,58 @@ ${trkpts}
                 showToast(`➡ Extended ${formatDistKm(km, unitsImperial)} on bearing ${bearing.toFixed(0)}° (${compassDir(bearing)})`);
               },
             }] : []),
+            // Extend backward from first vertex along the reverse bearing
+            // of the first leg. Companion to measureExtendForward.
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureExtendBackward" as const,
+              label: "⬅ Extend path before first vertex by N km along the first leg's reverse bearing",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                const input = window.prompt("Extend backward by how many km before the first vertex?", "100");
+                if (!input) return;
+                const km = parseFloat(input);
+                if (!Number.isFinite(km) || km <= 0) { showToast("Enter a positive km value"); return; }
+                const a = measurePoints[0];
+                const b = measurePoints[1];
+                // Reverse bearing: from b to a, then extend further past a
+                const bearing = bearingDeg(b.lat, b.lon, a.lat, a.lon);
+                const R = EARTH_RADIUS_KM;
+                const φ1 = a.lat * Math.PI / 180;
+                const λ1 = a.lon * Math.PI / 180;
+                const θ = bearing * Math.PI / 180;
+                const dR = km / R;
+                const φ2 = Math.asin(Math.sin(φ1) * Math.cos(dR) + Math.cos(φ1) * Math.sin(dR) * Math.cos(θ));
+                const λ2 = λ1 + Math.atan2(Math.sin(θ) * Math.sin(dR) * Math.cos(φ1), Math.cos(dR) - Math.sin(φ1) * Math.sin(φ2));
+                const newPt = { lat: φ2 * 180 / Math.PI, lon: ((λ2 * 180 / Math.PI) + 540) % 360 - 180 };
+                setMeasurePoints((pts) => [newPt, ...pts]);
+                showToast(`⬅ Extended ${formatDistKm(km, unitsImperial)} backward on bearing ${bearing.toFixed(0)}° (${compassDir(bearing)})`);
+              },
+            }] : []),
+            // Translate the entire path so its centroid lands on the
+            // current view. Preserves shape + scale; just shifts position.
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureCenterAtView" as const,
+              label: "🎯 Translate path so its centroid is at current view position",
+              group: "View" as const,
+              icon: Crosshair,
+              run: () => {
+                const c = cameraStateRef.current;
+                if (!c) { showToast("Camera position unknown"); return; }
+                let cLat = 0, cLon = 0;
+                for (const p of measurePoints) { cLat += p.lat; cLon += p.lon; }
+                cLat /= measurePoints.length;
+                cLon /= measurePoints.length;
+                const dLat = c.lat - cLat;
+                const dLon = c.lon - cLon;
+                const moved = measurePoints.map(p => ({
+                  lat: Math.max(-89, Math.min(89, p.lat + dLat)),
+                  lon: ((p.lon + dLon + 540) % 360) - 180,
+                }));
+                setMeasurePoints(moved);
+                showToast(`🎯 Translated path by Δlat ${dLat.toFixed(2)}°, Δlon ${dLon.toFixed(2)}° (centroid now at view)`);
+              },
+            }] : []),
             // Mirror the path across its centroid (point reflection).
             // Each vertex (lat, lon) becomes (2·cLat - lat, 2·cLon - lon).
             ...(measureMode && measurePoints.length >= 2 ? [{
