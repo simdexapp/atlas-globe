@@ -776,6 +776,9 @@ const KEYBOARD_HINTS = [
   { keys: "Home", desc: "🌍 Fly to (0°, 0°) — equator + prime meridian (Gulf of Guinea)" },
   { keys: "End", desc: "🏠 Fly to saved home location (set via palette)" },
   { keys: "F1", desc: "Show shortcuts (universal Help convention)" },
+  { keys: "F2", desc: "✏ Rename selected pin (Windows convention)" },
+  { keys: "Delete", desc: "🗑 Delete selected pin with confirm (alternative to Shift+X)" },
+  { keys: "\\", desc: "🎨 Toggle UI customization mode (alternative to Cmd+E)" },
   // ===== Time (Surface mode) =====
   { keys: "[", desc: "Step Surface clock back 1 hour" },
   { keys: "]", desc: "Step Surface clock forward 1 hour" },
@@ -4817,6 +4820,48 @@ function App() {
             const c = cameraStateRef.current;
             setFlyTo((p) => ({ id: p.id + 1, lat: c.lat, lon: c.lon, altKm: Math.min(50000, c.altKm * 4) }));
           }
+          break;
+        case "f2":
+          // F2 — rename selected pin. Universal Windows convention
+          // (Explorer, VS Code, etc.) for "rename the focused item".
+          event.preventDefault();
+          if (!selectedPin) { showToast("No pin selected — click a pin first (or press J/K)"); return; }
+          {
+            const sp = pins.find(p => p.id === selectedPin);
+            if (!sp) { showToast("Selected pin no longer exists"); return; }
+            const newLabel = window.prompt("Rename pin:", sp.label);
+            if (newLabel === null) return;
+            const trimmed = newLabel.trim();
+            if (!trimmed) { showToast("Label cannot be empty"); return; }
+            setPins((prev) => prev.map((p) => p.id === selectedPin ? { ...p, label: trimmed } : p));
+            showToast(`✏ Renamed: ${trimmed}`);
+          }
+          break;
+        case "delete":
+          // Delete — delete the selected pin (with confirm). Standard
+          // OS convention for delete-focused-item. Plain Delete (no
+          // Shift) is the muscle memory most users have. Shift+X
+          // (the original binding) is preserved as an alternative.
+          event.preventDefault();
+          if (!selectedPin) { showToast("No pin selected — click a pin first (or press J/K)"); return; }
+          {
+            const sp = pins.find(p => p.id === selectedPin);
+            if (!sp) { showToast("Selected pin no longer exists"); return; }
+            if (!window.confirm(`Delete pin "${sp.label}"? This cannot be undone.`)) return;
+            deletePin(selectedPin);
+            setSelectedPin(null);
+            showToast(`🗑 Deleted: ${sp.label}`);
+          }
+          break;
+        case "\\":
+          // Backslash — toggle UI customization mode. Single-key
+          // alternative to Cmd/Ctrl+E for users who don't have
+          // convenient meta keys (kiosk setups, on-screen keyboards).
+          event.preventDefault();
+          setCustomizeUiMode((v) => {
+            showToast(v ? "🎨 Customize mode off" : "🎨 Customize mode on — drag widgets anywhere");
+            return !v;
+          });
           break;
         default:
       }
