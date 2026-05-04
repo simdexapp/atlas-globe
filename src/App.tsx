@@ -11438,6 +11438,128 @@ ${trkpts}
                 showToast(`📊 ${legs.length} legs · mean ${formatDistKm(mean, unitsImperial)} · min ${formatDistKm(min, unitsImperial)} · max ${formatDistKm(max, unitsImperial)} · σ ${formatDistKm(stddev, unitsImperial)} (CV ${cv.toFixed(0)}%)`);
               },
             }] : []),
+            // Find the northernmost and southernmost vertices in one
+            // shot — useful for highlighting the extreme reaches of a
+            // long path (e.g. polar route, expedition track).
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureExtremeVertices" as const,
+              label: "🧭 Find northernmost / southernmost vertices in path",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                let n = 0, s = 0;
+                for (let i = 1; i < measurePoints.length; i++) {
+                  if (measurePoints[i].lat > measurePoints[n].lat) n = i;
+                  if (measurePoints[i].lat < measurePoints[s].lat) s = i;
+                }
+                const northern = measurePoints[n];
+                const southern = measurePoints[s];
+                const span = northern.lat - southern.lat;
+                showToast(`🧭 Northernmost: vertex #${n+1} @ ${formatLat(northern.lat)} · Southernmost: #${s+1} @ ${formatLat(southern.lat)} · Lat span ${span.toFixed(1)}°`);
+              },
+            }] : []),
+            // Compare great-circle vs rhumb-line distance for the
+            // start→end pair. Great-circle is the shortest path on a
+            // sphere; rhumb (loxodrome) is constant-bearing — typically
+            // longer at higher latitudes. Educational + useful for
+            // navigation planning.
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureGreatCircleVsRhumb" as const,
+              label: "📐 Compare great-circle vs rhumb-line distance (start ↔ end)",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                const a = measurePoints[0];
+                const b = measurePoints[measurePoints.length - 1];
+                const gcKm = haversineKm(a.lat, a.lon, b.lat, b.lon);
+                // Rhumb-line distance via Mercator-projected coordinates.
+                // φ = latitude in radians, ψ = stretched Mercator latitude.
+                const φ1 = a.lat * Math.PI / 180;
+                const φ2 = b.lat * Math.PI / 180;
+                const Δφ = φ2 - φ1;
+                let Δλ = (b.lon - a.lon) * Math.PI / 180;
+                if (Math.abs(Δλ) > Math.PI) Δλ = Δλ > 0 ? Δλ - 2*Math.PI : Δλ + 2*Math.PI;
+                const Δψ = Math.log(Math.tan(Math.PI/4 + φ2/2) / Math.tan(Math.PI/4 + φ1/2));
+                const q = Math.abs(Δψ) > 1e-12 ? Δφ / Δψ : Math.cos(φ1);
+                const dist = Math.sqrt(Δφ*Δφ + q*q*Δλ*Δλ) * EARTH_RADIUS_KM;
+                const rhumbKm = dist;
+                const savedKm = rhumbKm - gcKm;
+                const savedPct = (savedKm / rhumbKm * 100);
+                showToast(`📐 Great-circle ${formatDistKm(gcKm, unitsImperial)} · Rhumb ${formatDistKm(rhumbKm, unitsImperial)} · GC saves ${formatDistKm(savedKm, unitsImperial)} (${savedPct.toFixed(1)}%)`);
+              },
+            }] : []),
+            // Self-intersection detection — checks if any non-adjacent
+            // legs cross each other. Useful for cleaning up imported
+            // paths, validating polygons before area computation, or
+            // surfacing accidental loops/figure-eights.
+            ...(measureMode && measurePoints.length >= 4 ? [{
+              id: "measureSelfIntersection" as const,
+              label: "✂ Check for self-intersections (any non-adjacent legs that cross)",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                // 2D segment-intersection check (treats lat/lon as planar)
+                // — accurate enough for the typical small-area paths
+                // people draw. Big paths spanning the antimeridian get
+                // false negatives near the seam, but those are rare.
+                function segmentsIntersect(
+                  p1: {lat:number,lon:number}, p2: {lat:number,lon:number},
+                  p3: {lat:number,lon:number}, p4: {lat:number,lon:number}
+                ): boolean {
+                  const d = (p2.lon - p1.lon) * (p4.lat - p3.lat) - (p2.lat - p1.lat) * (p4.lon - p3.lon);
+                  if (Math.abs(d) < 1e-12) return false;
+                  const u = ((p3.lon - p1.lon) * (p4.lat - p3.lat) - (p3.lat - p1.lat) * (p4.lon - p3.lon)) / d;
+                  const v = ((p3.lon - p1.lon) * (p2.lat - p1.lat) - (p3.lat - p1.lat) * (p2.lon - p1.lon)) / d;
+                  return u > 1e-9 && u < 1 - 1e-9 && v > 1e-9 && v < 1 - 1e-9;
+                }
+                const crossings: Array<[number, number]> = [];
+                for (let i = 0; i < measurePoints.length - 1; i++) {
+                  for (let j = i + 2; j < measurePoints.length - 1; j++) {
+                    if (i === 0 && j === measurePoints.length - 2) continue; // skip closing-leg-style adjacent
+                    if (segmentsIntersect(measurePoints[i], measurePoints[i+1], measurePoints[j], measurePoints[j+1])) {
+                      crossings.push([i, j]);
+                    }
+                  }
+                }
+                if (crossings.length === 0) {
+                  showToast(`✅ No self-intersections detected — path is simple`);
+                } else {
+                  const sample = crossings.slice(0, 5).map(([i, j]) => `legs ${i+1}↔${j+1}`).join(", ");
+                  const more = crossings.length > 5 ? ` +${crossings.length - 5} more` : "";
+                  showToast(`✂ Found ${crossings.length} self-intersection${crossings.length === 1 ? "" : "s"}: ${sample}${more}`);
+                }
+              },
+            }] : []),
+            // Estimate flight / drive time at a prompted speed.
+            // Useful for trip planning ("how long does this 1500 km
+            // path take at 80 km/h?").
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureFlyTimeAtSpeed" as const,
+              label: "⏱ Estimate travel time at user-specified speed (km/h or kn)",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                const speedRaw = window.prompt(`Travel speed in ${unitsImperial ? "mph" : "km/h"} (typical: jet 900, car 100, walking 5):`, unitsImperial ? "60" : "100");
+                if (!speedRaw) return;
+                const speed = parseFloat(speedRaw);
+                if (!Number.isFinite(speed) || speed <= 0) { showToast("Speed must be a positive number"); return; }
+                let totalKm = 0;
+                for (let i = 1; i < measurePoints.length; i++) {
+                  totalKm += haversineKm(measurePoints[i-1].lat, measurePoints[i-1].lon, measurePoints[i].lat, measurePoints[i].lon);
+                }
+                const speedKmh = unitsImperial ? speed * 1.609344 : speed;
+                const hours = totalKm / speedKmh;
+                const days = Math.floor(hours / 24);
+                const remH = hours % 24;
+                const wholeH = Math.floor(remH);
+                const min = Math.round((remH - wholeH) * 60);
+                let durationStr: string;
+                if (days > 0) durationStr = `${days}d ${wholeH}h ${min}m`;
+                else if (wholeH > 0) durationStr = `${wholeH}h ${min}m`;
+                else durationStr = `${min}m`;
+                showToast(`⏱ ${formatDistKm(totalKm, unitsImperial)} at ${speed} ${unitsImperial ? "mph" : "km/h"} = ${durationStr}`);
+              },
+            }] : []),
             // Global metric/imperial unit toggle. Affects the measure pill,
             // distance commands, area calculations, elevation lookups.
             { id: "toggleUnits", label: unitsImperial ? "Units → metric (km, m, km²)" : "Units → imperial (mi, ft, mi²)", group: "View", icon: Compass, hint: "U", run: () => setUnitsImperial((v) => { showToast(v ? "Units: metric" : "Units: imperial"); return !v; }) },
