@@ -19351,6 +19351,112 @@ ${trkpts}
               const ft = Math.round(highest.altitudeM / 0.3048);
               showToast(`🚀 Flying to highest: ${cs} @ ${ft.toLocaleString()}ft (${highest.type || "?"})`);
             }},
+            // Fly to globally lowest airborne aircraft. Companion to
+            // FlyToHighest. Likely a helicopter, glider, or aircraft on
+            // approach/departure (not on ground but very low altitude).
+            { id: "aircraftFlyToLowest", label: "🛬 Fly to globally lowest airborne aircraft", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const lowest = aircraftSnapshot.aircraft
+                .filter(a => !a.onGround && a.altitudeM > 0)
+                .sort((a, b) => a.altitudeM - b.altitudeM)[0];
+              if (!lowest) { showToast("No airborne aircraft loaded"); return; }
+              setSelectedAircraftId(lowest.icao24);
+              const altKm = Math.max(2, lowest.altitudeM / 1000 + 3);
+              setFlyTo((p) => ({ id: p.id + 1, lat: lowest.lat, lon: lowest.lon, altKm }));
+              const cs = (lowest.callsign || lowest.icao24).trim();
+              const ft = Math.round(lowest.altitudeM / 0.3048);
+              showToast(`🛬 Flying to lowest airborne: ${cs} @ ${ft.toLocaleString()}ft (${lowest.type || "?"}) — likely on approach or helicopter`);
+            }},
+            // Fly to globally slowest airborne aircraft (>50kt threshold
+            // to skip stationary GPS noise). Companion to FlyToFastest.
+            // Likely a helicopter, ultralight, or aircraft holding/turning.
+            { id: "aircraftFlyToSlowest", label: "🐢 Fly to globally slowest airborne aircraft (>50kt — skip stationary noise)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const slowest = aircraftSnapshot.aircraft
+                .filter(a => !a.onGround && a.velocityMs > 25)  // >50kt = ~25 m/s
+                .sort((a, b) => a.velocityMs - b.velocityMs)[0];
+              if (!slowest) { showToast("No slow airborne aircraft >50kt loaded"); return; }
+              setSelectedAircraftId(slowest.icao24);
+              const altKm = Math.max(2, slowest.altitudeM / 1000 + 5);
+              setFlyTo((p) => ({ id: p.id + 1, lat: slowest.lat, lon: slowest.lon, altKm }));
+              const cs = (slowest.callsign || slowest.icao24).trim();
+              const kt = Math.round(slowest.velocityMs * 1.944);
+              showToast(`🐢 Flying to slowest airborne: ${cs} @ ${kt}kt (${slowest.type || "?"})`);
+            }},
+            // Predict where the selected aircraft will be in N minutes
+            // using its current heading + speed (great-circle dead
+            // reckoning). Drops a pin at the predicted position.
+            ...(selectedAircraftId && aircraftSnapshot ? [{
+              id: "aircraftPredictPosition" as const,
+              label: "🔮 Predict selected aircraft's position in N minutes (great-circle dead reckoning)",
+              group: "Tools" as const,
+              icon: Plane,
+              run: () => {
+                const a = aircraftById.get(selectedAircraftId);
+                if (!a) { showToast("Selected aircraft no longer in snapshot"); return; }
+                const minRaw = window.prompt(`Predict position of ${(a.callsign || a.icao24).trim()} in how many minutes?`, "10");
+                if (!minRaw) return;
+                const min = parseFloat(minRaw);
+                if (!Number.isFinite(min) || min <= 0) { showToast("Minutes must be > 0"); return; }
+                // Distance traveled: velocity (m/s) × seconds
+                const distM = a.velocityMs * min * 60;
+                const distKm = distM / 1000;
+                // Great-circle destination point given start, bearing, distance
+                const R = EARTH_RADIUS_KM;
+                const phi1 = a.lat * Math.PI / 180;
+                const lam1 = a.lon * Math.PI / 180;
+                const bearingR = a.headingDeg * Math.PI / 180;
+                const phi2 = Math.asin(Math.sin(phi1) * Math.cos(distKm/R) + Math.cos(phi1) * Math.sin(distKm/R) * Math.cos(bearingR));
+                const lam2 = lam1 + Math.atan2(Math.sin(bearingR) * Math.sin(distKm/R) * Math.cos(phi1), Math.cos(distKm/R) - Math.sin(phi1) * Math.sin(phi2));
+                let lon = lam2 * 180 / Math.PI;
+                while (lon > 180) lon -= 360;
+                while (lon < -180) lon += 360;
+                const lat = phi2 * 180 / Math.PI;
+                const id = `pin-predict-${Date.now()}`;
+                const cs = (a.callsign || a.icao24).trim();
+                const newPin: Pin = { id, lat, lon, label: `🔮 ${cs} predicted +${min}min`, color: "#ff7be0", createdAt: Date.now() };
+                setPins(prev => [...prev, newPin]);
+                setSelectedPin(id);
+                setFlyTo((p) => ({ id: p.id + 1, lat, lon, altKm: 50 }));
+                showToast(`🔮 Predicted ${cs} in +${min}min: ${formatLat(lat)} ${formatLon(lon)} (${formatDistKm(distKm, unitsImperial)} from current)`);
+              },
+            }] : []),
+            // Count aircraft by ADS-B emitter category — the metadata
+            // each aircraft transmits about itself. A1=light, A2=small,
+            // A3=large, A4=heavy-vortex, A5=heavy, A6=high-perf, A7=heli,
+            // B0-B7=balloons/UAVs/etc, C0-C7=ground vehicles.
+            { id: "aircraftCategoryBreakdown", label: "🛩 Aircraft count by ADS-B emitter category (A1-A7, B0-B7 light/medium/heavy/heli/etc.)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const counts = new Map<string, number>();
+              for (const a of aircraftSnapshot.aircraft) {
+                const cat = a.category || "?";
+                counts.set(cat, (counts.get(cat) ?? 0) + 1);
+              }
+              const labels: Record<string, string> = {
+                "A1": "light fixed-wing",
+                "A2": "small fixed-wing (<7t)",
+                "A3": "large fixed-wing (7-34t)",
+                "A4": "high-vortex large",
+                "A5": "heavy (>34t)",
+                "A6": "high-performance (>5g)",
+                "A7": "rotorcraft / helicopter",
+                "B0": "balloon",
+                "B1": "glider / sailplane",
+                "B2": "lighter-than-air",
+                "B3": "parachutist",
+                "B4": "ultralight",
+                "B6": "UAV / drone",
+                "B7": "spaceflight vehicle",
+                "C0": "surface vehicle",
+                "C1": "emergency vehicle",
+                "C2": "service vehicle",
+                "?": "no category",
+              };
+              const sorted = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+              const list = sorted.slice(0, 8).map(([cat, n]) => `${cat}=${n} (${labels[cat] || cat})`).join(" · ");
+              const more = sorted.length > 8 ? ` +${sorted.length - 8} more categories` : "";
+              showToast(`🛩 Categories: ${list}${more}`);
+            }},
             { id: "earthquakesExportCsv", label: earthquakes.length > 0 ? `📊 Export ${earthquakes.length} earthquakes as CSV (24h USGS)` : "Export earthquakes as CSV (none loaded — toggle layer)", group: "Tools", icon: Sparkles, run: () => {
               if (earthquakes.length === 0) { showToast("Earthquakes layer not loaded"); return; }
               const escape = (s: string) => `"${(s || "").replace(/"/g, '""')}"`;
