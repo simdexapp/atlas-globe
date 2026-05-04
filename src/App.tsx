@@ -7433,6 +7433,95 @@ function App() {
               setPins((prev) => [...prev, ...newPins]);
               showToast(`🕳 Dropped pins for 6 famous caves — Mammoth Cave's 686km of surveyed passages is over 2× the next longest`);
             }},
+            { id: "pinAncientGeoglyphs", label: "🐎 Drop pins for 6 of the world's most famous ancient geoglyphs (earth drawings)", group: "Tools", icon: BookmarkPlus, run: () => {
+              // Geoglyphs are large designs etched into the ground,
+              // typically only fully visible from above. Nazca is the
+              // most famous; the Atacama Giant is the largest single
+              // figure (86m). Most geoglyphs are 1500-3000 years old.
+              const geoglyphs = [
+                { name: "Nazca Lines, Peru (~500 BCE-500 CE, 800+ figures over 50km²)",   lat: -14.7390, lon: -75.1300 },
+                { name: "Atacama Giant, Chile (~1000 CE, 86m tall — largest single figure)", lat: -20.0028, lon: -69.6444 },
+                { name: "Uffington White Horse, England (~1000 BCE, 110m long)",            lat:  51.5783, lon:  -1.5667 },
+                { name: "Cerne Abbas Giant, England (medieval, 55m tall chalk figure)",     lat:  50.8138, lon:  -2.4727 },
+                { name: "Marree Man, Australia (1998 mystery — 4.2km tall geoglyph)",       lat: -29.5286, lon: 137.4736 },
+                { name: "Sajama Lines, Bolivia (16,000+ km of pre-Columbian lines)",        lat: -18.1000, lon: -69.0000 },
+              ];
+              const stamp = Date.now();
+              const newPins: Pin[] = geoglyphs.map((g, i) => ({
+                id: `pin-geoglyph-${i}-${stamp}`,
+                lat: g.lat, lon: g.lon, label: `🐎 ${g.name}`,
+                color: "#ff8a4d", createdAt: stamp + i,
+              }));
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`🐎 Dropped pins for 6 ancient geoglyphs — Nazca's 800+ figures only became fully visible after powered flight (1920s)`);
+            }},
+            { id: "pinNuclearTestSites", label: "☢ Drop pins for 6 historical nuclear weapons test sites", group: "Tools", icon: BookmarkPlus, run: () => {
+              // 2,056 nuclear tests have been conducted (1945-2017).
+              // The first ever (Trinity, NM, July 1945) and the largest
+              // (Tsar Bomba, Novaya Zemlya, 50 Mt 1961) are landmarks
+              // of the atomic age. CTBT (1996) ended most tests; only
+              // North Korea has tested in this century.
+              const sites = [
+                { name: "Trinity Site, New Mexico USA (1945 — first nuclear test, 21 kt)",   lat: 33.6772, lon: -106.4754 },
+                { name: "Bikini Atoll, Marshall Islands (23 tests 1946-58, incl. Castle Bravo 15Mt)", lat: 11.5817, lon: 165.4444 },
+                { name: "Nevada Test Site (928 tests 1951-92 — most tests of any site)",      lat: 37.1167, lon: -116.0500 },
+                { name: "Semipalatinsk, Kazakhstan (456 USSR tests 1949-89)",                  lat: 50.4500, lon:  77.8167 },
+                { name: "Novaya Zemlya, Russia (Tsar Bomba 1961 — 50Mt, largest ever)",        lat: 73.4091, lon:  54.7967 },
+                { name: "Punggye-ri, North Korea (6 tests 2006-17 — only 21st-c. tests)",      lat: 41.2783, lon: 129.0871 },
+              ];
+              const stamp = Date.now();
+              const newPins: Pin[] = sites.map((s, i) => ({
+                id: `pin-nuctest-${i}-${stamp}`,
+                lat: s.lat, lon: s.lon, label: `☢ ${s.name}`,
+                color: "#ff5a5a", createdAt: stamp + i,
+              }));
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`☢ Dropped pins for 6 nuclear test sites — Tsar Bomba (1961) at 50Mt remains the largest explosion ever detonated by humans`);
+            }},
+            { id: "pinPilgrimageDestinations", label: "🕊 Drop pins for 7 of the world's largest religious pilgrimage destinations", group: "Tools", icon: BookmarkPlus, run: () => {
+              // Mecca's Hajj draws 2-3M pilgrims each year — the largest
+              // annual gathering on Earth. Kumbh Mela (Allahabad) draws
+              // 200M+ over 6 weeks every 12 years (largest single event).
+              const sites = [
+                { name: "Mecca, Saudi Arabia (Hajj, 2-3M pilgrims/year — largest annual)",     lat: 21.4225, lon: 39.8262 },
+                { name: "Vatican City, Rome (St Peter's Basilica — 5M visitors/year)",          lat: 41.9022, lon: 12.4533 },
+                { name: "Jerusalem (sacred to Judaism, Christianity, Islam — 4M+ pilgrims)",     lat: 31.7683, lon: 35.2137 },
+                { name: "Varanasi, India (Hindu, oldest pilgrimage city — Ganges)",              lat: 25.3176, lon: 83.0130 },
+                { name: "Lourdes, France (Catholic Marian — 6M visitors/year, healing waters)",  lat: 43.0958, lon: -0.0436 },
+                { name: "Bodh Gaya, India (Buddhist — Bodhi tree of Buddha's enlightenment)",     lat: 24.6961, lon: 84.9911 },
+                { name: "Santiago de Compostela, Spain (Camino — 350k completed pilgrimages/yr)", lat: 42.8806, lon: -8.5450 },
+              ];
+              const stamp = Date.now();
+              const newPins: Pin[] = sites.map((s, i) => ({
+                id: `pin-pilgrim-${i}-${stamp}`,
+                lat: s.lat, lon: s.lon, label: `🕊 ${s.name}`,
+                color: "#ffd66b", createdAt: stamp + i,
+              }));
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`🕊 Dropped pins for 7 major pilgrimage sites — Hajj draws 2-3M annually, Kumbh Mela 200M+ every 12 years`);
+            }},
+            { id: "pinMarsAnalogues", label: "🔴 Drop pins for 6 Mars-analogue research sites on Earth (NASA/ESA training)", group: "Tools", icon: BookmarkPlus, run: () => {
+              // Mars-analogue sites have geology, climate, or biology
+              // that approximates Martian conditions. Used for testing
+              // rover hardware, training astronauts, and studying how
+              // life might have existed on Mars.
+              const sites = [
+                { name: "MDRS, Hanksville Utah USA (Mars Desert Research Station — full sim crews)", lat: 38.4063, lon: -110.7917 },
+                { name: "Atacama Desert, Chile (driest non-polar — Mars rover test site)",            lat: -24.5000, lon: -69.2500 },
+                { name: "Devon Island, Canada (Haughton crater — coldest desert, F.M.A.R.S)",         lat: 75.4167, lon: -89.8167 },
+                { name: "Antarctic Dry Valleys (Mars-like cold dry — closest Earth analog)",           lat: -77.5000, lon: 161.5000 },
+                { name: "Río Tinto, Spain (acidic Mars-like waters, iron-oxide rich)",                 lat: 37.6925, lon: -6.5611 },
+                { name: "Pico de Orizaba, Mexico (high-altitude lava + ice study site)",                lat: 19.0303, lon: -97.2683 },
+              ];
+              const stamp = Date.now();
+              const newPins: Pin[] = sites.map((s, i) => ({
+                id: `pin-mars-${i}-${stamp}`,
+                lat: s.lat, lon: s.lon, label: `🔴 ${s.name}`,
+                color: "#ff5a5a", createdAt: stamp + i,
+              }));
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`🔴 Dropped pins for 6 Mars-analogue sites — places NASA + ESA use to train astronauts and test rover hardware`);
+            }},
             { id: "pinOldestCities", label: "🏯 Drop pins for 7 of the world's oldest continuously-inhabited cities", group: "Tools", icon: BookmarkPlus, run: () => {
               const cities = [
                 { name: "Damascus, Syria (~9000 BCE)",         lat: 33.5138, lon:  36.2765 },
