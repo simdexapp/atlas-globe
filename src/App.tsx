@@ -220,6 +220,9 @@ type LayerVisibility = {
   // Pin counter widget — total pin count + per-color breakdown,
   // as small color-coded chips. Updates whenever pins change.
   pinCounter: boolean;
+  // Bookmarks list widget — small floating list of the user's most-
+  // recent bookmarks (last 8) with click-to-fly. Skips city presets.
+  bookmarksList: boolean;
 };
 
 type GlobeSettings = {
@@ -565,6 +568,7 @@ const defaultLayers: LayerVisibility = {
   toastHistory: false,
   scratchpad: false,
   pinCounter: false,
+  bookmarksList: false,
   // 3D OSM Buildings tileset is heavy and renders with edge outlines
   // that disable imagery draping underneath, painting the screen with
   // dark olive boxes at low altitudes (the user's tear repro). Off by
@@ -5254,6 +5258,7 @@ function App() {
             { id: "toggleToastHistory", label: layers.toastHistory ? "Hide Toast history widget" : "📜 Show Toast history widget (last 8 toast messages, click to copy)", group: "Widgets", icon: Compass, run: () => toggleLayer("toastHistory") },
             { id: "toggleScratchpad", label: layers.scratchpad ? "Hide Scratchpad widget" : "📝 Show Scratchpad widget (freeform notes, persists across sessions)", group: "Widgets", icon: Compass, run: () => toggleLayer("scratchpad") },
             { id: "togglePinCounter", label: layers.pinCounter ? "Hide Pin counter widget" : "📍 Show Pin counter widget (total + per-color breakdown chips)", group: "Widgets", icon: BookmarkPlus, run: () => toggleLayer("pinCounter") },
+            { id: "toggleBookmarksList", label: layers.bookmarksList ? "Hide Bookmarks list widget" : "📚 Show Bookmarks list widget (last 8 user bookmarks, click to fly)", group: "Widgets", icon: Bookmark, run: () => toggleLayer("bookmarksList") },
             { id: "tripMeterReset", label: "⏱ Reset trip meter to zero", group: "Tools", icon: Compass, run: () => {
               tripMeterRef.current = { totalKm: 0, lastLat: NaN, lastLon: NaN, startTime: Date.now() };
               setCameraState((c) => ({ ...c })); // force widget re-render
@@ -17796,6 +17801,51 @@ ${wpts}
                           <span className="atlasPinCounterDot" style={{ background: color }} />
                           <span className="atlasPinCounterCount">{group.length}</span>
                         </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            );
+          })()}
+        </Draggable>
+      )}
+
+      {/* Bookmarks list widget — last 8 user bookmarks (skips city
+          presets), most-recent first, click to fly. */}
+      {layers.bookmarksList && (
+        <Draggable id="bookmarksList" customizeMode={customizeUiMode} position={widgetPositions.bookmarksList} onMove={setWidgetPosition}>
+          {(() => {
+            const userBookmarks = bookmarks.filter(b => b.savedAt > 0).sort((a, b) => b.savedAt - a.savedAt).slice(0, 8);
+            return (
+              <div className="atlasBookmarksListWidget" role="status" aria-label="Recent bookmarks">
+                <div className="atlasBookmarksListHead">
+                  <Bookmark size={12} />
+                  <strong>Recent bookmarks</strong>
+                  <span>{userBookmarks.length}/{bookmarks.filter(b => b.savedAt > 0).length}</span>
+                </div>
+                {userBookmarks.length === 0 ? (
+                  <div className="atlasBookmarksListEmpty">No user bookmarks yet · press B to bookmark current view</div>
+                ) : (
+                  <ul className="atlasBookmarksListItems">
+                    {userBookmarks.map(b => (
+                      <li
+                        key={b.id}
+                        className="atlasBookmarksListItem"
+                        title={`${b.name} · saved ${new Date(b.savedAt).toLocaleString()}`}
+                        onClick={() => {
+                          setFlyTo((p) => ({ id: p.id + 1, lat: b.lat, lon: b.lon, altKm: b.altKm }));
+                          showToast(`📚 Flew to "${b.name}"`);
+                        }}
+                      >
+                        <span className="atlasBookmarksListName">{b.name}</span>
+                        <span className="atlasBookmarksListAge">{(() => {
+                          const days = (Date.now() - b.savedAt) / 86_400_000;
+                          if (days < 1) return `${Math.round(days * 24)}h`;
+                          if (days < 30) return `${Math.round(days)}d`;
+                          if (days < 365) return `${Math.round(days / 30)}mo`;
+                          return `${Math.round(days / 365)}y`;
+                        })()}</span>
                       </li>
                     ))}
                   </ul>
