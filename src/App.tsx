@@ -7931,6 +7931,25 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: -46.692, lon: -72.638, altKm: 8 }));
               showToast(`💎 Marble Caves (Cuevas de Mármol) · sculpted into a marble peninsula on Lake General Carrera, Patagonian Chile · turquoise water reflects on swirled marble · ~6,000 years of wave erosion`);
             }},
+            // ===== Iconic dramatic coastlines =====
+            // Famous cliff/arch/stack formations along the world's most
+            // photographed coastlines.
+            { id: "flyEtretat", label: "🪨 Fly to Cliffs of Étretat (Normandy — chalk arches painted by Monet, Courbet)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 49.7077, lon: 0.2055, altKm: 4 }));
+              showToast(`🪨 Cliffs of Étretat (Falaises d'Étretat) · Normandy, France · 70-90m chalk cliffs with 3 natural arches: Porte d'Aval, Porte d'Amont, Manneporte · Aiguille (the Needle) is a 70m chalk pinnacle in front · subject of paintings by Monet (33 works), Courbet, Boudin · subject of Maurice Leblanc's Arsène Lupin novels`);
+            }},
+            { id: "flyTwelveApostles", label: "🪨 Fly to Twelve Apostles (Victoria, Australia — 50m limestone sea stacks along Great Ocean Road)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: -38.6647, lon: 143.1051, altKm: 4 }));
+              showToast(`🪨 Twelve Apostles · Port Campbell NP, Victoria · 50-meter limestone sea stacks along the Great Ocean Road · only 8 still standing since the 9th collapsed July 2005 (and there were never actually 12 — original name "Sow and Piglets") · 1.6cm of cliff face erodes per year, so new stacks form as old ones fall · ~2.5M visitors/yr`);
+            }},
+            { id: "flyCapeGoodHope", label: "🪨 Fly to Cape of Good Hope (South Africa — Atlantic-meets-Indian Ocean cliffs)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: -34.3568, lon: 18.4751, altKm: 8 }));
+              showToast(`🪨 Cape of Good Hope · SW tip of Cape Peninsula, South Africa · NOT actually the southernmost point of Africa (that's Cape Agulhas, 150 km SE) but where the African coast turns east-southeast · first rounded by Bartolomeu Dias 1488 · iconic Cape Point Lighthouse (1860) · resident chacma baboons known for raiding tourist cars`);
+            }},
+            { id: "flyCliffsOfDover", label: "🪨 Fly to White Cliffs of Dover (England — symbol of Britain, English Channel chalk faces)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 51.1325, lon: 1.3433, altKm: 5 }));
+              showToast(`🪨 White Cliffs of Dover · Kent, England · 100m+ chalk cliffs facing the Strait of Dover (33 km across to Cap Gris-Nez, France) · symbol of Britain since Roman times · the chalk is ~65 million years old (Cretaceous) · Vera Lynn's "(There'll Be Bluebirds Over) The White Cliffs of Dover" became a WWII anthem · only 21 mi from Calais on a clear day`);
+            }},
             // ===== Iconic ski / winter resorts =====
             // Major ski mountains famous for snow quality, history, or scale.
             { id: "flyZermatt", label: "⛷ Fly to Zermatt (Switzerland — car-free village beneath the Matterhorn, 360km of pistes)", group: "View", icon: Globe2, run: () => {
