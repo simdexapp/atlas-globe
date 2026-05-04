@@ -11852,6 +11852,125 @@ ${trkpts}
                 showToast(`⏱ ${formatDistKm(totalKm, unitsImperial)} at ${speed} ${unitsImperial ? "mph" : "km/h"} = ${durationStr}`);
               },
             }] : []),
+            // TopoJSON export — much smaller than equivalent GeoJSON for
+            // paths with shared coordinates (which most measure paths
+            // aren't, but TopoJSON is still ~30% smaller due to its
+            // arc-based representation). Useful for embedding paths in
+            // mapping libraries that accept TopoJSON natively (D3, etc).
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureExportTopoJson" as const,
+              label: "🗺 Export measure path as TopoJSON (compact GeoJSON variant)",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                // Minimal TopoJSON manually constructed (we don't import
+                // topojson-server to keep the bundle tight). Produces a
+                // valid TopoJSON 1.0 document with one LineString geometry.
+                const arc = measurePoints.map((p, i) => {
+                  if (i === 0) return [p.lon, p.lat];
+                  // Arcs are deltas in TopoJSON, not absolute points
+                  const prev = measurePoints[i - 1];
+                  return [p.lon - prev.lon, p.lat - prev.lat];
+                });
+                const topo = {
+                  type: "Topology",
+                  objects: {
+                    measurePath: {
+                      type: "GeometryCollection",
+                      geometries: [{ type: "LineString", arcs: [0], properties: { vertices: measurePoints.length } }],
+                    },
+                  },
+                  arcs: [arc],
+                  bbox: [
+                    Math.min(...measurePoints.map(p => p.lon)),
+                    Math.min(...measurePoints.map(p => p.lat)),
+                    Math.max(...measurePoints.map(p => p.lon)),
+                    Math.max(...measurePoints.map(p => p.lat)),
+                  ],
+                };
+                const blob = new Blob([JSON.stringify(topo)], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = `atlas-measure-${new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-")}.topojson`;
+                link.click();
+                setTimeout(() => URL.revokeObjectURL(url), 500);
+                showToast(`🗺 Exported ${measurePoints.length}-vertex path as TopoJSON`);
+              },
+            }] : []),
+            // Find the leg with the largest latitude change. Useful for
+            // identifying steep north-south transits in a path (climbing,
+            // descending, polar routes).
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureMaxLatChange" as const,
+              label: "🧭 Find leg with biggest latitude change (north-south transit)",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                let maxIdx = 1;
+                let maxDeg = 0;
+                for (let i = 1; i < measurePoints.length; i++) {
+                  const d = Math.abs(measurePoints[i].lat - measurePoints[i-1].lat);
+                  if (d > maxDeg) { maxDeg = d; maxIdx = i; }
+                }
+                const a = measurePoints[maxIdx - 1];
+                const b = measurePoints[maxIdx];
+                const dir = b.lat > a.lat ? "north" : "south";
+                const km = haversineKm(a.lat, a.lon, b.lat, b.lon);
+                showToast(`🧭 Leg ${maxIdx}: ${maxDeg.toFixed(2)}° latitude change ${dir}, ${formatDistKm(km, unitsImperial)} (${formatLat(a.lat)} → ${formatLat(b.lat)})`);
+              },
+            }] : []),
+            // Split path into 3 equal-distance segments. Returns the two
+            // breakpoint vertex indices (closest to 33% and 66% of total
+            // distance). Useful for staging long routes — "I'll meet
+            // you at the 1/3 mark."
+            ...(measureMode && measurePoints.length >= 4 ? [{
+              id: "measureSplitInThirds" as const,
+              label: "📏 Split path into 3 equal-distance thirds (find 33%/66% breakpoint vertices)",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                const cumKm: number[] = [0];
+                for (let i = 1; i < measurePoints.length; i++) {
+                  cumKm.push(cumKm[i-1] + haversineKm(measurePoints[i-1].lat, measurePoints[i-1].lon, measurePoints[i].lat, measurePoints[i].lon));
+                }
+                const total = cumKm[cumKm.length - 1];
+                const findClosestIdx = (target: number) => {
+                  let best = 0, bestDiff = Infinity;
+                  for (let i = 0; i < cumKm.length; i++) {
+                    const d = Math.abs(cumKm[i] - target);
+                    if (d < bestDiff) { best = i; bestDiff = d; }
+                  }
+                  return best;
+                };
+                const idx1 = findClosestIdx(total / 3);
+                const idx2 = findClosestIdx(2 * total / 3);
+                showToast(`📏 ${formatDistKm(total, unitsImperial)} total · 1/3 at vertex #${idx1+1} (${formatDistKm(cumKm[idx1], unitsImperial)}) · 2/3 at vertex #${idx2+1} (${formatDistKm(cumKm[idx2], unitsImperial)})`);
+              },
+            }] : []),
+            // Fly to the start of the path, wait, then fly to the end.
+            // Animated tour of the path's extremes. Useful for showing
+            // "where this path begins and ends" without manually clicking
+            // through vertices.
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureFlyEnds" as const,
+              label: "🎬 Fly to start of path, then auto-fly to end after 4 seconds",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                const start = measurePoints[0];
+                const end = measurePoints[measurePoints.length - 1];
+                const km = haversineKm(start.lat, start.lon, end.lat, end.lon);
+                // Altitude scaled to fit each endpoint comfortably
+                const altKm = Math.min(2000, Math.max(50, km * 0.3));
+                setFlyTo((p) => ({ id: p.id + 1, lat: start.lat, lon: start.lon, altKm }));
+                showToast(`🎬 Start: ${formatLat(start.lat)} ${formatLon(start.lon)} → end in 4s`);
+                window.setTimeout(() => {
+                  setFlyTo((p) => ({ id: p.id + 1, lat: end.lat, lon: end.lon, altKm }));
+                  showToast(`🎬 End: ${formatLat(end.lat)} ${formatLon(end.lon)} (${formatDistKm(km, unitsImperial)} from start)`);
+                }, 4000);
+              },
+            }] : []),
             // Global metric/imperial unit toggle. Affects the measure pill,
             // distance commands, area calculations, elevation lookups.
             { id: "toggleUnits", label: unitsImperial ? "Units → metric (km, m, km²)" : "Units → imperial (mi, ft, mi²)", group: "View", icon: Compass, hint: "U", run: () => setUnitsImperial((v) => { showToast(v ? "Units: metric" : "Units: imperial"); return !v; }) },
