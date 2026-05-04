@@ -247,6 +247,14 @@ type LayerVisibility = {
   // to Earth's oblate shape + centrifugal effect of rotation).
   // Educational physics widget.
   localGravity: boolean;
+  // Closest-city widget — surfaces which MAJOR_CITIES + REGIONAL_CITIES
+  // city is nearest to current view, with distance + bearing. Updates
+  // as the camera moves.
+  closestCity: boolean;
+  // Date-at-view widget — wall-clock date + day-of-week at view's
+  // longitude (using mean solar time). Shows "what day is it where
+  // I'm looking?"
+  dateAtView: boolean;
 };
 
 type GlobeSettings = {
@@ -599,6 +607,8 @@ const defaultLayers: LayerVisibility = {
   earthRotation: false,
   distanceToPolesWidget: false,
   localGravity: false,
+  closestCity: false,
+  dateAtView: false,
   // 3D OSM Buildings tileset is heavy and renders with edge outlines
   // that disable imagery draping underneath, painting the screen with
   // dark olive boxes at low altitudes (the user's tear repro). Off by
@@ -12642,6 +12652,8 @@ ${trkpts}
             { id: "widgetEarthRotation", label: layers.earthRotation ? "Hide Earth-rotation widget" : "🌐 Show Earth-rotation widget (tangential velocity at current latitude)", group: "Widgets", icon: Compass, run: () => toggleLayer("earthRotation") },
             { id: "widgetDistanceToPoles", label: layers.distanceToPolesWidget ? "Hide distance-to-poles widget" : "📐 Show distance-to-poles widget (km to N/S poles + equator from view)", group: "Widgets", icon: Compass, run: () => toggleLayer("distanceToPolesWidget") },
             { id: "widgetLocalGravity", label: layers.localGravity ? "Hide local-gravity widget" : "⬇ Show local-gravity widget (g at current latitude — varies 9.78–9.83 m/s²)", group: "Widgets", icon: Compass, run: () => toggleLayer("localGravity") },
+            { id: "widgetClosestCity", label: layers.closestCity ? "Hide closest-city widget" : "🏙 Show closest-city widget (nearest MAJOR/REGIONAL city to view)", group: "Widgets", icon: Compass, run: () => toggleLayer("closestCity") },
+            { id: "widgetDateAtView", label: layers.dateAtView ? "Hide date-at-view widget" : "📅 Show date-at-view widget (wall-clock date + day-of-week at view longitude)", group: "Widgets", icon: SunIcon, run: () => toggleLayer("dateAtView") },
             // Ambient Earth — kiosk/big-screen mode. Hides UI chrome,
             // starts auto-orbit, shows comprehensive live-data overlay.
             // Made for office TVs, conference displays, screensavers.
@@ -20453,6 +20465,86 @@ ${wpts}
                 <div className="atlasLocalGravityFooter">
                   1 kg weighs {weight1kg.toFixed(3)} N here · 70 kg ≈ {(70 * g).toFixed(0)} N
                 </div>
+              </div>
+            );
+          })()}
+        </Draggable>
+      )}
+
+      {/* Closest-city widget — surfaces the nearest MAJOR + REGIONAL
+          city to current view with distance + bearing. Updates as the
+          camera moves. Useful "where am I exactly?" answer when zoomed
+          out where labels aren't visible. */}
+      {layers.closestCity && (
+        <Draggable id="closestCity" customizeMode={customizeUiMode} position={widgetPositions.closestCity} onMove={setWidgetPosition}>
+          {(() => {
+            const cLat = cameraState.lat, cLon = cameraState.lon;
+            let nearest: { name: string; country: string; lat: number; lon: number; population: number } | null = null;
+            let nearestKm = Infinity;
+            for (const c of [...MAJOR_CITIES, ...REGIONAL_CITIES]) {
+              const km = haversineKm(cLat, cLon, c.lat, c.lon);
+              if (km < nearestKm) { nearestKm = km; nearest = c; }
+            }
+            if (!nearest) {
+              return (
+                <div className="atlasClosestCityWidget" role="status" aria-label="Closest city">
+                  <div className="atlasClosestCityHead">
+                    <Compass size={12} />
+                    <strong>Closest city</strong>
+                  </div>
+                  <div className="atlasClosestCityEmpty">No city data loaded</div>
+                </div>
+              );
+            }
+            const dir = compassDir(bearingDeg(cLat, cLon, nearest.lat, nearest.lon));
+            const fmt = (km: number) => unitsImperial ? `${(km * 0.621371).toFixed(km < 100 ? 1 : 0)} mi` : `${km.toFixed(km < 100 ? 1 : 0)} km`;
+            const fmtPop = (n: number) => n >= 1_000_000 ? `${(n/1_000_000).toFixed(1)}M` : `${(n/1_000).toFixed(0)}k`;
+            return (
+              <div className="atlasClosestCityWidget" role="status" aria-label="Closest city">
+                <div className="atlasClosestCityHead">
+                  <Compass size={12} />
+                  <strong>Closest city</strong>
+                </div>
+                <div className="atlasClosestCityName">{nearest.name}, {nearest.country}</div>
+                <div className="atlasClosestCityMeta">
+                  <span>{fmt(nearestKm)} {dir}</span>
+                  <span>· pop {fmtPop(nearest.population)}</span>
+                </div>
+              </div>
+            );
+          })()}
+        </Draggable>
+      )}
+
+      {/* Date-at-view widget — wall-clock date + day-of-week at the
+          view's longitude using mean solar time. Surfaces "what day
+          is it where I'm looking?" — flips across the dateline. */}
+      {layers.dateAtView && (
+        <Draggable id="dateAtView" customizeMode={customizeUiMode} position={widgetPositions.dateAtView} onMove={setWidgetPosition}>
+          {(() => {
+            const offsetH = cameraState.lon / 15;
+            const localMs = Date.now() + offsetH * 3_600_000;
+            const localD = new Date(localMs);
+            const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+            const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+            const dow = days[localD.getUTCDay()];
+            const mon = months[localD.getUTCMonth()];
+            const dom = localD.getUTCDate();
+            const yr = localD.getUTCFullYear();
+            const lhh = localD.getUTCHours();
+            const lmm = localD.getUTCMinutes();
+            const sign = offsetH >= 0 ? "+" : "−";
+            const offHr = Math.floor(Math.abs(offsetH));
+            const offMin = Math.round((Math.abs(offsetH) - offHr) * 60);
+            return (
+              <div className="atlasDateAtViewWidget" role="status" aria-label="Date at view">
+                <div className="atlasDateAtViewHead">
+                  <SunIcon size={12} />
+                  <strong>Date at view</strong>
+                </div>
+                <div className="atlasDateAtViewBig">{dow} {mon} {dom}</div>
+                <div className="atlasDateAtViewYear">{yr} · {String(lhh).padStart(2,"0")}:{String(lmm).padStart(2,"0")}</div>
+                <div className="atlasDateAtViewMeta">UTC{sign}{String(offHr).padStart(2,"0")}:{String(offMin).padStart(2,"0")} (mean solar)</div>
               </div>
             );
           })()}

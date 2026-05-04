@@ -4378,6 +4378,87 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
   .atlasLocalGravityWidget { display: none; }
 }
 
+/* ============= Closest-city + Date-at-view widgets ============= */
+.atlasClosestCityWidget,
+.atlasDateAtViewWidget {
+  position: fixed;
+  left: 64px;
+  z-index: 5;
+  width: 240px;
+  padding: var(--s-3);
+  border-radius: var(--r-3);
+  border: 1px solid var(--border);
+  background: var(--surface-elevated);
+  backdrop-filter: blur(14px);
+  box-shadow: var(--shadow-2);
+  color: var(--gray-12);
+  font-size: var(--text-xs);
+  display: grid;
+  gap: var(--s-2);
+}
+.atlasClosestCityWidget { top: 2150px; }
+.atlasDateAtViewWidget  { top: 2280px; }
+
+.atlasClosestCityHead,
+.atlasDateAtViewHead {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  font-family: ui-monospace, monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--gray-9);
+}
+.atlasClosestCityHead strong,
+.atlasDateAtViewHead strong { color: var(--gray-9); font-weight: 600; flex: 1; }
+
+.atlasClosestCityName {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--gray-12);
+  font-family: Inter, sans-serif;
+}
+.atlasClosestCityMeta {
+  font-size: 11px;
+  color: var(--gray-10);
+  font-family: ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.atlasClosestCityEmpty {
+  color: var(--gray-9);
+  font-style: italic;
+  font-size: 11px;
+}
+
+.atlasDateAtViewBig {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--gray-12);
+  font-family: Inter, sans-serif;
+}
+.atlasDateAtViewYear {
+  font-size: 13px;
+  color: var(--gray-11);
+  font-family: ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+.atlasDateAtViewMeta {
+  font-size: 10.5px;
+  color: var(--gray-9);
+  font-family: ui-monospace, monospace;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 4px;
+}
+
+@media (max-width: 980px) {
+  .atlasClosestCityWidget,
+  .atlasDateAtViewWidget { display: none; }
+}
+
 .atlasAntipodeFlyBtn:hover { background: var(--accent); color: var(--bg); }
 
 .atlasLocalTimeClock {
