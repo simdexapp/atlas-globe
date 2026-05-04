@@ -7080,6 +7080,96 @@ function App() {
               setPins((prev) => [...prev, ...newPins]);
               showToast(`🏜 Dropped pins for Earth's 5 largest deserts — surprisingly, the polar deserts win on size`);
             }},
+            { id: "pinTallestSkyscrapers", label: "🏙 Drop pins for the 10 tallest completed skyscrapers in the world", group: "Tools", icon: BookmarkPlus, run: () => {
+              // Heights are pinnacle (incl. spires) per CTBUH. Stable as
+              // of late 2025 — Burj Khalifa still #1 (829.8 m); Jeddah
+              // Tower projected to overtake when finished post-2027.
+              const towers = [
+                { name: "Burj Khalifa, Dubai UAE (829.8m, 2010)",                  lat: 25.1972, lon:  55.2744 },
+                { name: "Merdeka 118, Kuala Lumpur (678.9m, 2023)",               lat:  3.1419, lon: 101.7008 },
+                { name: "Shanghai Tower, Shanghai (632m, 2015)",                  lat: 31.2336, lon: 121.5054 },
+                { name: "Abraj Al-Bait Clock Tower, Mecca (601m, 2012)",          lat: 21.4189, lon:  39.8262 },
+                { name: "Ping An Finance Center, Shenzhen (599m, 2017)",          lat: 22.5380, lon: 114.0500 },
+                { name: "Lotte World Tower, Seoul (554.5m, 2017)",                lat: 37.5126, lon: 127.1025 },
+                { name: "One World Trade Center, NYC (541.3m, 2014)",             lat: 40.7127, lon: -74.0134 },
+                { name: "Guangzhou CTF Finance Centre, Guangzhou (530m, 2016)",   lat: 23.1192, lon: 113.3232 },
+                { name: "Tianjin CTF Finance Centre, Tianjin (530m, 2019)",       lat: 39.0184, lon: 117.6987 },
+                { name: "CITIC Tower (China Zun), Beijing (528m, 2018)",          lat: 39.9094, lon: 116.4621 },
+              ];
+              const stamp = Date.now();
+              const newPins: Pin[] = towers.map((t, i) => ({
+                id: `pin-skyscr-${i}-${stamp}`,
+                lat: t.lat, lon: t.lon, label: `🏙 ${t.name}`,
+                color: "#a8a8ff", createdAt: stamp + i,
+              }));
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`🏙 Dropped pins for the 10 tallest skyscrapers — 8 of 10 are in Asia`);
+            }},
+            { id: "pinFamousCanyons", label: "🏞 Drop pins for 6 of the world's most iconic canyons", group: "Tools", icon: BookmarkPlus, run: () => {
+              // The Yarlung Tsangpo Grand Canyon is the deepest in the
+              // world (5,382 m) — much less famous than Grand Canyon
+              // (~1,800 m deep) but more dramatic.
+              const canyons = [
+                { name: "Grand Canyon, Arizona USA (1.8km deep, 446km long)",       lat:  36.0544, lon: -112.1401 },
+                { name: "Yarlung Tsangpo Grand Canyon, Tibet (5.4km deep, deepest)",lat:  29.7780, lon:  95.0670 },
+                { name: "Fish River Canyon, Namibia (550m deep, 161km long)",       lat: -27.5500, lon:  17.6000 },
+                { name: "Tara River Canyon, Montenegro (1.3km deep, deepest in Europe)", lat: 43.0833, lon: 19.0833 },
+                { name: "Colca Canyon, Peru (3.4km deep, 2× Grand Canyon depth)",   lat: -15.6135, lon: -71.9963 },
+                { name: "Antelope Canyon, Arizona USA (slot canyon, photogenic)",   lat:  36.8619, lon: -111.3743 },
+              ];
+              const stamp = Date.now();
+              const newPins: Pin[] = canyons.map((c, i) => ({
+                id: `pin-canyon-${i}-${stamp}`,
+                lat: c.lat, lon: c.lon, label: `🏞 ${c.name}`,
+                color: "#ff8a4d", createdAt: stamp + i,
+              }));
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`🏞 Dropped pins for 6 iconic canyons — Yarlung Tsangpo is 3× deeper than the Grand Canyon`);
+            }},
+            { id: "pinAfricaGreatLakes", label: "🌊 Drop pins for the 7 African Great Lakes (Rift Valley)", group: "Tools", icon: BookmarkPlus, run: () => {
+              // Lake Victoria is the largest in Africa (~69,000 km²) —
+              // 2nd largest freshwater by area in the world after Superior.
+              // Tanganyika is the 2nd-deepest lake on Earth (1,470m).
+              const lakes = [
+                { name: "Lake Victoria, Africa (68,800 km², largest)",      lat: -1.0000, lon: 33.0000 },
+                { name: "Lake Tanganyika (32,900 km², 2nd-deepest world)", lat: -6.0000, lon: 29.5000 },
+                { name: "Lake Malawi (29,500 km²)",                         lat:-12.0000, lon: 34.5000 },
+                { name: "Lake Turkana, Kenya (6,405 km², desert lake)",     lat:  3.5000, lon: 36.1000 },
+                { name: "Lake Albert, Uganda/DRC (5,374 km²)",              lat:  1.6800, lon: 30.9000 },
+                { name: "Lake Kivu, Rwanda/DRC (2,700 km², methane-rich)",  lat: -2.0000, lon: 29.0000 },
+                { name: "Lake Edward, Uganda/DRC (2,325 km²)",              lat: -0.3700, lon: 29.6000 },
+              ];
+              const stamp = Date.now();
+              const newPins: Pin[] = lakes.map((l, i) => ({
+                id: `pin-glake-${i}-${stamp}`,
+                lat: l.lat, lon: l.lon, label: `🌊 ${l.name}`,
+                color: "#5cb5ff", createdAt: stamp + i,
+              }));
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`🌊 Dropped pins for Africa's 7 Great Lakes — formed by the East African Rift`);
+            }},
+            { id: "pinHistoricalShipwrecks", label: "⚓ Drop pins for 6 famous historical shipwreck sites", group: "Tools", icon: BookmarkPlus, run: () => {
+              // RMS Titanic (1912), RMS Lusitania (1915, sank in 18min),
+              // SS Edmund Fitzgerald (1975, Lake Superior), USS Arizona
+              // (1941, Pearl Harbor), Vasa (1628, raised 1961), Mary Rose
+              // (1545, Tudor warship raised 1982). All confirmed wreck sites.
+              const wrecks = [
+                { name: "RMS Titanic (1912, North Atlantic, 3.8km depth)",           lat:  41.7325, lon: -49.9469 },
+                { name: "RMS Lusitania (1915, off Ireland, sank in 18 min)",         lat:  51.4167, lon:  -8.5333 },
+                { name: "SS Edmund Fitzgerald (1975, Lake Superior — Gordon Lightfoot)", lat: 46.9967, lon: -85.1217 },
+                { name: "USS Arizona (1941, Pearl Harbor — memorial above)",         lat:  21.3650, lon:-157.9500 },
+                { name: "Vasa (1628, Stockholm — raised 1961, museum)",              lat:  59.3275, lon:  18.0917 },
+                { name: "Mary Rose (1545, Solent UK — raised 1982, Tudor warship)",  lat:  50.7794, lon:  -1.0917 },
+              ];
+              const stamp = Date.now();
+              const newPins: Pin[] = wrecks.map((w, i) => ({
+                id: `pin-wreck-${i}-${stamp}`,
+                lat: w.lat, lon: w.lon, label: `⚓ ${w.name}`,
+                color: "#7cffb1", createdAt: stamp + i,
+              }));
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`⚓ Dropped pins for 6 famous shipwrecks — Titanic sits 3.8km down on the seabed`);
+            }},
             { id: "pinOldestCities", label: "🏯 Drop pins for 7 of the world's oldest continuously-inhabited cities", group: "Tools", icon: BookmarkPlus, run: () => {
               const cities = [
                 { name: "Damascus, Syria (~9000 BCE)",         lat: 33.5138, lon:  36.2765 },
