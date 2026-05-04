@@ -13288,6 +13288,85 @@ ${trkpts}
               window.speechSynthesis.speak(u);
               showToast(`🔊 ${text}`);
             }},
+            // Speak a curated overview of the most-useful keyboard shortcuts.
+            // Aimed at first-time screen-reader users — gives them a verbal
+            // map of the app without forcing them to find and read the
+            // visual cheat sheet (which itself requires sighted navigation).
+            { id: "announceShortcutsHelp", label: "🔊 Speak the most-useful keyboard shortcuts (verbal cheat sheet)", group: "Tools", icon: Sparkles, run: () => {
+              if (typeof window === "undefined" || !window.speechSynthesis) { showToast("🔊 SpeechSynthesis not available in this browser"); return; }
+              const lines = [
+                "Keyboard shortcuts overview.",
+                "Command-K opens the command palette.",
+                "F to search a place. R to reset view. B to bookmark.",
+                "Arrow keys or W A S D to pan. Plus and minus to zoom.",
+                "S switches Atlas and Surface modes. T cycles theme.",
+                "P toggles pin tool. M toggles measure tool.",
+                "Number keys 1 through 9 toggle data layers.",
+                "C copies the current view. Y copies a share link.",
+                "V toggles voice narration. Question mark shows the full cheat sheet.",
+              ];
+              const text = lines.join(" ");
+              window.speechSynthesis.cancel();
+              const u = new SpeechSynthesisUtterance(text);
+              u.rate = voiceRate;
+              window.speechSynthesis.speak(u);
+              showToast(`🔊 Speaking shortcuts overview (${lines.length} lines, ~30s at 1× rate)`);
+            }},
+            // Comprehensive one-shot status — mode, view position, layer
+            // count, pin/bookmark counts, aircraft snapshot freshness.
+            // The "where am I and what's loaded" question answered all
+            // at once for screen-reader users.
+            { id: "announceFullStatus", label: "🔊 Speak comprehensive status (mode, view, layers, pins, data sources)", group: "Tools", icon: Sparkles, run: () => {
+              if (typeof window === "undefined" || !window.speechSynthesis) { showToast("🔊 SpeechSynthesis not available in this browser"); return; }
+              const c = cameraStateRef.current;
+              if (!c) { showToast("Camera position unknown"); return; }
+              const ns = c.lat >= 0 ? "north" : "south";
+              const ew = c.lon >= 0 ? "east" : "west";
+              const onLayers = (Object.entries(layers) as Array<[keyof LayerVisibility, boolean]>).filter(([, on]) => on).length;
+              const userBookmarks = bookmarks.filter(b => b.savedAt > 0).length;
+              const aircraftN = aircraftSnapshot?.aircraft.length ?? 0;
+              const aircraftAgeS = aircraftSnapshot ? Math.round((Date.now() - aircraftSnapshot.fetchedAt) / 1000) : null;
+              const parts = [
+                `Mode: ${mode}.`,
+                `View: latitude ${Math.abs(c.lat).toFixed(1)} ${ns}, longitude ${Math.abs(c.lon).toFixed(1)} ${ew}, altitude ${c.altKm.toFixed(0)} kilometers.`,
+                `${onLayers} ${onLayers === 1 ? "layer" : "layers"} visible.`,
+                `${pins.length} ${pins.length === 1 ? "pin" : "pins"}, ${userBookmarks} ${userBookmarks === 1 ? "bookmark" : "bookmarks"}.`,
+              ];
+              if (aircraftN > 0 && aircraftAgeS !== null) {
+                parts.push(`${aircraftN.toLocaleString()} aircraft loaded, ${aircraftAgeS} seconds old.`);
+              }
+              if (earthquakes.length > 0) parts.push(`${earthquakes.length} earthquakes loaded.`);
+              const text = parts.join(" ");
+              window.speechSynthesis.cancel();
+              const u = new SpeechSynthesisUtterance(text);
+              u.rate = voiceRate;
+              window.speechSynthesis.speak(u);
+              showToast(`🔊 ${text}`);
+            }},
+            // Speak the latitude band the view is in plus a one-line
+            // climatic / day-length hint. Educational — surfaces the
+            // geography around the view without needing to look at it.
+            { id: "announceLatitudeBand", label: "🔊 Speak the latitude band of the current view (Arctic / Temperate / Tropical / etc.)", group: "Tools", icon: Sparkles, run: () => {
+              if (typeof window === "undefined" || !window.speechSynthesis) { showToast("🔊 SpeechSynthesis not available in this browser"); return; }
+              const c = cameraStateRef.current;
+              if (!c) { showToast("Camera position unknown"); return; }
+              const absLat = Math.abs(c.lat);
+              const ns = c.lat >= 0 ? "northern" : "southern";
+              let band: string;
+              let context: string;
+              if (absLat >= 66.5)      { band = `${ns} polar zone (above the Arctic Circle)`; context = "Polar day or polar night near solstices."; }
+              else if (absLat >= 60)   { band = `high ${ns} latitudes (subarctic)`; context = "Long summer days, very short winter days."; }
+              else if (absLat >= 35)   { band = `${ns} mid-latitudes (temperate)`; context = "Four distinct seasons, moderate day-length variation."; }
+              else if (absLat >= 23.5) { band = `${ns} subtropics (between the Tropic of ${c.lat >= 0 ? "Cancer" : "Capricorn"} and 35°)`; context = "Hot summers, mild winters, dry zones common."; }
+              else if (absLat >= 5)    { band = `${ns} tropics (within the Tropic of ${c.lat >= 0 ? "Cancer" : "Capricorn"})`; context = "Sun overhead at least once per year, ~12-hour days year-round."; }
+              else                     { band = "equatorial zone"; context = "Sun nearly overhead daily, day length ~12 hours year-round."; }
+              const text = `Latitude ${absLat.toFixed(1)} degrees ${c.lat >= 0 ? "north" : "south"}. ${band}. ${context}`;
+              window.speechSynthesis.cancel();
+              const u = new SpeechSynthesisUtterance(text);
+              u.rate = voiceRate;
+              window.speechSynthesis.speak(u);
+              showToast(`🔊 ${text}`);
+            }},
             { id: "wikiNearby", label: "🗺 Wikipedia articles near this view (top 8 within 50km)", group: "Tools", icon: Sparkles, run: async () => {
               const c = cameraStateRef.current;
               if (!c) return;
