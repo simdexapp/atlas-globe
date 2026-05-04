@@ -8361,6 +8361,88 @@ function App() {
               setPins((prev) => [...prev, ...newPins]);
               showToast(`☀ Dropped pins at the Tropics on this longitude — sun goes overhead between these limits each year`);
             }},
+            // Drop 2 pins at the Arctic Circle (66.5638°N) and Antarctic
+            // Circle (66.5638°S) at the current view's longitude. The
+            // polar circles mark the latitudes beyond which polar day /
+            // polar night occur each year (sun never sets / never rises).
+            { id: "pinDropAtPolarCircles", label: "🧊 Drop 2 pins at Arctic + Antarctic Circles (at current view longitude)", group: "Tools", icon: BookmarkPlus, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              // Arctic / Antarctic Circle latitude = 90° − current obliquity (23.4394° in 2025)
+              const POLAR_LAT = 66.5606;
+              const stamp = Date.now();
+              const newPins: Pin[] = [
+                { id: `pin-arctic-${stamp}`, lat: POLAR_LAT, lon: c.lon, label: `🧊 Arctic Circle (${formatLon(c.lon)})`, color: "#5cb5ff", createdAt: stamp },
+                { id: `pin-antarctic-${stamp}`, lat: -POLAR_LAT, lon: c.lon, label: `🧊 Antarctic Circle (${formatLon(c.lon)})`, color: "#a8a8ff", createdAt: stamp + 1 },
+              ];
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`🧊 Dropped pins at the Polar Circles — beyond these, the sun stays up (or down) for at least 24h once a year`);
+            }},
+            // Select pin by label substring — useful when you have many
+            // pins and remember the name but not the position. Selects
+            // first match (case-insensitive) and flies to it.
+            { id: "pinSelectByLabel", label: "🔍 Select pin by label substring (and fly to it)", group: "Tools", icon: BookmarkPlus, run: () => {
+              if (pins.length === 0) { showToast("No pins to search"); return; }
+              const query = window.prompt(`Pin label to find (substring, case-insensitive). Searching across ${pins.length} pin${pins.length === 1 ? "" : "s"}:`);
+              if (!query) return;
+              const q = query.trim().toLowerCase();
+              if (!q) return;
+              const match = pins.find(p => p.label.toLowerCase().includes(q));
+              if (!match) { showToast(`🔍 No pin with label containing "${query}"`); return; }
+              setSelectedPin(match.id);
+              setFlyTo((p) => ({ id: p.id + 1, lat: match.lat, lon: match.lon, altKm: 30 }));
+              showToast(`🔍 Selected: ${match.label}`);
+            }},
+            // Select the pin closest to current view (no manual click).
+            // Useful for keyboard-only / accessibility flows where the
+            // user wants to "select what's right here" without aiming.
+            { id: "pinSelectClosest", label: "📍 Select pin closest to current view (auto-pick — no clicking required)", group: "Tools", icon: BookmarkPlus, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              if (pins.length === 0) { showToast("No pins to select"); return; }
+              let best = pins[0];
+              let bestKm = haversineKm(c.lat, c.lon, best.lat, best.lon);
+              for (const p of pins) {
+                const km = haversineKm(c.lat, c.lon, p.lat, p.lon);
+                if (km < bestKm) { bestKm = km; best = p; }
+              }
+              setSelectedPin(best.id);
+              const distText = bestKm < 1 ? `${(bestKm * 1000).toFixed(0)}m` : formatDistKm(bestKm, unitsImperial);
+              showToast(`📍 Selected closest pin: ${best.label} (${distText} from view)`);
+            }},
+            // Nudge selected pin by N km in chosen cardinal direction.
+            // Lets users fine-tune pin positions without re-dropping.
+            ...(selectedPin ? [{
+              id: "pinNudgeSelected" as const,
+              label: "✋ Nudge selected pin by N km in chosen direction (N / S / E / W)",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const sp = pins.find(p => p.id === selectedPin);
+                if (!sp) { showToast("Selected pin no longer exists"); return; }
+                const dirRaw = window.prompt(`Nudge "${sp.label}" in which direction? (N / S / E / W):`, "N");
+                if (!dirRaw) return;
+                const dir = dirRaw.trim().toUpperCase();
+                if (dir !== "N" && dir !== "S" && dir !== "E" && dir !== "W") { showToast(`Direction must be N/S/E/W`); return; }
+                const distRaw = window.prompt(`Nudge distance in ${unitsImperial ? "miles" : "km"}:`, "10");
+                if (!distRaw) return;
+                const dist = parseFloat(distRaw);
+                if (!Number.isFinite(dist) || dist <= 0) { showToast("Distance must be > 0"); return; }
+                const km = unitsImperial ? dist * 1.609344 : dist;
+                const bearing = dir === "N" ? 0 : dir === "E" ? 90 : dir === "S" ? 180 : 270;
+                const R = EARTH_RADIUS_KM;
+                const phi1 = sp.lat * Math.PI / 180;
+                const lam1 = sp.lon * Math.PI / 180;
+                const bearingR = bearing * Math.PI / 180;
+                const phi2 = Math.asin(Math.sin(phi1) * Math.cos(km/R) + Math.cos(phi1) * Math.sin(km/R) * Math.cos(bearingR));
+                const lam2 = lam1 + Math.atan2(Math.sin(bearingR) * Math.sin(km/R) * Math.cos(phi1), Math.cos(km/R) - Math.sin(phi1) * Math.sin(phi2));
+                let lon = lam2 * 180 / Math.PI;
+                while (lon > 180) lon -= 360;
+                while (lon < -180) lon += 360;
+                setPins(prev => prev.map(p => p.id === selectedPin ? { ...p, lat: phi2 * 180 / Math.PI, lon } : p));
+                showToast(`✋ Nudged "${sp.label}" ${dist}${unitsImperial ? "mi" : "km"} ${dir}`);
+              },
+            }] : []),
             // Find the extreme pin in each cardinal direction (N/S/E/W)
             // and fly to whichever the user picks. Useful for "where's
             // the southernmost pin in my collection?" type questions.
