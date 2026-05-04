@@ -17723,6 +17723,101 @@ ${trkpts}
               });
               showToast(`🔍 ${dups.length} duplicate reg${dups.length === 1 ? "" : "s"} (${totalAffected} aircraft affected): ${top} — full list in console`);
             }},
+            // Pick a random airborne aircraft and fly to it. Like
+            // pinDropRandom but for live ADS-B traffic — surfaces the
+            // diversity of what's happening globally without filtering.
+            // Selects + camera-flies so the popover/info-card opens too.
+            { id: "aircraftRandomDive", label: "🎲 Pick a random airborne aircraft and dive to it (random sampling of the live snapshot)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const airborne = aircraftSnapshot.aircraft.filter(a => !a.onGround);
+              if (airborne.length === 0) { showToast("🎲 No airborne aircraft in current snapshot"); return; }
+              const a = airborne[Math.floor(Math.random() * airborne.length)];
+              setSelectedAircraftId(a.icao24);
+              const altKm = Math.max(2, a.altitudeM / 1000 + 5);
+              setFlyTo((p) => ({ id: p.id + 1, lat: a.lat, lon: a.lon, altKm }));
+              const cs = (a.callsign || a.icao24).trim();
+              const altFt = Math.round(a.altitudeM / 0.3048);
+              const kt = Math.round(a.velocityMs * 1.944);
+              showToast(`🎲 Random dive: ${cs} · ${altFt.toLocaleString()}ft · ${kt}kt · ${a.type || "?"}`);
+            }},
+            // Find aircraft that have been on the ground for a while
+            // (lastContact ≥ 20 min ago AND onGround=true). These are
+            // either taxiing slowly, waiting on the apron, or stuck at
+            // the gate — useful proxy for "is there a delay at this
+            // airport?" Console gets full list for inspection.
+            { id: "aircraftStuckOnGround", label: "🛬 Find aircraft on ground for ≥20 minutes (potential delays / parked)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const cutoffSec = 20 * 60;
+              const stuck = aircraftSnapshot.aircraft.filter(a => a.onGround && a.lastContact > cutoffSec);
+              if (stuck.length === 0) { showToast("🛬 No aircraft stuck on ground (all on-ground aircraft updated within 20 min)"); return; }
+              // Sort by stuckiness (oldest first)
+              stuck.sort((a, b) => b.lastContact - a.lastContact);
+              const top5 = stuck.slice(0, 5).map(a => {
+                const cs = (a.callsign || a.icao24).trim();
+                const minStuck = Math.round(a.lastContact / 60);
+                return `${cs} (${minStuck}m)`;
+              }).join(" · ");
+              console.log(`🛬 ${stuck.length} aircraft on ground ≥20 min:`);
+              stuck.forEach(a => console.log(`  ${(a.callsign || a.icao24).trim()} — ${Math.round(a.lastContact / 60)}m since last update · ${formatLat(a.lat)} ${formatLon(a.lon)}`));
+              showToast(`🛬 ${stuck.length} aircraft stuck on ground ≥20m: ${top5} — full list in console`);
+            }},
+            // Filter aircraft by ICAO type code (B738, A320, A380, etc).
+            // Uses the aircraft.type field. Prompts for a code and lists
+            // the first 5 + count.
+            { id: "aircraftFindByType", label: "🛩 Find aircraft by ICAO type code (e.g. B738, A320, A380, C172)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const query = window.prompt("ICAO aircraft type code (e.g. B738 = 737-800, A320, A388 = A380, C172 = Cessna):");
+              if (!query) return;
+              const q = query.trim().toUpperCase();
+              const matches = aircraftSnapshot.aircraft.filter(a => (a.type || "").toUpperCase() === q);
+              if (matches.length === 0) {
+                // Substring fallback
+                const partial = aircraftSnapshot.aircraft.filter(a => (a.type || "").toUpperCase().includes(q));
+                if (partial.length === 0) { showToast(`🛩 No aircraft with type containing "${q}"`); return; }
+                const sample = partial.slice(0, 5).map(a => `${(a.callsign || a.icao24).trim()}/${a.type}`).join(" · ");
+                showToast(`🛩 Type "${q}" partial match — ${partial.length} aircraft: ${sample}${partial.length > 5 ? ` +${partial.length - 5}` : ""}`);
+                return;
+              }
+              const sample = matches.slice(0, 5).map(a => `${(a.callsign || a.icao24).trim()} @${Math.round(a.altitudeM / 0.3048).toLocaleString()}ft`).join(" · ");
+              showToast(`🛩 ${matches.length} ${q} airborne globally: ${sample}${matches.length > 5 ? ` +${matches.length - 5}` : ""}`);
+            }},
+            // Drop pins at BOTH the origin AND destination airports of
+            // the selected aircraft. Companion to the existing fly-to
+            // commands which only visit one. Useful for visualizing the
+            // flight's full route at a glance.
+            ...(selectedAircraftId && aircraftSnapshot ? [{
+              id: "aircraftDropRoutePins" as const,
+              label: "🛫🛬 Drop pins at both origin and destination of selected aircraft",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: async () => {
+                const a = aircraftSnapshot.aircraft.find(x => x.icao24 === selectedAircraftId);
+                if (!a || !a.callsign) { showToast("Selected aircraft has no callsign"); return; }
+                showToast(`🔍 Looking up route for ${a.callsign.trim()}…`);
+                try {
+                  const route = await fetchFlightRoute(a.callsign);
+                  if (!route?.origin && !route?.destination) {
+                    showToast(`🛫🛬 No route data available for ${a.callsign.trim()}`);
+                    return;
+                  }
+                  const stamp = Date.now();
+                  const newPins: Pin[] = [];
+                  if (route.origin?.lat && route.origin?.lon) {
+                    const o = route.origin.iata || route.origin.icao || "?";
+                    newPins.push({ id: `pin-route-${stamp}-o`, lat: route.origin.lat, lon: route.origin.lon, label: `🛫 ${a.callsign.trim()} from ${o}${route.origin.city ? ` (${route.origin.city})` : ""}`, color: "#7cffb1", createdAt: stamp });
+                  }
+                  if (route.destination?.lat && route.destination?.lon) {
+                    const d = route.destination.iata || route.destination.icao || "?";
+                    newPins.push({ id: `pin-route-${stamp}-d`, lat: route.destination.lat, lon: route.destination.lon, label: `🛬 ${a.callsign.trim()} to ${d}${route.destination.city ? ` (${route.destination.city})` : ""}`, color: "#ff7be0", createdAt: stamp + 1 });
+                  }
+                  if (newPins.length === 0) { showToast(`🛫🛬 Route found but no airport coordinates`); return; }
+                  setPins((prev) => [...prev, ...newPins]);
+                  showToast(`🛫🛬 Dropped ${newPins.length} pin${newPins.length === 1 ? "" : "s"} for ${a.callsign.trim()} route`);
+                } catch (e) {
+                  showToast(`Lookup failed: ${(e as Error).message}`);
+                }
+              },
+            }] : []),
             { id: "earthquakesExportCsv", label: earthquakes.length > 0 ? `📊 Export ${earthquakes.length} earthquakes as CSV (24h USGS)` : "Export earthquakes as CSV (none loaded — toggle layer)", group: "Tools", icon: Sparkles, run: () => {
               if (earthquakes.length === 0) { showToast("Earthquakes layer not loaded"); return; }
               const escape = (s: string) => `"${(s || "").replace(/"/g, '""')}"`;
