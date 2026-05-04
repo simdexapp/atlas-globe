@@ -789,6 +789,7 @@ const KEYBOARD_HINTS = [
   { keys: "F2", desc: "✏ Rename selected pin (Windows convention)" },
   { keys: "Delete", desc: "🗑 Delete selected pin with confirm (alternative to Shift+X)" },
   { keys: "\\", desc: "🎨 Toggle UI customization mode (alternative to Cmd+E)" },
+  { keys: "Alt+1 … Alt+9", desc: "📚 Fly to user bookmark #N (newest-first, 1-indexed — power-user instant fly-to)" },
   // ===== Time (Surface mode) =====
   { keys: "[", desc: "Step Surface clock back 1 hour" },
   { keys: "]", desc: "Step Surface clock forward 1 hour" },
@@ -4095,6 +4096,23 @@ function App() {
       }
       if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
       if (event.metaKey || event.ctrlKey) return;
+
+      // Alt+1 through Alt+9 — fly to user bookmark N (newest first).
+      // Power-user shortcut for instant fly-to without opening the
+      // bookmarks panel. Skips city presets (savedAt=0).
+      if (event.altKey && /^[1-9]$/.test(event.key)) {
+        event.preventDefault();
+        const n = parseInt(event.key, 10);
+        const userBmks = bookmarksRef.current.filter(b => b.savedAt > 0).sort((a, b) => b.savedAt - a.savedAt);
+        if (n > userBmks.length) {
+          showToast(`Alt+${n}: only ${userBmks.length} user bookmark${userBmks.length === 1 ? "" : "s"} saved`);
+          return;
+        }
+        const bm = userBmks[n - 1];
+        setFlyTo((p) => ({ id: p.id + 1, lat: bm.lat, lon: bm.lon, altKm: bm.altKm }));
+        showToast(`📚 Alt+${n}: ${bm.name}`);
+        return;
+      }
 
       // Read frequently-changing state from refs so the closure
       // doesn't capture them as effect deps. The refs are kept fresh
