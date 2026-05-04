@@ -18852,6 +18852,86 @@ ${trkpts}
               const more = supersonic.length > 5 ? ` +${supersonic.length - 5}` : "";
               showToast(`🚀 ${supersonic.length} aircraft >700kt: ${top}${more} — likely military, tailwind-aided, or sensor noise`);
             }},
+            // Boeing vs Airbus split — buckets by ICAO type code prefix.
+            // B7xx / B73x / B74x / B75x / B76x / B77x / B78x = Boeing.
+            // A2xx / A3xx / A4xx (rare) = Airbus. Others (Embraer E-jets,
+            // Bombardier CRJ, Cessna C-series) lumped into "other".
+            // Surfaces the Boeing/Airbus duopoly's actual share of
+            // commercial flying right now.
+            { id: "aircraftBoeingVsAirbus", label: "🛩 Boeing vs Airbus split — count by manufacturer prefix", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              let boeing = 0, airbus = 0, embraer = 0, bombardier = 0, cessna = 0, other = 0, unknown = 0;
+              for (const a of aircraftSnapshot.aircraft) {
+                const t = (a.type || "").toUpperCase();
+                if (!t) { unknown++; continue; }
+                if (/^B7[0-9]/.test(t)) boeing++;
+                else if (/^A[2-4]/.test(t)) airbus++;
+                else if (/^E[1-9]/.test(t)) embraer++;
+                else if (/^CRJ|^CL/.test(t)) bombardier++;
+                else if (/^C1[0-9]/.test(t)) cessna++;
+                else other++;
+              }
+              const total = aircraftSnapshot.aircraft.length;
+              const knownTotal = boeing + airbus;
+              const boeingPct = knownTotal > 0 ? (boeing / knownTotal * 100) : 0;
+              const airbusPct = knownTotal > 0 ? (airbus / knownTotal * 100) : 0;
+              showToast(`🛩 Boeing ${boeing} (${boeingPct.toFixed(0)}%) vs Airbus ${airbus} (${airbusPct.toFixed(0)}%) of duopoly · Embraer ${embraer} · Bombardier ${bombardier} · Cessna ${cessna} · other ${other} · unknown ${unknown} · ${total} total`);
+            }},
+            // Aircraft count by ocean basin. Rough lat/lon zone test
+            // for the 5 major oceans. Useful for spotting trans-ocean
+            // route density (which ocean has the most flights right now?).
+            { id: "aircraftCountByOcean", label: "🌊 Aircraft count by ocean basin (rough zone test — Pacific / Atlantic / Indian / Arctic / Southern)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              let pacific = 0, atlantic = 0, indian = 0, arctic = 0, southern = 0, land = 0;
+              for (const a of aircraftSnapshot.aircraft) {
+                if (a.onGround) { land++; continue; }
+                const lat = a.lat, lon = a.lon;
+                // Rough oceanic zones — definitely overlapping & approximate
+                if (lat > 66.5) arctic++;
+                else if (lat < -60) southern++;
+                // Pacific: 120°E..120°W (large spread). Includes E Russia, Japan, etc.
+                else if ((lon >= 120 || lon <= -100) && lat >= -60 && lat <= 60) pacific++;
+                // Atlantic: -100°W..20°E
+                else if (lon > -100 && lon < 20 && lat >= -60 && lat <= 66.5) atlantic++;
+                // Indian: 20°E..120°E
+                else if (lon >= 20 && lon < 120 && lat >= -60 && lat <= 30) indian++;
+                else land++;
+              }
+              const oceanTotal = pacific + atlantic + indian + arctic + southern;
+              showToast(`🌊 Ocean splits — Pacific ${pacific} · Atlantic ${atlantic} · Indian ${indian} · Arctic ${arctic} · Southern ${southern} (${oceanTotal} oceanic) · ${land} over land/ground (rough zones)`);
+            }},
+            // Fly to globally fastest airborne aircraft. Companion to
+            // aircraftRandomDive — for users who want to see what's
+            // moving the fastest right now.
+            { id: "aircraftFlyToFastest", label: "⚡ Fly to globally fastest airborne aircraft", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const fastest = aircraftSnapshot.aircraft
+                .filter(a => !a.onGround && Number.isFinite(a.velocityMs) && a.velocityMs > 0)
+                .sort((a, b) => b.velocityMs - a.velocityMs)[0];
+              if (!fastest) { showToast("No airborne aircraft with velocity data"); return; }
+              setSelectedAircraftId(fastest.icao24);
+              const altKm = Math.max(2, fastest.altitudeM / 1000 + 5);
+              setFlyTo((p) => ({ id: p.id + 1, lat: fastest.lat, lon: fastest.lon, altKm }));
+              const cs = (fastest.callsign || fastest.icao24).trim();
+              const kt = Math.round(fastest.velocityMs * 1.944);
+              showToast(`⚡ Flying to fastest: ${cs} @ ${kt} kt (${fastest.type || "?"})`);
+            }},
+            // Fly to globally highest airborne aircraft. Companion to
+            // aircraftFlyToFastest — likely a U-2, business jet, or
+            // sensor anomaly above FL450.
+            { id: "aircraftFlyToHighest", label: "🚀 Fly to globally highest airborne aircraft", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const highest = aircraftSnapshot.aircraft
+                .filter(a => !a.onGround && a.altitudeM > 0)
+                .sort((a, b) => b.altitudeM - a.altitudeM)[0];
+              if (!highest) { showToast("No airborne aircraft loaded"); return; }
+              setSelectedAircraftId(highest.icao24);
+              const altKm = Math.max(2, highest.altitudeM / 1000 + 8);
+              setFlyTo((p) => ({ id: p.id + 1, lat: highest.lat, lon: highest.lon, altKm }));
+              const cs = (highest.callsign || highest.icao24).trim();
+              const ft = Math.round(highest.altitudeM / 0.3048);
+              showToast(`🚀 Flying to highest: ${cs} @ ${ft.toLocaleString()}ft (${highest.type || "?"})`);
+            }},
             { id: "earthquakesExportCsv", label: earthquakes.length > 0 ? `📊 Export ${earthquakes.length} earthquakes as CSV (24h USGS)` : "Export earthquakes as CSV (none loaded — toggle layer)", group: "Tools", icon: Sparkles, run: () => {
               if (earthquakes.length === 0) { showToast("Earthquakes layer not loaded"); return; }
               const escape = (s: string) => `"${(s || "").replace(/"/g, '""')}"`;
