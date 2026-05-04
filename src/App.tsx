@@ -979,6 +979,23 @@ function App() {
   });
   const voiceNarrationRef = useRef(voiceNarration);
   useEffect(() => { voiceNarrationRef.current = voiceNarration; }, [voiceNarration]);
+  // Voice speech rate — used by toast narration and all announce*
+  // commands. Range 0.5–2.0 (SpeechSynthesisUtterance native range).
+  // Default 1.0. Stored as one of 7 fixed steps (0.5/0.75/1.0/1.25/
+  // 1.5/1.75/2.0) so cycling is predictable.
+  const [voiceRate, setVoiceRate] = useState<number>(() => {
+    try {
+      const v = window.localStorage.getItem("atlas-voice-rate");
+      const n = v ? parseFloat(v) : NaN;
+      if (Number.isFinite(n) && n >= 0.5 && n <= 2.0) return n;
+    } catch { /* ignore */ }
+    return 1.0;
+  });
+  const voiceRateRef = useRef(voiceRate);
+  useEffect(() => {
+    voiceRateRef.current = voiceRate;
+    try { window.localStorage.setItem("atlas-voice-rate", String(voiceRate)); } catch { /* ignore */ }
+  }, [voiceRate]);
   // Accessibility settings — text scale (normal/large/xlarge),
   // high-contrast mode, and force-reduced-motion. All persisted to
   // localStorage and applied via data-* attributes on <html>, with
@@ -2443,7 +2460,7 @@ function App() {
         .replace(/[·•|]/g, ", ");
       if (stripped) {
         const u = new SpeechSynthesisUtterance(stripped);
-        u.rate = 1.05;
+        u.rate = voiceRateRef.current;
         u.volume = 0.9;
         // Cancel any in-flight utterance so rapid toasts don't queue up.
         window.speechSynthesis.cancel();
@@ -12722,7 +12739,7 @@ ${trkpts}
               const text = `Latitude ${Math.abs(c.lat).toFixed(2)} degrees ${ns}, longitude ${Math.abs(c.lon).toFixed(2)} degrees ${ew}, altitude ${c.altKm.toFixed(0)} kilometers.`;
               window.speechSynthesis.cancel();
               const u = new SpeechSynthesisUtterance(text);
-              u.rate = 1.0;
+              u.rate = voiceRate;
               window.speechSynthesis.speak(u);
               showToast(`🔊 Speaking: ${text}`);
             }},
@@ -12744,7 +12761,7 @@ ${trkpts}
               const text = `Pin ${cleanLabel} at latitude ${p.lat.toFixed(2)}, longitude ${p.lon.toFixed(2)}.${distText}`;
               window.speechSynthesis.cancel();
               const u = new SpeechSynthesisUtterance(text);
-              u.rate = 1.0;
+              u.rate = voiceRate;
               window.speechSynthesis.speak(u);
               showToast(`🔊 Speaking: ${text}`);
             }},
@@ -12765,7 +12782,7 @@ ${trkpts}
                 : `Aircraft ${callsign}, altitude ${altFt.toLocaleString()} feet, ground speed ${kt} knots, heading ${heading} degrees ${dir}.`;
               window.speechSynthesis.cancel();
               const u = new SpeechSynthesisUtterance(text);
-              u.rate = 1.0;
+              u.rate = voiceRate;
               window.speechSynthesis.speak(u);
               showToast(`🔊 Speaking: ${text}`);
             }},
@@ -12786,9 +12803,100 @@ ${trkpts}
               const text = `Local solar time at this longitude is ${hh12}:${mm.toString().padStart(2, "0")} ${period}, UTC offset ${offsetH >= 0 ? "plus" : "minus"} ${Math.abs(offsetH).toFixed(1)} hours.`;
               window.speechSynthesis.cancel();
               const u = new SpeechSynthesisUtterance(text);
-              u.rate = 1.0;
+              u.rate = voiceRate;
               window.speechSynthesis.speak(u);
               showToast(`🔊 Speaking: ${text}`);
+            }},
+            // Cycle voice speech rate through 7 fixed steps (0.5/0.75/1.0
+            // /1.25/1.5/1.75/2.0). Applies to toast narration AND every
+            // announce* command. Useful for screen-reader users who prefer
+            // faster pace, and for kiosk/presentation use where slower
+            // pace helps audience comprehension.
+            { id: "voiceRateCycle", label: `🎚 Voice rate: ${voiceRate.toFixed(2)}× — cycle through speeds`, group: "Tools", icon: Sparkles, run: () => {
+              const steps = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
+              // Find current step (or nearest), advance by 1
+              let idx = steps.findIndex(s => Math.abs(s - voiceRate) < 0.01);
+              if (idx === -1) {
+                // Snap to nearest
+                let best = 0, bestDiff = Infinity;
+                for (let i = 0; i < steps.length; i++) {
+                  const d = Math.abs(steps[i] - voiceRate);
+                  if (d < bestDiff) { best = i; bestDiff = d; }
+                }
+                idx = best;
+              }
+              const next = steps[(idx + 1) % steps.length];
+              setVoiceRate(next);
+              showToast(`🎚 Voice rate: ${next.toFixed(2)}×`);
+              // Demo the new rate immediately so the user can hear the change
+              if (typeof window !== "undefined" && window.speechSynthesis) {
+                window.speechSynthesis.cancel();
+                const u = new SpeechSynthesisUtterance(`Voice rate ${next.toFixed(2)} times.`);
+                u.rate = next;
+                window.speechSynthesis.speak(u);
+              }
+            }},
+            // Speak which layers are currently visible. Useful for
+            // screen-reader users navigating layer state without scanning
+            // a panel. Counterpart to the Shift+L visual layer-list toast.
+            { id: "announceLayers", label: "🔊 Speak currently-visible data layers", group: "Tools", icon: Sparkles, run: () => {
+              if (typeof window === "undefined" || !window.speechSynthesis) { showToast("🔊 SpeechSynthesis not available in this browser"); return; }
+              const onLayers = (Object.entries(layers) as Array<[keyof LayerVisibility, boolean]>)
+                .filter(([, on]) => on)
+                .map(([k]) => k);
+              const text = onLayers.length === 0
+                ? "No data layers currently visible."
+                : `${onLayers.length} ${onLayers.length === 1 ? "layer" : "layers"} visible: ${onLayers.join(", ")}.`;
+              window.speechSynthesis.cancel();
+              const u = new SpeechSynthesisUtterance(text);
+              u.rate = voiceRate;
+              window.speechSynthesis.speak(u);
+              showToast(`🔊 ${text}`);
+            }},
+            // Speak info about the closest pin to current view center.
+            // No selection required — auto-picks the nearest pin and
+            // describes its label, distance, bearing.
+            { id: "announceNearestPin", label: pins.length === 0 ? "🔊 Speak nearest pin (no pins yet)" : "🔊 Speak nearest pin to current view (label, distance, bearing)", group: "Tools", icon: Sparkles, run: () => {
+              if (typeof window === "undefined" || !window.speechSynthesis) { showToast("🔊 SpeechSynthesis not available in this browser"); return; }
+              const c = cameraStateRef.current;
+              if (!c) { showToast("Camera position unknown"); return; }
+              if (pins.length === 0) { showToast("No pins to announce — drop one with P"); return; }
+              const sorted = [...pins].map(p => ({ p, km: haversineKm(c.lat, c.lon, p.lat, p.lon) })).sort((a, b) => a.km - b.km);
+              const nearest = sorted[0];
+              const dir = compassDir(bearingDeg(c.lat, c.lon, nearest.p.lat, nearest.p.lon));
+              const cleanLabel = nearest.p.label.replace(/^[\p{Emoji}\s]+/u, "").trim() || nearest.p.label;
+              const distText = nearest.km < 100 ? `${nearest.km.toFixed(1)} kilometers` : `${Math.round(nearest.km)} kilometers`;
+              const text = `Nearest pin: ${cleanLabel}, ${distText} ${dir} of current view.`;
+              window.speechSynthesis.cancel();
+              const u = new SpeechSynthesisUtterance(text);
+              u.rate = voiceRate;
+              window.speechSynthesis.speak(u);
+              showToast(`🔊 ${text}`);
+            }},
+            // Speak info about the closest aircraft to current view center.
+            // No selection required — auto-picks. Useful for spatial-audio
+            // tracking by screen-reader users.
+            { id: "announceNearestAircraft", label: !aircraftSnapshot ? "🔊 Speak nearest aircraft (none loaded)" : "🔊 Speak nearest aircraft to current view (callsign, alt, distance)", group: "Tools", icon: Sparkles, run: () => {
+              if (typeof window === "undefined" || !window.speechSynthesis) { showToast("🔊 SpeechSynthesis not available in this browser"); return; }
+              const c = cameraStateRef.current;
+              if (!c) { showToast("Camera position unknown"); return; }
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const sorted = [...aircraftSnapshot.aircraft]
+                .filter(a => !a.onGround)
+                .map(a => ({ a, km: haversineKm(c.lat, c.lon, a.lat, a.lon) }))
+                .sort((x, y) => x.km - y.km);
+              if (sorted.length === 0) { showToast("No airborne aircraft loaded"); return; }
+              const { a, km } = sorted[0];
+              const dir = compassDir(bearingDeg(c.lat, c.lon, a.lat, a.lon));
+              const callsign = (a.callsign || a.icao24).trim();
+              const altFt = Math.round(a.altitudeM / 0.3048);
+              const distText = km < 100 ? `${km.toFixed(1)} kilometers` : `${Math.round(km)} kilometers`;
+              const text = `Nearest aircraft: ${callsign}, altitude ${altFt.toLocaleString()} feet, ${distText} ${dir}.`;
+              window.speechSynthesis.cancel();
+              const u = new SpeechSynthesisUtterance(text);
+              u.rate = voiceRate;
+              window.speechSynthesis.speak(u);
+              showToast(`🔊 ${text}`);
             }},
             { id: "wikiNearby", label: "🗺 Wikipedia articles near this view (top 8 within 50km)", group: "Tools", icon: Sparkles, run: async () => {
               const c = cameraStateRef.current;
