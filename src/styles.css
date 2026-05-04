@@ -333,6 +333,17 @@ input:focus-visible,
   50% { opacity: 0.9; }
 }
 
+/* CSS containment for all widgets — tells the browser that layout +
+   style + paint changes inside the widget don't propagate outside.
+   Big perf win since widgets re-render on every camera tick (5×/sec)
+   while their position + size stay stable. The containment hint lets
+   the engine skip layout invalidation of the whole page when a widget
+   updates its inner content (e.g. a clock ticking, a distance changing).
+   Applied via attribute selector to cover every widget at once. */
+[class*="atlas"][class$="Widget"] {
+  contain: layout style;
+}
+
 /* Nearby aircraft widget — top 5 closest to current view */
 .atlasNearbyAircraftWidget {
   position: fixed;
