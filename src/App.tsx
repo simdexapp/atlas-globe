@@ -229,6 +229,15 @@ type LayerVisibility = {
   // Seasons widget — current astronomical season for the camera's
   // hemisphere, day-of-year, days until next equinox/solstice.
   seasons: boolean;
+  // Population widget — sum of MAJOR_CITIES + REGIONAL_CITIES city
+  // populations within 500km of current view (rough proxy for
+  // metropolitan population concentration around any point on Earth).
+  populationNearby: boolean;
+  // Earth-rotation widget — Earth's tangential rotational velocity at
+  // the current view's latitude (1670 km/h at equator → 0 at poles).
+  // Educational: surfaces a non-obvious physics fact (you're moving
+  // 1670 km/h east just standing still on the equator).
+  earthRotation: boolean;
 };
 
 type GlobeSettings = {
@@ -577,6 +586,8 @@ const defaultLayers: LayerVisibility = {
   bookmarksList: false,
   moonPhase: false,
   seasons: false,
+  populationNearby: false,
+  earthRotation: false,
   // 3D OSM Buildings tileset is heavy and renders with edge outlines
   // that disable imagery draping underneath, painting the screen with
   // dark olive boxes at low altitudes (the user's tear repro). Off by
@@ -11850,6 +11861,8 @@ ${trkpts}
             { id: "widgetViewHistory", label: layers.viewHistory ? "Hide view history widget" : `Show view history (${viewHistory.length} recent views)`, group: "Widgets", icon: RotateCcw, run: () => toggleLayer("viewHistory") },
             { id: "widgetMoonPhase", label: layers.moonPhase ? "Hide moon-phase widget" : "Show moon-phase widget (illumination, age, next full)", group: "Widgets", icon: SunIcon, run: () => toggleLayer("moonPhase") },
             { id: "widgetSeasons", label: layers.seasons ? "Hide seasons widget" : "Show seasons widget (current season + days to next equinox/solstice)", group: "Widgets", icon: SunIcon, run: () => toggleLayer("seasons") },
+            { id: "widgetPopulationNearby", label: layers.populationNearby ? "Hide population-nearby widget" : "🏙 Show population-nearby widget (sum of cities within 500km)", group: "Widgets", icon: BookmarkPlus, run: () => toggleLayer("populationNearby") },
+            { id: "widgetEarthRotation", label: layers.earthRotation ? "Hide Earth-rotation widget" : "🌐 Show Earth-rotation widget (tangential velocity at current latitude)", group: "Widgets", icon: Compass, run: () => toggleLayer("earthRotation") },
             // Ambient Earth — kiosk/big-screen mode. Hides UI chrome,
             // starts auto-orbit, shows comprehensive live-data overlay.
             // Made for office TVs, conference displays, screensavers.
@@ -19126,6 +19139,96 @@ ${wpts}
                 </div>
                 <div className="atlasSeasonsMeta">
                   <span>{nextEvent.emoji} {nextEvent.name} in {nextEvent.daysAway}d</span>
+                </div>
+              </div>
+            );
+          })()}
+        </Draggable>
+      )}
+
+      {/* Population-nearby widget — sums populations of MAJOR_CITIES
+          + REGIONAL_CITIES within 500km of view center. Useful for
+          "is this region densely populated?" answers without zooming. */}
+      {layers.populationNearby && (
+        <Draggable id="populationNearby" customizeMode={customizeUiMode} position={widgetPositions.populationNearby} onMove={setWidgetPosition}>
+          {(() => {
+            const RADIUS_KM = 500;
+            const cLat = cameraState.lat, cLon = cameraState.lon;
+            let total = 0;
+            let count = 0;
+            const top: Array<{ name: string; population: number; km: number }> = [];
+            for (const c of [...MAJOR_CITIES, ...REGIONAL_CITIES]) {
+              const km = haversineKm(cLat, cLon, c.lat, c.lon);
+              if (km <= RADIUS_KM) {
+                total += c.population;
+                count++;
+                top.push({ name: c.name, population: c.population, km });
+              }
+            }
+            top.sort((a, b) => b.population - a.population);
+            const top3 = top.slice(0, 3);
+            const fmtPop = (n: number) => {
+              if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+              if (n >= 1_000) return `${(n / 1_000).toFixed(0)}k`;
+              return n.toString();
+            };
+            return (
+              <div className="atlasPopulationNearbyWidget" role="status" aria-label="Population nearby">
+                <div className="atlasPopulationNearbyHead">
+                  <BookmarkPlus size={12} />
+                  <strong>Pop. within {RADIUS_KM}km</strong>
+                </div>
+                <div className="atlasPopulationNearbyBig">
+                  {count === 0 ? "—" : fmtPop(total)}
+                  {count === 0 && <div className="atlasPopulationNearbyEmpty">No major/regional cities within {RADIUS_KM}km</div>}
+                </div>
+                {count > 0 && (
+                  <div className="atlasPopulationNearbyList">
+                    {top3.map(c => (
+                      <div key={c.name}><span>{c.name}</span><span>{fmtPop(c.population)}</span></div>
+                    ))}
+                    {count > 3 && <div className="atlasPopulationNearbyMore">+ {count - 3} more cit{count - 3 === 1 ? "y" : "ies"}</div>}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </Draggable>
+      )}
+
+      {/* Earth-rotation widget — shows Earth's tangential rotational
+          velocity at the current latitude. Equator: 1670 km/h, poles: 0.
+          Surfaces a non-obvious physics fact: you're moving 1670 km/h
+          east just standing still on the equator, due to Earth's spin. */}
+      {layers.earthRotation && (
+        <Draggable id="earthRotation" customizeMode={customizeUiMode} position={widgetPositions.earthRotation} onMove={setWidgetPosition}>
+          {(() => {
+            // Earth equatorial circumference 40,075 km / 23.934 sidereal
+            // hours = 1674.4 km/h at the equator. Velocity at latitude φ
+            // is v_eq · cos(φ).
+            const vEqKmh = 1674.4;
+            const phi = cameraState.lat * Math.PI / 180;
+            const vKmh = vEqKmh * Math.cos(phi);
+            const vMs = vKmh * 1000 / 3600;
+            const pctOfEq = vKmh / vEqKmh * 100;
+            // Days at this speed to circle Earth (proper of geometry,
+            // not real laps — useful as a comparator).
+            const circKm = 40075 * Math.cos(phi);
+            return (
+              <div className="atlasEarthRotationWidget" role="status" aria-label="Earth rotation velocity">
+                <div className="atlasEarthRotationHead">
+                  <Compass size={12} />
+                  <strong>Earth spin (this latitude)</strong>
+                </div>
+                <div className="atlasEarthRotationBig">
+                  {Math.round(vKmh).toLocaleString()} <span>km/h</span>
+                </div>
+                <div className="atlasEarthRotationMeta">
+                  <span>{Math.round(vMs).toLocaleString()} m/s</span>
+                  <span>· {pctOfEq.toFixed(0)}% of equator (1674 km/h)</span>
+                </div>
+                <div className="atlasEarthRotationFooter">
+                  Local circumference: {circKm.toFixed(0)} km
                 </div>
               </div>
             );

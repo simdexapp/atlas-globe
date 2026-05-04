@@ -4169,6 +4169,111 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
   .atlasSeasonsWidget { display: none; }
 }
 
+/* ============= Population-nearby + Earth-rotation widgets =============
+   Two more lightweight info widgets. Population reads from city data
+   (no network), Earth-rotation is pure trig from camera latitude. */
+.atlasPopulationNearbyWidget,
+.atlasEarthRotationWidget {
+  position: fixed;
+  left: 64px;
+  z-index: 5;
+  width: 240px;
+  padding: var(--s-3);
+  border-radius: var(--r-3);
+  border: 1px solid var(--border);
+  background: var(--surface-elevated);
+  backdrop-filter: blur(14px);
+  box-shadow: var(--shadow-2);
+  color: var(--gray-12);
+  font-size: var(--text-xs);
+  display: grid;
+  gap: var(--s-2);
+}
+.atlasPopulationNearbyWidget { top: 1620px; }
+.atlasEarthRotationWidget    { top: 1740px; }
+
+.atlasPopulationNearbyHead,
+.atlasEarthRotationHead {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  font-family: ui-monospace, monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--gray-9);
+}
+.atlasPopulationNearbyHead strong,
+.atlasEarthRotationHead strong { color: var(--gray-9); font-weight: 600; flex: 1; }
+
+.atlasPopulationNearbyBig {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--gray-12);
+  font-family: ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+.atlasPopulationNearbyEmpty {
+  font-size: 11px;
+  color: var(--gray-9);
+  font-weight: 400;
+  font-family: Inter, sans-serif;
+  font-style: italic;
+}
+.atlasPopulationNearbyList {
+  display: grid;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--gray-10);
+  font-family: ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+.atlasPopulationNearbyList > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.atlasPopulationNearbyMore {
+  color: var(--gray-9);
+  font-style: italic;
+}
+
+.atlasEarthRotationBig {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--gray-12);
+  font-family: ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+.atlasEarthRotationBig span {
+  font-size: 12px;
+  color: var(--gray-9);
+  font-weight: 500;
+  margin-left: 4px;
+}
+.atlasEarthRotationMeta {
+  font-size: 11px;
+  color: var(--gray-10);
+  font-family: ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.atlasEarthRotationFooter {
+  font-size: 10.5px;
+  color: var(--gray-9);
+  font-family: ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 4px;
+}
+
+@media (max-width: 980px) {
+  .atlasPopulationNearbyWidget,
+  .atlasEarthRotationWidget { display: none; }
+}
+
 .atlasAntipodeFlyBtn:hover { background: var(--accent); color: var(--bg); }
 
 .atlasLocalTimeClock {
