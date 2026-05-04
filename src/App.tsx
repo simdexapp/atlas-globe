@@ -1027,6 +1027,22 @@ function App() {
     voiceRateRef.current = voiceRate;
     try { window.localStorage.setItem("atlas-voice-rate", String(voiceRate)); } catch { /* ignore */ }
   }, [voiceRate]);
+  // Voice speech pitch — companion to voiceRate. Range 0.5..2.0
+  // (SpeechSynthesisUtterance native range). Default 1.0. Lets users
+  // pick a deeper or higher voice character without OS-level config.
+  const [voicePitch, setVoicePitch] = useState<number>(() => {
+    try {
+      const v = window.localStorage.getItem("atlas-voice-pitch");
+      const n = v ? parseFloat(v) : NaN;
+      if (Number.isFinite(n) && n >= 0.5 && n <= 2.0) return n;
+    } catch { /* ignore */ }
+    return 1.0;
+  });
+  const voicePitchRef = useRef(voicePitch);
+  useEffect(() => {
+    voicePitchRef.current = voicePitch;
+    try { window.localStorage.setItem("atlas-voice-pitch", String(voicePitch)); } catch { /* ignore */ }
+  }, [voicePitch]);
   // Accessibility settings — text scale (normal/large/xlarge),
   // high-contrast mode, and force-reduced-motion. All persisted to
   // localStorage and applied via data-* attributes on <html>, with
@@ -2536,6 +2552,7 @@ function App() {
       if (stripped) {
         const u = new SpeechSynthesisUtterance(stripped);
         u.rate = voiceRateRef.current;
+        u.pitch = voicePitchRef.current;
         u.volume = 0.9;
         // Cancel any in-flight utterance so rapid toasts don't queue up.
         window.speechSynthesis.cancel();
@@ -13529,6 +13546,7 @@ ${trkpts}
               window.speechSynthesis.cancel();
               const u = new SpeechSynthesisUtterance(text);
               u.rate = voiceRate;
+              u.pitch = voicePitch;
               window.speechSynthesis.speak(u);
               showToast(`🔊 Speaking: ${text}`);
             }},
@@ -13551,6 +13569,7 @@ ${trkpts}
               window.speechSynthesis.cancel();
               const u = new SpeechSynthesisUtterance(text);
               u.rate = voiceRate;
+              u.pitch = voicePitch;
               window.speechSynthesis.speak(u);
               showToast(`🔊 Speaking: ${text}`);
             }},
@@ -13572,6 +13591,7 @@ ${trkpts}
               window.speechSynthesis.cancel();
               const u = new SpeechSynthesisUtterance(text);
               u.rate = voiceRate;
+              u.pitch = voicePitch;
               window.speechSynthesis.speak(u);
               showToast(`🔊 Speaking: ${text}`);
             }},
@@ -13593,6 +13613,7 @@ ${trkpts}
               window.speechSynthesis.cancel();
               const u = new SpeechSynthesisUtterance(text);
               u.rate = voiceRate;
+              u.pitch = voicePitch;
               window.speechSynthesis.speak(u);
               showToast(`🔊 Speaking: ${text}`);
             }},
@@ -13639,6 +13660,7 @@ ${trkpts}
               window.speechSynthesis.cancel();
               const u = new SpeechSynthesisUtterance(text);
               u.rate = voiceRate;
+              u.pitch = voicePitch;
               window.speechSynthesis.speak(u);
               showToast(`🔊 ${text}`);
             }},
@@ -13659,6 +13681,7 @@ ${trkpts}
               window.speechSynthesis.cancel();
               const u = new SpeechSynthesisUtterance(text);
               u.rate = voiceRate;
+              u.pitch = voicePitch;
               window.speechSynthesis.speak(u);
               showToast(`🔊 ${text}`);
             }},
@@ -13684,6 +13707,7 @@ ${trkpts}
               window.speechSynthesis.cancel();
               const u = new SpeechSynthesisUtterance(text);
               u.rate = voiceRate;
+              u.pitch = voicePitch;
               window.speechSynthesis.speak(u);
               showToast(`🔊 ${text}`);
             }},
@@ -13708,6 +13732,7 @@ ${trkpts}
               window.speechSynthesis.cancel();
               const u = new SpeechSynthesisUtterance(text);
               u.rate = voiceRate;
+              u.pitch = voicePitch;
               window.speechSynthesis.speak(u);
               showToast(`🔊 Speaking shortcuts overview (${lines.length} lines, ~30s at 1× rate)`);
             }},
@@ -13739,6 +13764,7 @@ ${trkpts}
               window.speechSynthesis.cancel();
               const u = new SpeechSynthesisUtterance(text);
               u.rate = voiceRate;
+              u.pitch = voicePitch;
               window.speechSynthesis.speak(u);
               showToast(`🔊 ${text}`);
             }},
@@ -13763,6 +13789,91 @@ ${trkpts}
               window.speechSynthesis.cancel();
               const u = new SpeechSynthesisUtterance(text);
               u.rate = voiceRate;
+              u.pitch = voicePitch;
+              window.speechSynthesis.speak(u);
+              showToast(`🔊 ${text}`);
+            }},
+            // Cycle voice pitch through 7 fixed steps. Companion to
+            // voiceRateCycle. Lets users pick a deeper or higher voice
+            // character (men/women / robotic / chipmunk effect).
+            { id: "voicePitchCycle", label: `🎚 Voice pitch: ${voicePitch.toFixed(2)} — cycle through pitches`, group: "Tools", icon: Sparkles, run: () => {
+              const steps = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
+              let idx = steps.findIndex(s => Math.abs(s - voicePitch) < 0.01);
+              if (idx === -1) {
+                let best = 0, bestDiff = Infinity;
+                for (let i = 0; i < steps.length; i++) {
+                  const d = Math.abs(steps[i] - voicePitch);
+                  if (d < bestDiff) { best = i; bestDiff = d; }
+                }
+                idx = best;
+              }
+              const next = steps[(idx + 1) % steps.length];
+              setVoicePitch(next);
+              showToast(`🎚 Voice pitch: ${next.toFixed(2)}`);
+              if (typeof window !== "undefined" && window.speechSynthesis) {
+                window.speechSynthesis.cancel();
+                const u = new SpeechSynthesisUtterance(`Voice pitch ${next.toFixed(2)}.`);
+                u.rate = voiceRate;
+                u.pitch = next;
+                window.speechSynthesis.speak(u);
+              }
+            }},
+            // Speak distance + bearing to user's saved home location.
+            // Useful for screen-reader users orienting in space relative
+            // to a known anchor. Errors gracefully if no home is set.
+            { id: "announceTimeToHome", label: homeLocation ? `🔊 Speak distance + bearing from current view to home (${homeLocation.name})` : "🔊 Speak distance to home (no home location set)", group: "Tools", icon: Sparkles, run: () => {
+              if (typeof window === "undefined" || !window.speechSynthesis) { showToast("🔊 SpeechSynthesis not available in this browser"); return; }
+              if (!homeLocation) { showToast("🏠 No home location set — use the palette to set one"); return; }
+              const c = cameraStateRef.current;
+              if (!c) { showToast("Camera position unknown"); return; }
+              const km = haversineKm(c.lat, c.lon, homeLocation.lat, homeLocation.lon);
+              const dir = compassDir(bearingDeg(c.lat, c.lon, homeLocation.lat, homeLocation.lon));
+              const distText = km < 100 ? `${km.toFixed(1)} kilometers` : `${Math.round(km).toLocaleString()} kilometers`;
+              const text = `Home (${homeLocation.name}) is ${distText} ${dir} of current view.`;
+              window.speechSynthesis.cancel();
+              const u = new SpeechSynthesisUtterance(text);
+              u.rate = voiceRate;
+              u.pitch = voicePitch;
+              window.speechSynthesis.speak(u);
+              showToast(`🔊 ${text}`);
+            }},
+            // Speak which mode is active + a brief description of what
+            // it does. Useful for screen-reader users to confirm the
+            // current rendering mode.
+            { id: "announceMode", label: "🔊 Speak current mode (Atlas / Surface) and what it shows", group: "Tools", icon: Sparkles, run: () => {
+              if (typeof window === "undefined" || !window.speechSynthesis) { showToast("🔊 SpeechSynthesis not available in this browser"); return; }
+              const text = mode === "atlas"
+                ? "Atlas mode active. A 3D globe view with shader-based imagery, designed for orbital exploration. Press S to switch to Surface mode."
+                : "Surface mode active. A high-detail map view backed by Cesium with NASA imagery, designed for ground-level zoom. Press S to switch back to Atlas mode.";
+              window.speechSynthesis.cancel();
+              const u = new SpeechSynthesisUtterance(text);
+              u.rate = voiceRate;
+              u.pitch = voicePitch;
+              window.speechSynthesis.speak(u);
+              showToast(`🔊 Speaking mode info`);
+            }},
+            // Speak counts of items in each loaded data layer. Useful
+            // for screen-reader users to know how much data is loaded
+            // without scanning the visual chrome.
+            { id: "announceLayerCounts", label: "🔊 Speak counts of items in each loaded data source (aircraft, quakes, etc.)", group: "Tools", icon: Sparkles, run: () => {
+              if (typeof window === "undefined" || !window.speechSynthesis) { showToast("🔊 SpeechSynthesis not available in this browser"); return; }
+              const parts: string[] = [];
+              const aircraftN = aircraftSnapshot?.aircraft.length ?? 0;
+              if (aircraftN > 0) parts.push(`${aircraftN.toLocaleString()} aircraft`);
+              if (earthquakes.length > 0) parts.push(`${earthquakes.length} earthquakes`);
+              if (eonetEvents.length > 0) parts.push(`${eonetEvents.length} natural events`);
+              if (launches.length > 0) parts.push(`${launches.length} upcoming rocket launches`);
+              if (activeStorms.length > 0) parts.push(`${activeStorms.length} active storms`);
+              if (pins.length > 0) parts.push(`${pins.length} pins`);
+              const userBookmarks = bookmarks.filter(b => b.savedAt > 0).length;
+              if (userBookmarks > 0) parts.push(`${userBookmarks} user bookmarks`);
+              const text = parts.length === 0
+                ? "No data sources currently loaded. Toggle layers via the palette to load some."
+                : `Loaded data sources: ${parts.join(", ")}.`;
+              window.speechSynthesis.cancel();
+              const u = new SpeechSynthesisUtterance(text);
+              u.rate = voiceRate;
+              u.pitch = voicePitch;
               window.speechSynthesis.speak(u);
               showToast(`🔊 ${text}`);
             }},
