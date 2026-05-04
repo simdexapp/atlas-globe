@@ -7572,6 +7572,112 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: aLat, lon: aLon, altKm: 5000 }));
               showToast(`🌐 Dropped pin at antipode: ${formatLat(aLat)} ${formatLon(aLon)}`);
             }},
+            // Drop a pin where the sun is currently directly overhead.
+            // Uses simple Spencer-style declination + UTC-hour formula
+            // (also used by the day-info widget). Updates instantly so
+            // dropping it again 5min later moves the pin ~1.25° west.
+            { id: "pinDropAtSubsolarPoint", label: "☀ Drop a pin at the current subsolar point (sun directly overhead)", group: "Tools", icon: BookmarkPlus, run: () => {
+              const now = new Date();
+              const dayOfYear = Math.floor((now.getTime() - Date.UTC(now.getUTCFullYear(), 0, 0)) / 86400000);
+              const decl = 23.45 * Math.sin((360 / 365) * (dayOfYear - 81) * Math.PI / 180);
+              const utcH = now.getUTCHours() + now.getUTCMinutes() / 60 + now.getUTCSeconds() / 3600;
+              const subLat = decl;
+              let subLon = -((utcH - 12) * 15);
+              while (subLon > 180) subLon -= 360;
+              while (subLon < -180) subLon += 360;
+              const id = `pin-sun-${Date.now()}`;
+              const newPin: Pin = { id, lat: subLat, lon: subLon, label: `☀ Subsolar @ ${now.toUTCString().slice(17, 22)}Z`, color: "#ffd66b", createdAt: Date.now() };
+              setPins((prev) => [...prev, newPin]);
+              setSelectedPin(id);
+              setFlyTo((p) => ({ id: p.id + 1, lat: subLat, lon: subLon, altKm: 12000 }));
+              showToast(`☀ Subsolar point now: ${formatLat(subLat)} ${formatLon(subLon)} (drift ~1.25°W per 5 minutes)`);
+            }},
+            // Drop a pin at the current ISS sub-satellite point. Reads
+            // from the live issPosition state which polls every ~10s
+            // when the ISS layer is enabled. ISS moves at ~7.7 km/s so
+            // this pin is "where the ISS was when you pressed it".
+            { id: "pinDropAtIssLocation", label: issPosition ? "🛰 Drop a pin at the current ISS position" : "🛰 Drop pin at ISS (enable ISS layer first)", group: "Tools", icon: BookmarkPlus, run: () => {
+              if (!issPosition) { showToast("🛰 ISS position not loaded — turn on the ISS layer (key 7) first"); return; }
+              const id = `pin-iss-${Date.now()}`;
+              const ts = new Date().toUTCString().slice(17, 22);
+              const newPin: Pin = { id, lat: issPosition.lat, lon: issPosition.lon, label: `🛰 ISS @ ${ts}Z`, color: "#7cffb1", createdAt: Date.now() };
+              setPins((prev) => [...prev, newPin]);
+              setSelectedPin(id);
+              setFlyTo((p) => ({ id: p.id + 1, lat: issPosition.lat, lon: issPosition.lon, altKm: 800 }));
+              showToast(`🛰 Dropped pin at ISS sub-satellite point: ${formatLat(issPosition.lat)} ${formatLon(issPosition.lon)} (ISS moves 7.7 km/s)`);
+            }},
+            // Drop pins forming a regular polygon around the view —
+            // user picks number of sides (3 = triangle, 4 = square, 5 =
+            // pentagon, 6 = hexagon, 8 = octagon, 12 = dodecagon).
+            // Uses the same destination-from-bearing formula as the
+            // ring commands, but with vertex angles only (no edges between).
+            { id: "pinDropPolygon", label: "🔷 Drop pins forming a regular polygon around the view (prompt for sides + radius)", group: "Tools", icon: BookmarkPlus, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              const sidesRaw = window.prompt("Polygon sides (3=triangle, 4=square, 6=hexagon, 12=clock face):", "6");
+              if (!sidesRaw) return;
+              const sides = parseInt(sidesRaw, 10);
+              if (!Number.isFinite(sides) || sides < 3 || sides > 36) { showToast(`Sides must be 3..36 (got ${sidesRaw})`); return; }
+              const radiusRaw = window.prompt(`Polygon radius (km) — distance from view center to each vertex:`, "300");
+              if (!radiusRaw) return;
+              const r = parseFloat(radiusRaw);
+              if (!Number.isFinite(r) || r <= 0 || r > 10000) { showToast(`Radius must be 0..10000 km (got ${radiusRaw})`); return; }
+              const R = EARTH_RADIUS_KM;
+              const phi1 = c.lat * Math.PI / 180;
+              const lam1 = c.lon * Math.PI / 180;
+              const stamp = Date.now();
+              const color = PIN_COLORS[Math.floor(Math.random() * PIN_COLORS.length)];
+              const newPins: Pin[] = [];
+              for (let i = 0; i < sides; i++) {
+                // Bearing 0° at vertex 0 (true north), then evenly spaced clockwise.
+                const bearing = (i * 360 / sides) * Math.PI / 180;
+                const phi2 = Math.asin(Math.sin(phi1) * Math.cos(r/R) + Math.cos(phi1) * Math.sin(r/R) * Math.cos(bearing));
+                const lam2 = lam1 + Math.atan2(Math.sin(bearing) * Math.sin(r/R) * Math.cos(phi1), Math.cos(r/R) - Math.sin(phi1) * Math.sin(phi2));
+                let lon = lam2 * 180 / Math.PI;
+                while (lon > 180) lon -= 360;
+                while (lon < -180) lon += 360;
+                newPins.push({
+                  id: `pin-poly${sides}-${i}-${stamp}`,
+                  lat: phi2 * 180 / Math.PI,
+                  lon,
+                  label: `🔷 ${sides}-gon v${i+1}/${sides}`,
+                  color,
+                  createdAt: stamp + i,
+                });
+              }
+              setPins((prev) => [...prev, ...newPins]);
+              const shapeName = sides === 3 ? "triangle" : sides === 4 ? "square" : sides === 5 ? "pentagon" : sides === 6 ? "hexagon" : sides === 8 ? "octagon" : sides === 12 ? "dodecagon" : `${sides}-gon`;
+              showToast(`🔷 Dropped ${sides} pins forming a ${shapeName} (radius ${r}km)`);
+            }},
+            // Find the most-distant pair of pins and fly to their
+            // midpoint. Useful for "what's the diameter of my pin set?"
+            // and for visualizing the extent of a global pin collection.
+            { id: "pinFurthestPair", label: "📏 Find furthest pair of pins and fly to their midpoint (great-circle diameter)", group: "Tools", icon: BookmarkPlus, run: () => {
+              if (pins.length < 2) { showToast("Need ≥2 pins (currently " + pins.length + ")"); return; }
+              // O(n²) — fine for any realistic pin count
+              let bestKm = -1;
+              let bestI = 0, bestJ = 1;
+              for (let i = 0; i < pins.length; i++) {
+                for (let j = i + 1; j < pins.length; j++) {
+                  const km = haversineKm(pins[i].lat, pins[i].lon, pins[j].lat, pins[j].lon);
+                  if (km > bestKm) { bestKm = km; bestI = i; bestJ = j; }
+                }
+              }
+              const a = pins[bestI], b = pins[bestJ];
+              // Spherical midpoint via 3D unit vectors (handles antimeridian).
+              const aLatR = a.lat * Math.PI/180, aLonR = a.lon * Math.PI/180;
+              const bLatR = b.lat * Math.PI/180, bLonR = b.lon * Math.PI/180;
+              const ax = Math.cos(aLatR)*Math.cos(aLonR), ay = Math.cos(aLatR)*Math.sin(aLonR), az = Math.sin(aLatR);
+              const bx = Math.cos(bLatR)*Math.cos(bLonR), by = Math.cos(bLatR)*Math.sin(bLonR), bz = Math.sin(bLatR);
+              const mx = (ax+bx)/2, my = (ay+by)/2, mz = (az+bz)/2;
+              const mLen = Math.sqrt(mx*mx + my*my + mz*mz);
+              const mLat = Math.asin(mz/mLen) * 180 / Math.PI;
+              const mLon = Math.atan2(my/mLen, mx/mLen) * 180 / Math.PI;
+              // Frame altitude — wide enough to fit both endpoints comfortably
+              const altKm = Math.min(20000, Math.max(500, bestKm * 0.6));
+              setFlyTo((p) => ({ id: p.id + 1, lat: mLat, lon: mLon, altKm }));
+              showToast(`📏 ${a.label} ↔ ${b.label}: ${formatDistKm(bestKm, unitsImperial)} apart — flying to midpoint`);
+            }},
             // ===== Ring / radial pin commands — drop pins at fixed
             // distances around the current view, useful for visualizing
             // distance/coverage from a location.
