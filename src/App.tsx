@@ -726,6 +726,8 @@ const KEYBOARD_HINTS = [
   { keys: "Shift+A", desc: "🎚 Turn off ALL currently-on layers" },
   { keys: "Shift+Y", desc: "📝 Copy as Markdown link (vs Y which copies plain URL)" },
   { keys: "Shift+D", desc: "🔧 Dev info — storage, snapshot ages, JS heap" },
+  { keys: "Shift+C", desc: "📋 Copy verbose view info (DD + DMS + alt + UTC + map links)" },
+  { keys: "Shift+O", desc: "📺 Kiosk preset (hide UI + start auto-orbit)" },
   // ===== Pan / zoom =====
   { keys: "↑ ↓ ← → / W X A D", desc: "Pan camera north / south / west / east" },
   { keys: "+ / =", desc: "Zoom in 2× (halve altitude)" },
@@ -4366,21 +4368,40 @@ function App() {
         case "c":
           // Copy current view's lat/lon/altitude to clipboard. Gives users
           // a quick way to share or paste into another tool.
+          // Shift+C — copy a verbose multi-line dump (DD + DMS + alt + UTC).
           event.preventDefault();
           if (cameraStateRef.current && navigator.clipboard) {
             const cur = cameraStateRef.current;
-            const text = `${cur.lat.toFixed(5)}, ${cur.lon.toFixed(5)} (${cur.altKm.toFixed(1)} km altitude)`;
-            navigator.clipboard.writeText(text).then(
-              () => showToast(`📋 Copied: ${text}`),
-              () => showToast(`📋 Coords: ${text}`)
-            );
+            if (event.shiftKey) {
+              const dms = `${formatLatDms(cur.lat)} ${formatLonDms(cur.lon)}`;
+              const offsetH = cur.lon / 15;
+              const utcSign = offsetH >= 0 ? "+" : "−";
+              const text = `Atlas Globe — current view\nLat: ${cur.lat.toFixed(5)}° (${formatLatDms(cur.lat)})\nLon: ${cur.lon.toFixed(5)}° (${formatLonDms(cur.lon)})\nAlt: ${cur.altKm.toFixed(1)} km\nLocal solar time offset: UTC${utcSign}${Math.abs(offsetH).toFixed(2)}h\nGoogle Maps: https://www.google.com/maps?q=${cur.lat},${cur.lon}\nOSM: https://www.openstreetmap.org/?mlat=${cur.lat}&mlon=${cur.lon}#map=10/${cur.lat}/${cur.lon}`;
+              navigator.clipboard.writeText(text).then(
+                () => showToast(`📋 Copied verbose view info: ${dms}`),
+                () => showToast(`📋 ${dms}`)
+              );
+            } else {
+              const text = `${cur.lat.toFixed(5)}, ${cur.lon.toFixed(5)} (${cur.altKm.toFixed(1)} km altitude)`;
+              navigator.clipboard.writeText(text).then(
+                () => showToast(`📋 Copied: ${text}`),
+                () => showToast(`📋 Coords: ${text}`)
+              );
+            }
           }
           break;
         case "o":
           // Toggle camera auto-orbit. Surface mode handles this differently
           // (via globe.timeAnim) so this only applies in Atlas.
+          // Shift+O — kiosk preset: hide UI + start auto-orbit. Plain O
+          // just toggles orbit alone.
           event.preventDefault();
-          if (mode === "atlas") {
+          if (event.shiftKey) {
+            // Kiosk preset
+            setHideUi(true);
+            if (mode === "atlas") setOrbiting(true);
+            showToast("📺 Kiosk mode: UI hidden + orbit on (press H or Esc to restore UI)");
+          } else if (mode === "atlas") {
             setOrbiting((v) => {
               showToast(v ? "Auto-orbit off" : "Auto-orbit on");
               return !v;
