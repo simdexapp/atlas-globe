@@ -7843,6 +7843,24 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: -46.692, lon: -72.638, altKm: 8 }));
               showToast(`💎 Marble Caves (Cuevas de Mármol) · sculpted into a marble peninsula on Lake General Carrera, Patagonian Chile · turquoise water reflects on swirled marble · ~6,000 years of wave erosion`);
             }},
+            // ===== Iconic dune fields / desert features =====
+            // Specific photogenic dune fields, beyond general "deserts".
+            { id: "flyErgChebbi", label: "🏜 Fly to Erg Chebbi (Morocco — orange Sahara dunes near Merzouga, up to 150m tall)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 31.1500, lon: -3.9667, altKm: 8 }));
+              showToast(`🏜 Erg Chebbi · SE Morocco near the Algerian border · 28 km long, 5-7 km wide field of orange-red dunes (highest ~150m) · most-visited dune sea in Morocco · accessible from Merzouga village by 4WD or camel · sunset/sunrise photography destination · scenes filmed here for The Mummy, Sahara, Hidalgo`);
+            }},
+            { id: "flySossusvlei", label: "🏜 Fly to Sossusvlei + Deadvlei (Namibia — 300m red dunes + petrified camel-thorn trees in white pan)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: -24.7387, lon: 15.2966, altKm: 12 }));
+              showToast(`🏜 Sossusvlei · Namib-Naukluft NP, Namibia · iconic red dunes (Big Daddy = 325m, Dune 7 = 388m, possibly world's tallest) · Deadvlei is a white clay pan dotted with 600-900-year-old petrified camel-thorn trees, surrounded by the red dunes — surreal photo subject · the Namib is the world's oldest desert (~55-80 million years)`);
+            }},
+            { id: "flyRubAlKhali", label: "🏜 Fly to Empty Quarter / Rub' al Khali (Saudi Arabia — largest contiguous sand desert, 650,000 km²)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 20.0, lon: 50.0, altKm: 1200 }));
+              showToast(`🏜 Rub' al Khali (the Empty Quarter) · Arabian Peninsula · 650,000 km² across Saudi Arabia, Yemen, Oman, UAE — largest contiguous sand desert in the world · dune ridges up to 250m tall, some 300km long · effectively uninhabited; first crossed by a westerner (Bertram Thomas) in 1931, by Wilfred Thesiger 1946-50`);
+            }},
+            { id: "flyAtacamaSaltFlats", label: "🏜 Fly to Salar de Atacama (Chile — 3,000 km² salt flat, 2,300m elevation, lithium reserves)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: -23.5, lon: -68.25, altKm: 60 }));
+              showToast(`🏜 Salar de Atacama · Antofagasta, Chile · 3,000 km² salt flat at 2,300m elevation in the Atacama Desert (driest non-polar place on Earth) · holds ~25% of world's lithium reserves in brine · flamingos breed on the few water bodies · brilliant white at noon, pink at sunset · adjacent to ALMA observatory site`);
+            }},
             // ===== Iconic mining / extraction sites =====
             // Massive resource-extraction operations visible from space.
             { id: "flyBinghamCanyon", label: "⛏ Fly to Bingham Canyon Mine (Utah — largest man-made excavation, 4 km wide, 1.2 km deep)", group: "View", icon: Globe2, run: () => {
