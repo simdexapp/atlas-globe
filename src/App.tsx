@@ -7257,6 +7257,92 @@ function App() {
               setPins((prev) => [...prev, ...newPins]);
               showToast(`⚓ Dropped pins for 6 famous shipwrecks — Titanic sits 3.8km down on the seabed`);
             }},
+            { id: "pinDeepestLakes", label: "🌊 Drop pins for the 5 deepest lakes on Earth", group: "Tools", icon: BookmarkPlus, run: () => {
+              // Lake Baikal is by far the deepest at 1642m. Tanganyika
+              // is 2nd at 1470m. Vostok is a SUBGLACIAL lake under 4km
+              // of Antarctic ice — accessed only via deep ice cores.
+              const lakes = [
+                { name: "Lake Baikal, Russia (1642m, deepest + oldest)",   lat: 53.5500, lon: 108.1667 },
+                { name: "Lake Tanganyika, Africa (1470m, 2nd deepest)",    lat: -6.0000, lon:  29.5000 },
+                { name: "Caspian Sea (1025m, world's largest lake)",       lat: 41.6000, lon:  50.6000 },
+                { name: "Lake Vostok, Antarctica (1000m, subglacial)",     lat:-77.5000, lon: 106.0000 },
+                { name: "O'Higgins–San Martín, Patagonia (836m)",           lat:-48.9000, lon: -73.1500 },
+              ];
+              const stamp = Date.now();
+              const newPins: Pin[] = lakes.map((l, i) => ({
+                id: `pin-deeplake-${i}-${stamp}`,
+                lat: l.lat, lon: l.lon, label: `🌊 ${l.name}`,
+                color: "#5cb5ff", createdAt: stamp + i,
+              }));
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`🌊 Dropped pins for Earth's 5 deepest lakes — Baikal alone holds 20% of all unfrozen freshwater`);
+            }},
+            { id: "pinIconicBridges", label: "🌉 Drop pins for 7 iconic bridges of the world", group: "Tools", icon: BookmarkPlus, run: () => {
+              // Akashi Kaikyō (1991m main span) was the world's longest
+              // suspension bridge from 1998 to 2022 when 1915 Çanakkale
+              // (2023m main span) opened in Turkey.
+              const bridges = [
+                { name: "Golden Gate, San Francisco (1937, 1280m main span)",          lat:  37.8199, lon: -122.4783 },
+                { name: "Brooklyn Bridge, NYC (1883, first steel-wire suspension)",     lat:  40.7061, lon:  -73.9969 },
+                { name: "Tower Bridge, London (1894, bascule-suspension hybrid)",       lat:  51.5055, lon:   -0.0754 },
+                { name: "Sydney Harbour Bridge (1932, world's widest long-span)",       lat: -33.8523, lon:  151.2108 },
+                { name: "Akashi Kaikyō, Japan (1998, 1991m — world's #2 suspension)",   lat:  34.6166, lon:  135.0214 },
+                { name: "1915 Çanakkale, Turkey (2022, 2023m — world's #1 suspension)", lat:  40.2278, lon:   26.5000 },
+                { name: "Millau Viaduct, France (2004, 343m piers — world's tallest)",  lat:  44.0794, lon:    3.0224 },
+              ];
+              const stamp = Date.now();
+              const newPins: Pin[] = bridges.map((b, i) => ({
+                id: `pin-bridge-${i}-${stamp}`,
+                lat: b.lat, lon: b.lon, label: `🌉 ${b.name}`,
+                color: "#ffd66b", createdAt: stamp + i,
+              }));
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`🌉 Dropped pins for 7 iconic bridges — Çanakkale's 2023m suspension span is now the world's longest`);
+            }},
+            { id: "pinMajorReservoirs", label: "💧 Drop pins for 6 of the world's largest dams + reservoirs", group: "Tools", icon: BookmarkPlus, run: () => {
+              // Three Gorges generates 22.5 GW (largest power station on
+              // Earth). Itaipu (BR/PY) is #2 at 14 GW. Lake Volta is the
+              // largest reservoir by surface area (8502 km²).
+              const dams = [
+                { name: "Three Gorges Dam, China (22.5 GW — world's largest power station)", lat: 30.8233, lon: 111.0064 },
+                { name: "Itaipu Dam, Brazil/Paraguay (14 GW — 2nd largest)",                  lat:-25.4083, lon: -54.5894 },
+                { name: "Aswan High Dam, Egypt (Lake Nasser, 5250 km²)",                      lat: 23.9711, lon:  32.8775 },
+                { name: "Hoover Dam, USA (Lake Mead, 1937 — Art Deco icon)",                  lat: 36.0161, lon:-114.7376 },
+                { name: "Akosombo Dam, Ghana (Lake Volta — world's largest by surface area)", lat:  6.3000, lon:   0.0500 },
+                { name: "Grand Coulee Dam, USA (Columbia River — heaviest concrete structure)",lat: 47.9560, lon:-118.9817 },
+              ];
+              const stamp = Date.now();
+              const newPins: Pin[] = dams.map((d, i) => ({
+                id: `pin-dam-${i}-${stamp}`,
+                lat: d.lat, lon: d.lon, label: `💧 ${d.name}`,
+                color: "#7cffb1", createdAt: stamp + i,
+              }));
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`💧 Dropped pins for 6 mega-dams — Three Gorges generates more electricity than any other power plant on Earth`);
+            }},
+            { id: "pinFamousCaves", label: "🕳 Drop pins for 6 of the world's most famous caves / cave systems", group: "Tools", icon: BookmarkPlus, run: () => {
+              // Mammoth Cave is BY FAR the longest cave system at 686 km
+              // surveyed (over 2× the next longest). Krubera (Voronya) is
+              // 2199m deep — the only known cave to exceed 2km depth.
+              // Sarawak Chamber is the largest single cave chamber by
+              // volume (12 million m³).
+              const caves = [
+                { name: "Mammoth Cave, Kentucky (686km — longest cave system, world's #1)", lat: 37.1869, lon:  -86.1003 },
+                { name: "Krubera-Voronya, Georgia (2199m deep — world's only 2km+ cave)",   lat: 43.4097, lon:   40.3450 },
+                { name: "Sarawak Chamber, Malaysia (12M m³ — largest cave chamber)",        lat:  4.0394, lon:  114.8233 },
+                { name: "Carlsbad Caverns, New Mexico (Big Room: 102m high)",               lat: 32.1759, lon: -104.4434 },
+                { name: "Lechuguilla Cave, New Mexico (rare gypsum chandeliers)",           lat: 32.1639, lon: -104.4747 },
+                { name: "Postojna Cave, Slovenia (5.3km tourist track since 1819)",         lat: 45.7833, lon:   14.2133 },
+              ];
+              const stamp = Date.now();
+              const newPins: Pin[] = caves.map((c, i) => ({
+                id: `pin-cave-${i}-${stamp}`,
+                lat: c.lat, lon: c.lon, label: `🕳 ${c.name}`,
+                color: "#a8a8ff", createdAt: stamp + i,
+              }));
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`🕳 Dropped pins for 6 famous caves — Mammoth Cave's 686km of surveyed passages is over 2× the next longest`);
+            }},
             { id: "pinOldestCities", label: "🏯 Drop pins for 7 of the world's oldest continuously-inhabited cities", group: "Tools", icon: BookmarkPlus, run: () => {
               const cities = [
                 { name: "Damascus, Syria (~9000 BCE)",         lat: 33.5138, lon:  36.2765 },
