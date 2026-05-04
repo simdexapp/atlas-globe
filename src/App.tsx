@@ -877,8 +877,20 @@ function App() {
   // for the cinematic shader globe.
   const [mode, setMode] = useState<Mode>("surface");
   const [layers, setLayers] = useState<LayerVisibility>(defaultLayers);
+  // List of currently-on layer keys. Used in 7+ palette commands and
+  // toasts. Memoized so the Object.entries walk only happens once per
+  // layer change instead of per-render at each use site.
+  const onLayerKeys = useMemo(
+    () => (Object.entries(layers) as Array<[keyof LayerVisibility, boolean]>).filter(([, v]) => v).map(([k]) => k),
+    [layers]
+  );
   const [globe, setGlobe] = useState<GlobeSettings>(defaultGlobe);
   const [bookmarks, setBookmarks] = useState<Bookmark[]>(cityBookmarks);
+  // User-saved bookmarks (excluding the city presets which have
+  // savedAt=0). Used in 22+ places — palette commands, widgets,
+  // counts, exports. Memoizing here means we walk the bookmarks
+  // array once per change instead of once per use site per render.
+  const userBookmarks = useMemo(() => bookmarks.filter(b => b.savedAt > 0), [bookmarks]);
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("globe");
   const [hideUi, setHideUi] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
@@ -9662,7 +9674,9 @@ function App() {
             // — useful when the user wants to clean up exploration debris.
             ...(bookmarks.some(b => b.savedAt > 0) ? [{
               id: "bmkDeleteUserSaved" as const,
-              label: `🗑 Delete all ${bookmarks.filter(b => b.savedAt > 0).length} user-saved bookmark${bookmarks.filter(b => b.savedAt > 0).length === 1 ? "" : "s"} (keep city seeds)`,
+              // Use memoized userBookmarks (was running .filter twice
+              // per label rebuild, on every Atlas re-render).
+              label: `🗑 Delete all ${userBookmarks.length} user-saved bookmark${userBookmarks.length === 1 ? "" : "s"} (keep city seeds)`,
               group: "Tools" as const,
               icon: Trash2,
               run: () => {
@@ -10478,13 +10492,12 @@ ${trkpts}
             }] : []),
             // Build a measure path from all user bookmarks, in their
             // current array order. Replaces any existing path.
-            ...(measureMode && bookmarks.filter(b => b.savedAt > 0).length >= 2 ? [{
+            ...(measureMode && userBookmarks.length >= 2 ? [{
               id: "measureFromBookmarks" as const,
-              label: `📚 Replace measure path with all ${bookmarks.filter(b => b.savedAt > 0).length} user bookmarks (in order)`,
+              label: `📚 Replace measure path with all ${userBookmarks.length} user bookmarks (in order)`,
               group: "View" as const,
               icon: Compass,
               run: () => {
-                const userBookmarks = bookmarks.filter(b => b.savedAt > 0);
                 const path = userBookmarks.map(b => ({ lat: b.lat, lon: b.lon }));
                 let total = 0;
                 for (let i = 1; i < path.length; i++) {
@@ -13878,15 +13891,17 @@ ${trkpts}
               if (!c) { showToast("Camera position unknown"); return; }
               const ns = c.lat >= 0 ? "north" : "south";
               const ew = c.lon >= 0 ? "east" : "west";
-              const onLayers = (Object.entries(layers) as Array<[keyof LayerVisibility, boolean]>).filter(([, on]) => on).length;
-              const userBookmarks = bookmarks.filter(b => b.savedAt > 0).length;
+              // Use the memoized onLayerKeys (was rebuilding the
+              // Object.entries walk in every announce* command site).
+              const onLayers = onLayerKeys.length;
+              const userBookmarksCount = userBookmarks.length;
               const aircraftN = aircraftSnapshot?.aircraft.length ?? 0;
               const aircraftAgeS = aircraftSnapshot ? Math.round((Date.now() - aircraftSnapshot.fetchedAt) / 1000) : null;
               const parts = [
                 `Mode: ${mode}.`,
                 `View: latitude ${Math.abs(c.lat).toFixed(1)} ${ns}, longitude ${Math.abs(c.lon).toFixed(1)} ${ew}, altitude ${c.altKm.toFixed(0)} kilometers.`,
                 `${onLayers} ${onLayers === 1 ? "layer" : "layers"} visible.`,
-                `${pins.length} ${pins.length === 1 ? "pin" : "pins"}, ${userBookmarks} ${userBookmarks === 1 ? "bookmark" : "bookmarks"}.`,
+                `${pins.length} ${pins.length === 1 ? "pin" : "pins"}, ${userBookmarksCount} ${userBookmarksCount === 1 ? "bookmark" : "bookmarks"}.`,
               ];
               if (aircraftN > 0 && aircraftAgeS !== null) {
                 parts.push(`${aircraftN.toLocaleString()} aircraft loaded, ${aircraftAgeS} seconds old.`);
@@ -15923,7 +15938,7 @@ ${trkpts}
             // Find duplicate-ish bookmarks (within 5km of each other) and
             // offer to delete the older copy of each pair. Helps clean up
             // accumulated bookmark clutter.
-            { id: "bookmarksDedupe", label: bookmarks.filter(b => b.savedAt > 0).length >= 2 ? "🧹 Remove duplicate bookmarks (within 5km of each other)" : "🧹 Remove duplicate bookmarks (need 2+)", group: "Tools", icon: Bookmark, run: () => {
+            { id: "bookmarksDedupe", label: userBookmarks.length >= 2 ? "🧹 Remove duplicate bookmarks (within 5km of each other)" : "🧹 Remove duplicate bookmarks (need 2+)", group: "Tools", icon: Bookmark, run: () => {
               const userBookmarks = bookmarks.filter(b => b.savedAt > 0);
               if (userBookmarks.length < 2) { showToast("Need ≥2 user bookmarks"); return; }
               // Sort by date so we keep the newest in each cluster.
@@ -19921,19 +19936,21 @@ ${wpts}
       {layers.bookmarksList && (
         <Draggable id="bookmarksList" customizeMode={customizeUiMode} position={widgetPositions.bookmarksList} onMove={setWidgetPosition}>
           {(() => {
-            const userBookmarks = bookmarks.filter(b => b.savedAt > 0).sort((a, b) => b.savedAt - a.savedAt).slice(0, 8);
+            // Use the memoized parent userBookmarks (skips the .filter
+            // walk on every Atlas re-render) and only sort+slice here.
+            const recentBookmarks = [...userBookmarks].sort((a, b) => b.savedAt - a.savedAt).slice(0, 8);
             return (
               <div className="atlasBookmarksListWidget" role="status" aria-label="Recent bookmarks">
                 <div className="atlasBookmarksListHead">
                   <Bookmark size={12} />
                   <strong>Recent bookmarks</strong>
-                  <span>{userBookmarks.length}/{bookmarks.filter(b => b.savedAt > 0).length}</span>
+                  <span>{recentBookmarks.length}/{userBookmarks.length}</span>
                 </div>
-                {userBookmarks.length === 0 ? (
+                {recentBookmarks.length === 0 ? (
                   <div className="atlasBookmarksListEmpty">No user bookmarks yet · press B to bookmark current view</div>
                 ) : (
                   <ul className="atlasBookmarksListItems">
-                    {userBookmarks.map(b => (
+                    {recentBookmarks.map(b => (
                       <li
                         key={b.id}
                         className="atlasBookmarksListItem"
