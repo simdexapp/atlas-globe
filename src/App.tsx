@@ -5774,6 +5774,28 @@ function App() {
               const pct = (n: number) => `${(n/total*100).toFixed(0)}%`;
               showToast(`🌐 NE ${ne} (${pct(ne)}) · NW ${nw} (${pct(nw)}) · SE ${se} (${pct(se)}) · SW ${sw} (${pct(sw)}) — total ${total.toLocaleString()}`);
             }},
+            // Aircraft density at major world cities — uses MAJOR_CITIES as
+            // a proxy for major airport hubs (most are co-located with the
+            // city's primary international airport). 50km radius is generous
+            // enough to catch climb-out / descent traffic plus the airport
+            // itself. Surfaces the live air-traffic hotspots right now.
+            { id: "aircraftAtMajorCities", label: "🌆 Top 10 major-city air-traffic hotspots (aircraft within 50km)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const RADIUS_KM = 50;
+              const counts: Array<{ city: string; country: string; n: number }> = [];
+              for (const c of MAJOR_CITIES) {
+                let n = 0;
+                for (const a of aircraftSnapshot.aircraft) {
+                  if (haversineKm(c.lat, c.lon, a.lat, a.lon) <= RADIUS_KM) n++;
+                }
+                if (n > 0) counts.push({ city: c.name, country: c.country, n });
+              }
+              counts.sort((x, y) => y.n - x.n);
+              const top = counts.slice(0, 10);
+              if (top.length === 0) { showToast("🌆 No aircraft near any major city"); return; }
+              const list = top.map(c => `${c.city}: ${c.n}`).join(" · ");
+              showToast(`🌆 Top 10 air-traffic cities (${RADIUS_KM}km radius): ${list}`);
+            }},
             // ===== Aircraft type / registration analytics — surfaces the
             // shape of the global airborne fleet right now using ICAO type
             // codes (B738, A320, etc.) and registration prefixes (N=US,
@@ -5827,7 +5849,7 @@ function App() {
               const more = helis.length > 5 ? ` +${helis.length - 5} more` : "";
               showToast(`🚁 ${helis.length} helicopters airborne: ${sample}${more}`);
             }},
-            { id: "aircraftSquawkDist", label: "📡 Aircraft squawk code distribution (top 8 most-used codes)", group: "Tools", icon: Plane, run: () => {
+            { id: "aircraftSquawkDistDecoded", label: "📡 Aircraft squawk distribution (top 8) with decoded reserved codes", group: "Tools", icon: Plane, run: () => {
               if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
               const counts = new Map<string, number>();
               for (const a of aircraftSnapshot.aircraft) {
