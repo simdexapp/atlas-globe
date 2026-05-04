@@ -8168,6 +8168,95 @@ function App() {
               setPins((prev) => [...prev, ...newPins]);
               showToast(`🌐 Dropped ${newPins.length} grid pins at ${spacing}° spacing`);
             }},
+            // Drop pins at both the geographic North Pole and South Pole.
+            // Useful as global anchors / reference points. North Pole
+            // sits in the Arctic Ocean (no land), South Pole sits on
+            // Antarctica (Amundsen-Scott station).
+            { id: "pinDropAtPoles", label: "🧭 Drop 2 pins at the North + South Poles", group: "Tools", icon: BookmarkPlus, run: () => {
+              const stamp = Date.now();
+              const newPins: Pin[] = [
+                { id: `pin-pole-n-${stamp}`, lat: 90, lon: 0, label: "🧭 North Pole (Arctic Ocean)", color: "#5cb5ff", createdAt: stamp },
+                { id: `pin-pole-s-${stamp}`, lat: -90, lon: 0, label: "🧭 South Pole (Amundsen–Scott)", color: "#ffd66b", createdAt: stamp + 1 },
+              ];
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`🧭 Dropped pins at both poles — N is sea ice, S is on Antarctic ice cap (2,835m elevation)`);
+            }},
+            // Drop pins at the Tropic of Cancer (23.4394°N) and Tropic
+            // of Capricorn (23.4394°S) at the current view's longitude.
+            // The tropics mark the limits of where the sun can be
+            // directly overhead at solar noon.
+            { id: "pinDropAtTropics", label: "☀ Drop 2 pins at Tropic of Cancer + Capricorn (at current view longitude)", group: "Tools", icon: BookmarkPlus, run: () => {
+              const c = cameraStateRef.current;
+              if (!c) return;
+              // Tropic latitude = current obliquity of Earth's axis.
+              // Slow drift over thousands of years; 23.4394° is the 2025 value.
+              const TROPIC_LAT = 23.4394;
+              const stamp = Date.now();
+              const newPins: Pin[] = [
+                { id: `pin-tropic-n-${stamp}`, lat: TROPIC_LAT, lon: c.lon, label: `☀ Tropic of Cancer (${formatLon(c.lon)})`, color: "#ffd66b", createdAt: stamp },
+                { id: `pin-tropic-s-${stamp}`, lat: -TROPIC_LAT, lon: c.lon, label: `☀ Tropic of Capricorn (${formatLon(c.lon)})`, color: "#ff8a4d", createdAt: stamp + 1 },
+              ];
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`☀ Dropped pins at the Tropics on this longitude — sun goes overhead between these limits each year`);
+            }},
+            // Find the extreme pin in each cardinal direction (N/S/E/W)
+            // and fly to whichever the user picks. Useful for "where's
+            // the southernmost pin in my collection?" type questions.
+            { id: "pinFlyToExtreme", label: "🧭 Fly to extreme pin in chosen direction (N / S / E / W)", group: "Tools", icon: BookmarkPlus, run: () => {
+              if (pins.length === 0) { showToast("No pins to inspect"); return; }
+              const dir = window.prompt("Which extreme? Type N (northernmost), S (southernmost), E (easternmost), W (westernmost):", "N");
+              if (!dir) return;
+              const d = dir.trim().toUpperCase();
+              if (d !== "N" && d !== "S" && d !== "E" && d !== "W") { showToast(`Direction must be N/S/E/W (got "${dir}")`); return; }
+              let best = pins[0];
+              for (const p of pins) {
+                if (d === "N" && p.lat > best.lat) best = p;
+                if (d === "S" && p.lat < best.lat) best = p;
+                if (d === "E" && p.lon > best.lon) best = p;
+                if (d === "W" && p.lon < best.lon) best = p;
+              }
+              setSelectedPin(best.id);
+              setFlyTo((p) => ({ id: p.id + 1, lat: best.lat, lon: best.lon, altKm: 200 }));
+              const compass = d === "N" ? "northernmost" : d === "S" ? "southernmost" : d === "E" ? "easternmost" : "westernmost";
+              showToast(`🧭 ${compass} pin: ${best.label} @ ${formatLat(best.lat)} ${formatLon(best.lon)}`);
+            }},
+            // Drop a "shifted clone" of the selected pin — same label
+            // but offset by N km in the chosen direction. Useful for
+            // creating reference markers around a target pin.
+            ...(selectedPin ? [{
+              id: "pinCloneShifted" as const,
+              label: "📌 Drop a clone of the selected pin offset by N km in chosen direction",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const sp = pins.find(p => p.id === selectedPin);
+                if (!sp) { showToast("Selected pin no longer exists"); return; }
+                const dirRaw = window.prompt("Offset direction (N / S / E / W):", "N");
+                if (!dirRaw) return;
+                const dir = dirRaw.trim().toUpperCase();
+                if (dir !== "N" && dir !== "S" && dir !== "E" && dir !== "W") { showToast(`Direction must be N/S/E/W`); return; }
+                const distRaw = window.prompt(`Offset distance in ${unitsImperial ? "miles" : "km"}:`, "100");
+                if (!distRaw) return;
+                const dist = parseFloat(distRaw);
+                if (!Number.isFinite(dist) || dist <= 0) { showToast("Distance must be > 0"); return; }
+                const km = unitsImperial ? dist * 1.609344 : dist;
+                const bearing = dir === "N" ? 0 : dir === "E" ? 90 : dir === "S" ? 180 : 270;
+                const R = EARTH_RADIUS_KM;
+                const phi1 = sp.lat * Math.PI / 180;
+                const lam1 = sp.lon * Math.PI / 180;
+                const bearingR = bearing * Math.PI / 180;
+                const phi2 = Math.asin(Math.sin(phi1) * Math.cos(km/R) + Math.cos(phi1) * Math.sin(km/R) * Math.cos(bearingR));
+                const lam2 = lam1 + Math.atan2(Math.sin(bearingR) * Math.sin(km/R) * Math.cos(phi1), Math.cos(km/R) - Math.sin(phi1) * Math.sin(phi2));
+                let lon = lam2 * 180 / Math.PI;
+                while (lon > 180) lon -= 360;
+                while (lon < -180) lon += 360;
+                const id = `pin-clone-${Date.now()}`;
+                const newPin: Pin = { id, lat: phi2 * 180 / Math.PI, lon, label: `${sp.label} +${dist}${unitsImperial ? "mi" : "km"} ${dir}`, color: sp.color, createdAt: Date.now() };
+                setPins((prev) => [...prev, newPin]);
+                setSelectedPin(id);
+                showToast(`📌 Dropped clone ${dist}${unitsImperial ? "mi" : "km"} ${dir} of ${sp.label}`);
+              },
+            }] : []),
             // ===== Ring / radial pin commands — drop pins at fixed
             // distances around the current view, useful for visualizing
             // distance/coverage from a location.
