@@ -11050,6 +11050,113 @@ ${trkpts}
                 showToast("All saved measurements cleared");
               },
             }] : []),
+            // 8-octant bearing histogram — finer-grained companion to
+            // measureBearingDist (which uses 4 quadrants). Shows path
+            // direction tendency at the resolution of compass octants.
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureBearingsHistogram8" as const,
+              label: "🧭 Bearing histogram across 8 octants (N/NE/E/SE/S/SW/W/NW)",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                const counts = new Array(8).fill(0);
+                const labels = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+                for (let i = 1; i < measurePoints.length; i++) {
+                  const b = bearingDeg(measurePoints[i-1].lat, measurePoints[i-1].lon, measurePoints[i].lat, measurePoints[i].lon);
+                  // Octant boundaries every 45° centred on cardinal directions.
+                  // N occupies [337.5, 22.5), NE [22.5, 67.5), etc.
+                  const idx = Math.floor(((b + 22.5) % 360) / 45);
+                  counts[idx]++;
+                }
+                const total = measurePoints.length - 1;
+                const parts = counts.map((n, i) => n > 0 ? `${labels[i]}: ${n}` : null).filter(Boolean).join(" · ");
+                showToast(`🧭 ${total} legs · ${parts}`);
+              },
+            }] : []),
+            // Colinearity / straightness score — mean absolute bearing
+            // change between consecutive legs (in degrees), divided by 180
+            // to give a 0..1 score where 0 = perfectly straight and 1 =
+            // U-turns at every vertex. Useful for "how zig-zag is this?"
+            ...(measureMode && measurePoints.length >= 3 ? [{
+              id: "measureColinearity" as const,
+              label: "📐 Path straightness score (mean bearing change between consecutive legs)",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                let totalDelta = 0;
+                let n = 0;
+                for (let i = 2; i < measurePoints.length; i++) {
+                  const b1 = bearingDeg(measurePoints[i-2].lat, measurePoints[i-2].lon, measurePoints[i-1].lat, measurePoints[i-1].lon);
+                  const b2 = bearingDeg(measurePoints[i-1].lat, measurePoints[i-1].lon, measurePoints[i].lat, measurePoints[i].lon);
+                  // Smallest signed angle delta. (b2-b1+540)%360-180 gives -180..180.
+                  let d = ((b2 - b1 + 540) % 360) - 180;
+                  totalDelta += Math.abs(d);
+                  n++;
+                }
+                const meanDeg = totalDelta / n;
+                const score = meanDeg / 180;
+                const verdict = score < 0.05 ? "very straight (almost geodesic)"
+                  : score < 0.15 ? "fairly straight"
+                  : score < 0.30 ? "gently curving"
+                  : score < 0.50 ? "winding"
+                  : "highly zig-zag";
+                showToast(`📐 Straightness: mean bearing-change ${meanDeg.toFixed(1)}° per vertex (score ${score.toFixed(3)}) — ${verdict}`);
+              },
+            }] : []),
+            // Fly the camera to the path's spherical centroid. Companion
+            // to measureCenterAtView which moves the PATH so its centroid
+            // matches the view; this moves the VIEW to the path's
+            // centroid (path stays put). Uses 3D unit-vector mean to
+            // avoid date-line wrap issues with raw lat/lon averaging.
+            ...(measureMode && measurePoints.length >= 1 ? [{
+              id: "measureCentroidFly" as const,
+              label: "🎯 Fly to centroid of measure path (spherical mean of vertices)",
+              group: "View" as const,
+              icon: Crosshair,
+              run: () => {
+                // Spherical mean via 3D unit vectors → handles antimeridian gracefully.
+                let sx = 0, sy = 0, sz = 0;
+                for (const p of measurePoints) {
+                  const latR = p.lat * Math.PI / 180;
+                  const lonR = p.lon * Math.PI / 180;
+                  sx += Math.cos(latR) * Math.cos(lonR);
+                  sy += Math.cos(latR) * Math.sin(lonR);
+                  sz += Math.sin(latR);
+                }
+                const len = Math.sqrt(sx*sx + sy*sy + sz*sz);
+                if (len === 0) { showToast("Centroid undefined (vertices cancel out)"); return; }
+                sx /= len; sy /= len; sz /= len;
+                const cLat = Math.asin(sz) * 180 / Math.PI;
+                const cLon = Math.atan2(sy, sx) * 180 / Math.PI;
+                const c = cameraStateRef.current;
+                const altKm = c?.altKm ?? 1500;
+                setFlyTo((p) => ({ id: p.id + 1, lat: cLat, lon: cLon, altKm }));
+                showToast(`🎯 Centroid: ${formatLat(cLat)} ${formatLon(cLon)}`);
+              },
+            }] : []),
+            // Leg-length variance — quantifies how uniform the vertex
+            // spacing is. Useful for path planning (uniform spacing is
+            // good for time-based animations, fuel calculations).
+            ...(measureMode && measurePoints.length >= 3 ? [{
+              id: "measureLegLengthVariance" as const,
+              label: "📊 Leg-length variance (mean / min / max / stddev)",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                const legs: number[] = [];
+                for (let i = 1; i < measurePoints.length; i++) {
+                  legs.push(haversineKm(measurePoints[i-1].lat, measurePoints[i-1].lon, measurePoints[i].lat, measurePoints[i].lon));
+                }
+                const sum = legs.reduce((a, b) => a + b, 0);
+                const mean = sum / legs.length;
+                const min = Math.min(...legs);
+                const max = Math.max(...legs);
+                const variance = legs.reduce((a, x) => a + (x - mean) ** 2, 0) / legs.length;
+                const stddev = Math.sqrt(variance);
+                const cv = (stddev / mean * 100); // coefficient of variation %
+                showToast(`📊 ${legs.length} legs · mean ${formatDistKm(mean, unitsImperial)} · min ${formatDistKm(min, unitsImperial)} · max ${formatDistKm(max, unitsImperial)} · σ ${formatDistKm(stddev, unitsImperial)} (CV ${cv.toFixed(0)}%)`);
+              },
+            }] : []),
             // Global metric/imperial unit toggle. Affects the measure pill,
             // distance commands, area calculations, elevation lookups.
             { id: "toggleUnits", label: unitsImperial ? "Units → metric (km, m, km²)" : "Units → imperial (mi, ft, mi²)", group: "View", icon: Compass, hint: "U", run: () => setUnitsImperial((v) => { showToast(v ? "Units: metric" : "Units: imperial"); return !v; }) },
