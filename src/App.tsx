@@ -675,6 +675,7 @@ const KEYBOARD_HINTS = [
   // ===== Palette / search =====
   { keys: "⌘K / Ctrl+K", desc: "Command palette (search every action / layer / setting / city / airport / country)" },
   { keys: "⌘⇧P / Ctrl+Shift+P", desc: "Command palette (VS Code-style alias)" },
+  { keys: "`", desc: "Command palette (one-handed alt — no meta keys needed)" },
   { keys: "⌘/ / Ctrl+/", desc: "Show keyboard shortcuts (this list)" },
   { keys: "⌘E / Ctrl+E", desc: "🎨 Toggle UI customization mode (drag widgets anywhere)" },
   { keys: "F", desc: "Open place search" },
@@ -695,6 +696,8 @@ const KEYBOARD_HINTS = [
   { keys: "Z", desc: "Undo last measure-path vertex (only while measuring)" },
   { keys: "U", desc: "Toggle metric ↔ imperial units (km/mi, m/ft, km²/mi²)" },
   { keys: "O", desc: "Toggle camera auto-orbit (Atlas mode)" },
+  { keys: "Space", desc: "▶/⏸ Play/pause auto-orbit (Atlas mode — universal play/pause)" },
+  { keys: "Backspace", desc: "⏪ Back to previous view (browser back-button convention)" },
   { keys: "C", desc: "Copy current view's coordinates to clipboard" },
   { keys: "Y", desc: "Yank — copy share-link to current view" },
   { keys: "Q", desc: "Quick exit any active tool (measure / pin / customize)" },
@@ -735,6 +738,7 @@ const KEYBOARD_HINTS = [
   // ===== Time (Surface mode) =====
   { keys: "[", desc: "Step Surface clock back 1 hour" },
   { keys: "]", desc: "Step Surface clock forward 1 hour" },
+  { keys: ",", desc: "Step Surface clock back 6 hours (faster scrub)" },
   { keys: ".", desc: "Reset Surface clock to real-time UTC" },
   // ===== Layer quick-toggles =====
   { keys: "1", desc: "Toggle aircraft layer" },
@@ -1985,6 +1989,8 @@ function App() {
   bookmarksRef.current = bookmarks;
   const imageryRef = useRef(imagery);
   imageryRef.current = imagery;
+  const viewHistoryRef = useRef(viewHistory);
+  viewHistoryRef.current = viewHistory;
 
   // After initial mount, force a window resize so r3f's <Canvas> ResizeObserver
   // picks up the actual viewport size. Without this, on some browsers the first
@@ -4537,6 +4543,56 @@ function App() {
             setSelectedPin(next.id);
             setFlyTo((p) => ({ id: p.id + 1, lat: next.lat, lon: next.lon, altKm: 5 }));
             showToast(`${event.shiftKey ? "▶▶▶▶" : ""}▶ ${next.label}`);
+          }
+          break;
+        case " ":
+          // Spacebar — toggle auto-orbit in Atlas. Universal "play/pause"
+          // convention. preventDefault stops the page from scrolling, which
+          // happens by default on Space anywhere in the viewport.
+          event.preventDefault();
+          if (mode === "atlas") {
+            setOrbiting((v) => {
+              showToast(v ? "⏸ Auto-orbit paused" : "▶ Auto-orbit playing");
+              return !v;
+            });
+          } else {
+            showToast("⏸/▶ Auto-orbit is Atlas-mode only — press S to switch");
+          }
+          break;
+        case "`":
+          // Backtick — alt command palette opener for one-handed users
+          // / for users without convenient meta keys (e.g. some kiosk
+          // setups, on-screen keyboards). Same effect as Cmd/Ctrl+K.
+          event.preventDefault();
+          setCommandPaletteOpen((v) => !v);
+          break;
+        case "backspace":
+          // Backspace — go back to previous view in history (browser
+          // back-button convention). Useful for "where was I just looking?"
+          // after exploring around a region. No-op when history is empty.
+          event.preventDefault();
+          {
+            const history = viewHistoryRef.current;
+            if (history.length === 0) {
+              showToast("⏪ View history empty — fly somewhere first");
+            } else {
+              const prev = history[0];
+              setFlyTo((p) => ({ id: p.id + 1, lat: prev.lat, lon: prev.lon, altKm: prev.altKm }));
+              showToast(`⏪ Back to ${prev.label}`);
+            }
+          }
+          break;
+        case ",":
+          // Comma — clock -6h on Surface mode (a faster jump than `[`
+          // which steps -1h). Lets users rapidly scrub day/night quarter
+          // by quarter without holding `[` for 6 keystrokes.
+          event.preventDefault();
+          if (mode === "surface") {
+            const now = new Date();
+            const hr = now.getUTCHours() - 6 + (now.getUTCMinutes() / 60);
+            updateGlobe({ realTimeSun: false });
+            setSurfaceManualHour((hr + 24) % 24);
+            showToast("⏪⏪ Clock -6h");
           }
           break;
         default:
