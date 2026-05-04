@@ -255,6 +255,14 @@ type LayerVisibility = {
   // longitude (using mean solar time). Shows "what day is it where
   // I'm looking?"
   dateAtView: boolean;
+  // Biome-at-view widget — estimated biome / ecosystem type from the
+  // view's latitude band. Educational geography hint (Tropical /
+  // Subtropical / Temperate / Boreal / Tundra / Polar).
+  biomeAtView: boolean;
+  // Horizon-distance widget — at current camera altitude, how far
+  // away (km) is the visible horizon? Uses the standard sqrt(2Rh)
+  // formula. Surfaces "how much of Earth can I see from here?"
+  horizonDistance: boolean;
 };
 
 type GlobeSettings = {
@@ -609,6 +617,8 @@ const defaultLayers: LayerVisibility = {
   localGravity: false,
   closestCity: false,
   dateAtView: false,
+  biomeAtView: false,
+  horizonDistance: false,
   // 3D OSM Buildings tileset is heavy and renders with edge outlines
   // that disable imagery draping underneath, painting the screen with
   // dark olive boxes at low altitudes (the user's tear repro). Off by
@@ -12976,6 +12986,8 @@ ${trkpts}
             { id: "widgetLocalGravity", label: layers.localGravity ? "Hide local-gravity widget" : "⬇ Show local-gravity widget (g at current latitude — varies 9.78–9.83 m/s²)", group: "Widgets", icon: Compass, run: () => toggleLayer("localGravity") },
             { id: "widgetClosestCity", label: layers.closestCity ? "Hide closest-city widget" : "🏙 Show closest-city widget (nearest MAJOR/REGIONAL city to view)", group: "Widgets", icon: Compass, run: () => toggleLayer("closestCity") },
             { id: "widgetDateAtView", label: layers.dateAtView ? "Hide date-at-view widget" : "📅 Show date-at-view widget (wall-clock date + day-of-week at view longitude)", group: "Widgets", icon: SunIcon, run: () => toggleLayer("dateAtView") },
+            { id: "widgetBiomeAtView", label: layers.biomeAtView ? "Hide biome-at-view widget" : "🌳 Show biome-at-view widget (climate zone from latitude — Tropical / Temperate / Polar / etc.)", group: "Widgets", icon: Mountain, run: () => toggleLayer("biomeAtView") },
+            { id: "widgetHorizonDistance", label: layers.horizonDistance ? "Hide horizon-distance widget" : "👁 Show horizon-distance widget (how far the visible horizon is from current altitude)", group: "Widgets", icon: Compass, run: () => toggleLayer("horizonDistance") },
             // Ambient Earth — kiosk/big-screen mode. Hides UI chrome,
             // starts auto-orbit, shows comprehensive live-data overlay.
             // Made for office TVs, conference displays, screensavers.
@@ -21039,6 +21051,77 @@ ${wpts}
                 <div className="atlasDateAtViewBig">{dow} {mon} {dom}</div>
                 <div className="atlasDateAtViewYear">{yr} · {String(lhh).padStart(2,"0")}:{String(lmm).padStart(2,"0")}</div>
                 <div className="atlasDateAtViewMeta">UTC{sign}{String(offHr).padStart(2,"0")}:{String(offMin).padStart(2,"0")} (mean solar)</div>
+              </div>
+            );
+          })()}
+        </Draggable>
+      )}
+
+      {/* Biome-at-view widget — surfaces estimated biome / climate zone
+          from the camera's latitude band. Educational geography hint
+          using standard climatic latitudinal divisions. */}
+      {layers.biomeAtView && (
+        <Draggable id="biomeAtView" customizeMode={customizeUiMode} position={widgetPositions.biomeAtView} onMove={setWidgetPosition}>
+          {(() => {
+            const absLat = Math.abs(cameraState.lat);
+            let biome: string, emoji: string, hint: string;
+            if (absLat >= 80) { biome = "Polar Ice Cap"; emoji = "🧊"; hint = "Permanent ice / freezing year-round"; }
+            else if (absLat >= 66.5) { biome = "Polar / Arctic"; emoji = "❄"; hint = "Tundra, sea ice, polar day/night"; }
+            else if (absLat >= 60) { biome = "Subarctic / Boreal"; emoji = "🌲"; hint = "Taiga forest, long cold winters"; }
+            else if (absLat >= 50) { biome = "Cold Temperate"; emoji = "🌳"; hint = "Mixed forests, cool summers"; }
+            else if (absLat >= 35) { biome = "Temperate"; emoji = "🍃"; hint = "Deciduous forests, four seasons"; }
+            else if (absLat >= 23.5) { biome = "Subtropical"; emoji = "🌴"; hint = "Hot summers, mild winters, deserts common"; }
+            else if (absLat >= 5) { biome = "Tropical"; emoji = "🌺"; hint = "Hot year-round, wet/dry seasons"; }
+            else { biome = "Equatorial"; emoji = "☀"; hint = "Rainforests, ~12h day year-round"; }
+            return (
+              <div className="atlasBiomeAtViewWidget" role="status" aria-label="Biome at view">
+                <div className="atlasBiomeAtViewHead">
+                  <Mountain size={12} />
+                  <strong>Biome zone</strong>
+                </div>
+                <div className="atlasBiomeAtViewBig">
+                  <span className="atlasBiomeAtViewEmoji" aria-hidden="true">{emoji}</span>
+                  <div>
+                    <div className="atlasBiomeAtViewName">{biome}</div>
+                    <div className="atlasBiomeAtViewLat">{absLat.toFixed(1)}° {cameraState.lat >= 0 ? "N" : "S"}</div>
+                  </div>
+                </div>
+                <div className="atlasBiomeAtViewHint">{hint}</div>
+              </div>
+            );
+          })()}
+        </Draggable>
+      )}
+
+      {/* Horizon-distance widget — at current camera altitude h above
+          surface, the visible horizon is at ~sqrt(2*R*h) km away. With
+          h in km and R = 6371 km. Surfaces "how much of Earth can I
+          see from here?" */}
+      {layers.horizonDistance && (
+        <Draggable id="horizonDistance" customizeMode={customizeUiMode} position={widgetPositions.horizonDistance} onMove={setWidgetPosition}>
+          {(() => {
+            const h = cameraState.altKm;
+            const R = 6371;
+            // Geometric horizon (no atmospheric refraction)
+            const horizonKm = Math.sqrt(2 * R * h + h * h);
+            // % of Earth's surface visible — area of spherical cap visible
+            // from h above center: A = 2πR² · (1 − R/(R+h))
+            // Total surface = 4πR². Visible fraction = (1 − R/(R+h)) / 2
+            const visiblePct = (1 - R / (R + h)) / 2 * 100;
+            const fmt = (km: number) => unitsImperial ? `${(km * 0.621371).toFixed(0)} mi` : `${km.toFixed(0)} km`;
+            return (
+              <div className="atlasHorizonDistanceWidget" role="status" aria-label="Horizon distance">
+                <div className="atlasHorizonDistanceHead">
+                  <Compass size={12} />
+                  <strong>Visible horizon</strong>
+                </div>
+                <div className="atlasHorizonDistanceBig">{fmt(horizonKm)}</div>
+                <div className="atlasHorizonDistanceMeta">
+                  <span>{visiblePct.toFixed(2)}% of Earth visible</span>
+                </div>
+                <div className="atlasHorizonDistanceFooter">
+                  Camera at {h.toFixed(0)}km altitude · sqrt(2·R·h) approx
+                </div>
               </div>
             );
           })()}
