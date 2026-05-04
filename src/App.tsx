@@ -7905,6 +7905,24 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: -46.692, lon: -72.638, altKm: 8 }));
               showToast(`💎 Marble Caves (Cuevas de Mármol) · sculpted into a marble peninsula on Lake General Carrera, Patagonian Chile · turquoise water reflects on swirled marble · ~6,000 years of wave erosion`);
             }},
+            // ===== Iconic opera / theatre houses =====
+            // Storied performance venues with centuries of history.
+            { id: "flyLaScala", label: "🎭 Fly to La Scala (Milan — opened 1778, the world's most famous opera house)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 45.4671, lon: 9.1893, altKm: 2 }));
+              showToast(`🎭 Teatro alla Scala · Milan · opened August 3, 1778 with Salieri's "L'Europa riconosciuta" · seats 2,030 (3,600 with standing) · 6 tiers of boxes · operas by Verdi, Puccini, Rossini all premiered here · season opens December 7 (St. Ambrose's Day) · destroyed by Allied bombing 1943, rebuilt 1946`);
+            }},
+            { id: "flyBolshoi", label: "🎭 Fly to Bolshoi Theatre (Moscow — Russia's premier opera + ballet stage, since 1825)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 55.7600, lon: 37.6186, altKm: 2 }));
+              showToast(`🎭 Bolshoi Theatre (Большо́й теа́тр) · Moscow · current building 1825, neoclassical · home of the Bolshoi Ballet (since 1776) and Bolshoi Opera · seats 2,153 · the iconic chandelier weighs 2.5 tonnes · "Bolshoi" means "big" in Russian · 6-year renovation completed 2011`);
+            }},
+            { id: "flyLincolnCenter", label: "🎭 Fly to Lincoln Center (NYC — 16-acre cultural complex, Met Opera + NY Phil)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 40.7724, lon: -73.9836, altKm: 2 }));
+              showToast(`🎭 Lincoln Center for the Performing Arts · Upper West Side, NYC · 16-acre campus opened 1962-69 · houses Metropolitan Opera (3,800 seats, world's largest opera house by capacity), NY Philharmonic, NY City Ballet, Juilliard School · 5M visitors/year across 30 venues · Robert Moses urban-renewal project that demolished San Juan Hill neighborhood`);
+            }},
+            { id: "flyRoyalOperaCovent", label: "🎭 Fly to Royal Opera House (Covent Garden, London — 3rd theatre on the site since 1732)", group: "View", icon: Globe2, run: () => {
+              setFlyTo((p) => ({ id: p.id + 1, lat: 51.5128, lon: -0.1226, altKm: 2 }));
+              showToast(`🎭 Royal Opera House · Covent Garden, London · current 1858 building is the 3rd theatre on the site (the previous two burned down in 1808 and 1856) · home to the Royal Opera + Royal Ballet · seats 2,256 · Handel's operas premiered at the original 1732 theatre · iconic Floral Hall foyer added in 1860 expansion`);
+            }},
             // ===== Iconic dune fields / desert features =====
             // Specific photogenic dune fields, beyond general "deserts".
             { id: "flyErgChebbi", label: "🏜 Fly to Erg Chebbi (Morocco — orange Sahara dunes near Merzouga, up to 150m tall)", group: "View", icon: Globe2, run: () => {
