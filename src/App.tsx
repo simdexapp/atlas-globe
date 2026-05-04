@@ -18301,6 +18301,75 @@ ${trkpts}
                 }
               },
             }] : []),
+            // Find aircraft within N km of the currently-selected pin.
+            // Uses the user-prompted radius. Useful for "what's flying
+            // over my house?" if the user has a home pin selected.
+            ...(selectedPin ? [{
+              id: "aircraftNearSelectedPin" as const,
+              label: "📍 Find aircraft within prompted radius of selected pin",
+              group: "Tools" as const,
+              icon: Plane,
+              run: () => {
+                const sp = pinsById.get(selectedPin);
+                if (!sp) { showToast("Selected pin no longer exists"); return; }
+                if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+                const radiusRaw = window.prompt(`Search radius around "${sp.label}" in ${unitsImperial ? "miles" : "km"}:`, "50");
+                if (!radiusRaw) return;
+                const radius = parseFloat(radiusRaw);
+                if (!Number.isFinite(radius) || radius <= 0) { showToast("Radius must be > 0"); return; }
+                const km = unitsImperial ? radius * 1.609344 : radius;
+                const found = aircraftSnapshot.aircraft
+                  .map(a => ({ a, dist: haversineKm(sp.lat, sp.lon, a.lat, a.lon) }))
+                  .filter(x => x.dist <= km)
+                  .sort((a, b) => a.dist - b.dist);
+                if (found.length === 0) { showToast(`📍 No aircraft within ${radius}${unitsImperial ? "mi" : "km"} of "${sp.label}"`); return; }
+                const top5 = found.slice(0, 5).map(({ a, dist }) => `${(a.callsign || a.icao24).trim()} (${dist < 1 ? `${(dist*1000).toFixed(0)}m` : `${dist.toFixed(0)}km`})`).join(" · ");
+                const more = found.length > 5 ? ` +${found.length - 5}` : "";
+                showToast(`📍 ${found.length} aircraft within ${radius}${unitsImperial ? "mi" : "km"} of "${sp.label}": ${top5}${more}`);
+              },
+            }] : []),
+            // Aircraft within 5° latitude of the equator. The "equatorial
+            // band" sees specific weather patterns (ITCZ) and many
+            // long-haul routes cross it — fun to surface what's flying
+            // over the equator right now.
+            { id: "aircraftAtEquator", label: "🌐 Find aircraft within 5° latitude of the equator (equatorial band)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const equatorial = aircraftSnapshot.aircraft.filter(a => !a.onGround && Math.abs(a.lat) <= 5);
+              if (equatorial.length === 0) { showToast("🌐 No airborne aircraft within 5° of the equator right now"); return; }
+              const sample = equatorial.slice(0, 5).map(a => `${(a.callsign || a.icao24).trim()} @ ${formatLat(a.lat)}`).join(" · ");
+              const more = equatorial.length > 5 ? ` +${equatorial.length - 5}` : "";
+              showToast(`🌐 ${equatorial.length} aircraft over equatorial band: ${sample}${more}`);
+            }},
+            // Aircraft near the antimeridian (180° longitude — the
+            // International Date Line). Fewer routes cross here so any
+            // hits are typically interesting (Pacific transits).
+            { id: "aircraftAtDateline", label: "🌐 Find aircraft within 10° longitude of the antimeridian (date line)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              // Within 10° of ±180° longitude
+              const dateline = aircraftSnapshot.aircraft.filter(a => !a.onGround && Math.abs(Math.abs(a.lon) - 180) <= 10);
+              if (dateline.length === 0) { showToast("🌐 No airborne aircraft within 10° of the antimeridian right now"); return; }
+              const sample = dateline.slice(0, 5).map(a => `${(a.callsign || a.icao24).trim()} @ ${formatLon(a.lon)}`).join(" · ");
+              const more = dateline.length > 5 ? ` +${dateline.length - 5}` : "";
+              showToast(`🌐 ${dateline.length} aircraft near date line: ${sample}${more}`);
+            }},
+            // Aircraft going implausibly fast (>700 kt = ~1296 km/h ≈ Mach 1).
+            // Most commercial jets cruise at 450-490 kt; anything over
+            // 700 kt is either a fighter, an SR-71-class spy plane,
+            // a strong tailwind aided airliner (rare), or bad sensor data.
+            { id: "aircraftSupersonic", label: "🚀 Find aircraft going faster than 700 knots (~Mach 1 — military / sensor anomaly)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              // 700 knots = 360.111 m/s
+              const supersonic = aircraftSnapshot.aircraft
+                .filter(a => !a.onGround && a.velocityMs > 360.111)
+                .sort((a, b) => b.velocityMs - a.velocityMs);
+              if (supersonic.length === 0) { showToast("🚀 No supersonic aircraft (>700kt) airborne right now"); return; }
+              const top = supersonic.slice(0, 5).map(a => {
+                const kt = Math.round(a.velocityMs * 1.944);
+                return `${(a.callsign || a.icao24).trim()} ${kt}kt`;
+              }).join(" · ");
+              const more = supersonic.length > 5 ? ` +${supersonic.length - 5}` : "";
+              showToast(`🚀 ${supersonic.length} aircraft >700kt: ${top}${more} — likely military, tailwind-aided, or sensor noise`);
+            }},
             { id: "earthquakesExportCsv", label: earthquakes.length > 0 ? `📊 Export ${earthquakes.length} earthquakes as CSV (24h USGS)` : "Export earthquakes as CSV (none loaded — toggle layer)", group: "Tools", icon: Sparkles, run: () => {
               if (earthquakes.length === 0) { showToast("Earthquakes layer not loaded"); return; }
               const escape = (s: string) => `"${(s || "").replace(/"/g, '""')}"`;
