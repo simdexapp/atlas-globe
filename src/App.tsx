@@ -6212,6 +6212,47 @@ function App() {
               const cruisePct = (cruise / altsM.length * 100).toFixed(0);
               showToast(`📊 Median ${medFt}ft · mean ${meanFt}ft (across ${altsM.length.toLocaleString()} airborne) · ${cruisePct}% above FL300`);
             }},
+            // For selected aircraft in descent: predict time + distance
+            // until ground, assuming current vertical rate holds.
+            ...(selectedAircraftId && aircraftSnapshot ? [{
+              id: "aircraftPredictLanding" as const,
+              label: "🛬 Predict selected aircraft's landing time (assumes constant descent rate)",
+              group: "Tools" as const,
+              icon: Plane,
+              run: () => {
+                const a = aircraftSnapshot.aircraft.find(x => x.icao24 === selectedAircraftId);
+                if (!a) { showToast("Aircraft no longer in snapshot"); return; }
+                if (a.onGround) { showToast(`${(a.callsign || a.icao24).trim()} is already on the ground`); return; }
+                const vrate = a.verticalRateMs ?? 0;
+                if (vrate >= -0.5) { showToast(`🛬 ${(a.callsign || a.icao24).trim()} is not descending (vrate ${(vrate * 196.85).toFixed(0)}fpm) — can't predict landing`); return; }
+                const altM = a.altitudeM;
+                const secsToGround = altM / -vrate;
+                const minsToGround = secsToGround / 60;
+                const distKm = (a.velocityMs || 0) * secsToGround / 1000;
+                showToast(`🛬 At ${(a.velocityMs ? Math.round(a.velocityMs * 1.944) : "?")}kt + ${Math.round(vrate * 196.85)}fpm: ground in ${minsToGround.toFixed(1)}min (${formatDistKm(distKm, unitsImperial)} downrange)`);
+              },
+            }] : []),
+            // For airborne aircraft at typical cruise (FL300+), report
+            // average + median speed and modal direction. The "what's
+            // happening at cruise" snapshot.
+            { id: "aircraftCruiseStats", label: "✈ Stats for cruising aircraft (FL300+): avg/median speed + modal heading", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const cruise = aircraftSnapshot.aircraft.filter(a => !a.onGround && a.altitudeM > 9144 && (a.velocityMs ?? 0) > 0);
+              if (cruise.length === 0) { showToast("No aircraft cruising at FL300+"); return; }
+              const speeds = cruise.map(a => a.velocityMs ?? 0).sort((a, b) => a - b);
+              const avgKt = Math.round(speeds.reduce((s, x) => s + x, 0) / speeds.length * 1.944);
+              const medKt = Math.round(speeds[Math.floor(speeds.length / 2)] * 1.944);
+              // Modal direction: 8 octants
+              const labels = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+              const counts = [0, 0, 0, 0, 0, 0, 0, 0];
+              for (const a of cruise) {
+                if (a.headingDeg === undefined || a.headingDeg === null) continue;
+                const h = ((a.headingDeg ?? 0) + 22.5) % 360;
+                counts[Math.floor(h / 45) % 8]++;
+              }
+              const maxIdx = counts.indexOf(Math.max(...counts));
+              showToast(`✈ Cruise stats (${cruise.length} aircraft >FL300): avg ${avgKt}kt · med ${medKt}kt · modal heading ${labels[maxIdx]} (${counts[maxIdx]})`);
+            }},
             // prefix. Useful for "what airline is this?" without leaving
             // the app to look it up.
             ...(selectedAircraftId && aircraftSnapshot ? (() => {
