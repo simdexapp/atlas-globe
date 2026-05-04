@@ -7891,6 +7891,107 @@ function App() {
               setFlyTo((p) => ({ id: p.id + 1, lat: mLat, lon: mLon, altKm }));
               showToast(`📏 ${a.label} ↔ ${b.label}: ${formatDistKm(bestKm, unitsImperial)} apart — flying to midpoint`);
             }},
+            // Find the closest non-trivial pair of pins. Companion to
+            // pinFurthestPair — useful for spotting accidentally-overlapping
+            // pins, near-duplicate landmarks, or just the densest cluster.
+            // Filters out exact-position duplicates (same lat & lon).
+            { id: "pinNearestPair", label: "📍 Find closest pair of pins and fly to their midpoint (densest cluster)", group: "Tools", icon: BookmarkPlus, run: () => {
+              if (pins.length < 2) { showToast("Need ≥2 pins (currently " + pins.length + ")"); return; }
+              let bestKm = Infinity;
+              let bestI = 0, bestJ = 1;
+              for (let i = 0; i < pins.length; i++) {
+                for (let j = i + 1; j < pins.length; j++) {
+                  const km = haversineKm(pins[i].lat, pins[i].lon, pins[j].lat, pins[j].lon);
+                  if (km > 0.001 && km < bestKm) { bestKm = km; bestI = i; bestJ = j; }
+                }
+              }
+              if (!isFinite(bestKm)) { showToast("All pins overlap — no separable pairs"); return; }
+              const a = pins[bestI], b = pins[bestJ];
+              const aLatR = a.lat * Math.PI/180, aLonR = a.lon * Math.PI/180;
+              const bLatR = b.lat * Math.PI/180, bLonR = b.lon * Math.PI/180;
+              const ax = Math.cos(aLatR)*Math.cos(aLonR), ay = Math.cos(aLatR)*Math.sin(aLonR), az = Math.sin(aLatR);
+              const bx = Math.cos(bLatR)*Math.cos(bLonR), by = Math.cos(bLatR)*Math.sin(bLonR), bz = Math.sin(bLatR);
+              const mx = (ax+bx)/2, my = (ay+by)/2, mz = (az+bz)/2;
+              const mLen = Math.sqrt(mx*mx + my*my + mz*mz);
+              const mLat = Math.asin(mz/mLen) * 180 / Math.PI;
+              const mLon = Math.atan2(my/mLen, mx/mLen) * 180 / Math.PI;
+              const altKm = Math.max(0.5, bestKm * 4);  // tight zoom for close pairs
+              setFlyTo((p) => ({ id: p.id + 1, lat: mLat, lon: mLon, altKm }));
+              showToast(`📍 ${a.label} ↔ ${b.label}: ${bestKm < 1 ? `${(bestKm * 1000).toFixed(0)}m` : formatDistKm(bestKm, unitsImperial)} apart — flying to midpoint`);
+            }},
+            // Drop a pin at the user's current geolocation. Uses the
+            // browser's Geolocation API — requires user permission.
+            // First-time use prompts the OS dialog; subsequent uses are
+            // silent (browser caches consent for the origin).
+            { id: "pinDropMyLocation", label: "📍 Drop a pin at my current geolocation (browser GPS)", group: "Tools", icon: BookmarkPlus, run: () => {
+              if (typeof navigator === "undefined" || !navigator.geolocation) { showToast("📍 Geolocation API not available in this browser"); return; }
+              showToast("📍 Requesting location…");
+              navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                  const { latitude, longitude } = pos.coords;
+                  const id = `pin-mylocation-${Date.now()}`;
+                  const accuracyM = Math.round(pos.coords.accuracy ?? 0);
+                  const newPin: Pin = { id, lat: latitude, lon: longitude, label: `📍 My location (±${accuracyM}m)`, color: "#5cb5ff", createdAt: Date.now() };
+                  setPins((prev) => [...prev, newPin]);
+                  setSelectedPin(id);
+                  setFlyTo((p) => ({ id: p.id + 1, lat: latitude, lon: longitude, altKm: 5 }));
+                  showToast(`📍 Dropped pin at your location: ${formatLat(latitude)} ${formatLon(longitude)} (±${accuracyM}m)`);
+                },
+                (err) => {
+                  showToast(`📍 Geolocation denied or failed: ${err.message}`);
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+              );
+            }},
+            // Drop a pin at each integer UTC offset (-12 .. +12), placed
+            // on the equator so they're visible everywhere. Useful as a
+            // teaching aid for "what country is at UTC+5?" type questions.
+            { id: "pinDropTimezones", label: "🕐 Drop 25 pins on the equator marking each integer UTC offset (-12 .. +12)", group: "Tools", icon: BookmarkPlus, run: () => {
+              const stamp = Date.now();
+              const newPins: Pin[] = [];
+              // Each integer UTC offset corresponds to longitude offset×15°.
+              // -12h → -180°, 0h → 0°, +12h → +180° (which wraps to -180°).
+              for (let h = -12; h <= 12; h++) {
+                let lon = h * 15;
+                if (lon > 180) lon -= 360;
+                if (lon < -180) lon += 360;
+                const sign = h >= 0 ? "+" : "−";
+                const label = `🕐 UTC${sign}${Math.abs(h).toString().padStart(2, "0")}`;
+                newPins.push({
+                  id: `pin-tz-${h}-${stamp}`,
+                  lat: 0, lon, label, color: "#a8a8ff", createdAt: stamp + (h + 12),
+                });
+              }
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`🕐 Dropped 25 timezone markers on the equator — UTC-12 through UTC+12`);
+            }},
+            // Drop pins on a regular lat/lon grid. Prompts for spacing.
+            // Useful for "how big is X degrees of separation?" or for
+            // visualizing the regularity of map coordinate grids.
+            { id: "pinDropLatLonGrid", label: "🌐 Drop a regular lat/lon grid of pins (prompt for spacing in degrees)", group: "Tools", icon: BookmarkPlus, run: () => {
+              const spacingRaw = window.prompt("Grid spacing in degrees (e.g. 30 = 7×13=91 pins; 60 = 3×7=21 pins; 15 = 13×25=325 pins):", "30");
+              if (!spacingRaw) return;
+              const spacing = parseFloat(spacingRaw);
+              if (!Number.isFinite(spacing) || spacing < 5 || spacing > 90) { showToast(`Spacing must be 5..90° (got ${spacingRaw})`); return; }
+              const stamp = Date.now();
+              const newPins: Pin[] = [];
+              for (let lat = -90; lat <= 90; lat += spacing) {
+                for (let lon = -180; lon < 180; lon += spacing) {
+                  newPins.push({
+                    id: `pin-grid-${lat}-${lon}-${stamp}`,
+                    lat, lon,
+                    label: `🌐 ${formatLat(lat)} ${formatLon(lon)}`,
+                    color: "#7cffb1",
+                    createdAt: stamp + newPins.length,
+                  });
+                }
+              }
+              if (newPins.length > 500) {
+                if (!window.confirm(`This will drop ${newPins.length} pins, which may make the UI slow. Proceed?`)) return;
+              }
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`🌐 Dropped ${newPins.length} grid pins at ${spacing}° spacing`);
+            }},
             // ===== Ring / radial pin commands — drop pins at fixed
             // distances around the current view, useful for visualizing
             // distance/coverage from a location.
