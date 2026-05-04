@@ -629,6 +629,10 @@ const FAMOUS_VOLCANOES: { id: string; name: string; lat: number; lon: number }[]
   { id: "santamaria", name: "Santa María", lat: 14.75, lon: -91.55 },
   { id: "stHelens", name: "Mt. St. Helens", lat: 46.20, lon: -122.18 }
 ];
+// O(1) volcano lookup by ID — built once at module load. The previous
+// .find() linear scan ran on every Atlas re-render whenever a volcano
+// was selected, walking the full list each time. Map lookup is constant.
+const FAMOUS_VOLCANOES_BY_ID = new Map(FAMOUS_VOLCANOES.map(v => [v.id, v]));
 
 const defaultGlobe: GlobeSettings = {
   rotationSpeed: 0,
@@ -1333,6 +1337,22 @@ function App() {
     return eonetEvents.filter((e) => !eonetHidden.has(e.category));
   }, [eonetEvents, eonetHidden]);
 
+  // O(1) launch lookup by id. Replaces .find() linear scans for the
+  // selected-launch popover render (~1 per Atlas re-render while a
+  // launch is selected). Same pattern as aircraftById / pinsById.
+  const launchById = useMemo(() => {
+    const m = new Map<string, RocketLaunch>();
+    for (const l of launches) m.set(l.id, l);
+    return m;
+  }, [launches]);
+  // Memoized "next upcoming launch" — used by 4+ widgets/cards on
+  // every render. Was being recomputed via .find() per call site.
+  // Now a single O(n) scan that re-runs only when launches changes.
+  const nextLaunch = useMemo(() => {
+    const now = Date.now();
+    return launches.find((l) => l.netUnixMs > now) ?? null;
+  }, [launches]);
+
   // NOAA NHC active tropical cyclones — public CurrentStorms.json. Empty
   // outside hurricane season; populated 0-6 entries during active season.
   type ActiveStorm = {
@@ -1496,6 +1516,13 @@ function App() {
   const [pins, setPins] = useState<Pin[]>([]);
   const [selectedPin, setSelectedPin] = useState<string | null>(null);
   const [earthquakes, setEarthquakes] = useState<Earthquake[]>([]);
+  // O(1) earthquake lookup by id. Replaces .find() linear scan for
+  // the selected-quake popover render. Same pattern as launchById.
+  const earthquakeById = useMemo(() => {
+    const m = new Map<string, Earthquake>();
+    for (const q of earthquakes) m.set(q.id, q);
+    return m;
+  }, [earthquakes]);
   const [borders, setBorders] = useState<Float32Array | null>(null);
   // GeoJSON FeatureCollection of country borders, computed alongside the
   // Float32Array borders. Cesium can render this via GeoJsonDataSource so
@@ -19551,7 +19578,8 @@ ${wpts}
         const aircraftCount = aircraftSnapshot?.aircraft.length ?? 0;
         const eonetCount = eonetEvents.length;
         const kp = spaceWeather?.kpLatest;
-        const nextLaunch = launches.find((l) => l.netUnixMs > Date.now());
+        // Use memoized nextLaunch from parent scope (computed once
+        // per launches change, not per render).
         // Big quake in last 24h
         const bigQuake = earthquakes.length > 0
           ? earthquakes.reduce((max, q) => q.mag > max.mag ? q : max)
@@ -20070,7 +20098,8 @@ ${wpts}
         const eonetCount = eonetEvents.length;
         const kp = spaceWeather?.kpLatest;
         const sw = spaceWeather?.swSpeedKmS;
-        const nextLaunch = launches.find((l) => l.netUnixMs > Date.now());
+        // Use memoized nextLaunch from parent scope (computed once
+        // per launches change, not per render).
         // Subsolar point right now: lat = decl, lon = -(utcHours-12)*15
         const now = new Date();
         const utcHours = now.getUTCHours() + now.getUTCMinutes() / 60;
@@ -20160,7 +20189,10 @@ ${wpts}
       )}
 
       {selectedVolcanoId && (() => {
-        const v = FAMOUS_VOLCANOES.find((x) => x.id === selectedVolcanoId);
+        // O(1) lookup via the module-level FAMOUS_VOLCANOES_BY_ID Map
+        // (vs the previous .find() linear scan that ran on every Atlas
+        // re-render whenever a volcano was selected).
+        const v = FAMOUS_VOLCANOES_BY_ID.get(selectedVolcanoId);
         if (!v) return null;
         const alertCode = volcanoAlerts.get(v.name.toLowerCase());
         const alertLabel = alertCode === "red" ? "WARNING — eruption imminent or in progress"
@@ -20185,7 +20217,9 @@ ${wpts}
       })()}
 
       {selectedEarthquakeId && (() => {
-        const q = earthquakes.find((x) => x.id === selectedEarthquakeId);
+        // O(1) lookup via earthquakeById Map (vs the previous .find()
+        // over up to ~150 entries on every Atlas re-render).
+        const q = earthquakeById.get(selectedEarthquakeId);
         if (!q) return null;
         const ageHrs = Math.max(0, (Date.now() - q.time) / 3_600_000);
         const ageLabel = ageHrs < 1 ? `${Math.round(ageHrs * 60)} min ago`
@@ -20218,7 +20252,9 @@ ${wpts}
       })()}
 
       {selectedLaunchId && (() => {
-        const l = launches.find((x) => x.id === selectedLaunchId);
+        // O(1) lookup via launchById Map (vs the previous .find()
+        // over the launches list on every Atlas re-render).
+        const l = launchById.get(selectedLaunchId);
         if (!l) return null;
         return (
           <div className="atlasEventCard atlasLaunchCard" role="dialog">
@@ -20249,7 +20285,9 @@ ${wpts}
       })()}
 
       {layers.launches && launches.length > 0 && (() => {
-        const next = launches.find((l) => l.netUnixMs > Date.now());
+        // Use memoized nextLaunch from parent scope (computed once
+        // per launches change, not per render).
+        const next = nextLaunch;
         if (!next) return null;
         return (
           <div className="atlasNextLaunchPill" role="status">
