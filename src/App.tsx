@@ -8777,6 +8777,99 @@ function App() {
                 showToast(`🔄 Swapped "${sp.label}" with "${nearest.label}" (${formatDistKm(nearestKm, unitsImperial)} apart)`);
               },
             }] : []),
+            // Drop a pin at the centroid of any country by name. Searches
+            // COUNTRY_CENTROIDS by case-insensitive substring. Useful
+            // for "drop a pin at France" without flying there manually.
+            { id: "pinDropAtCountryCenter", label: "🌍 Drop a pin at a country's geographic centroid (search by name)", group: "Tools", icon: BookmarkPlus, run: () => {
+              const query = window.prompt("Country name (case-insensitive substring search):");
+              if (!query) return;
+              const q = query.trim().toLowerCase();
+              if (!q) return;
+              const exact = COUNTRY_CENTROIDS.find(c => c.name.toLowerCase() === q);
+              const match = exact || COUNTRY_CENTROIDS.find(c => c.name.toLowerCase().includes(q));
+              if (!match) { showToast(`🌍 No country matching "${query}"`); return; }
+              const id = `pin-country-${Date.now()}`;
+              const newPin: Pin = { id, lat: match.lat, lon: match.lon, label: `🌍 ${match.name} (${match.code}) centroid`, color: "#7cffb1", createdAt: Date.now() };
+              setPins((prev) => [...prev, newPin]);
+              setSelectedPin(id);
+              setFlyTo((p) => ({ id: p.id + 1, lat: match.lat, lon: match.lon, altKm: 1500 }));
+              showToast(`🌍 Dropped pin at ${match.name} centroid${exact ? "" : " (substring match)"}`);
+            }},
+            // Remove pins that are within N km of another pin (dedupe-style
+            // simplification). Keeps the older pin in each pair, removes
+            // the newer one. Useful for cleaning up dense pin sets.
+            { id: "pinSimplifyByMinDistance", label: "🧹 Remove pins within N km of another pin (simplify dense sets)", group: "Tools", icon: BookmarkPlus, run: () => {
+              if (pins.length < 2) { showToast(`Need ≥2 pins (currently ${pins.length})`); return; }
+              const distRaw = window.prompt(`Minimum distance between kept pins (${unitsImperial ? "miles" : "km"}). Pins closer than this are removed (older one kept):`, "10");
+              if (!distRaw) return;
+              const dist = parseFloat(distRaw);
+              if (!Number.isFinite(dist) || dist <= 0) { showToast("Distance must be > 0"); return; }
+              const minKm = unitsImperial ? dist * 1.609344 : dist;
+              // Sort by createdAt (oldest first), greedily keep, drop later pins within minKm of any kept
+              const sorted = [...pins].sort((a, b) => a.createdAt - b.createdAt);
+              const kept: Pin[] = [];
+              for (const p of sorted) {
+                let tooClose = false;
+                for (const k of kept) {
+                  if (haversineKm(p.lat, p.lon, k.lat, k.lon) < minKm) { tooClose = true; break; }
+                }
+                if (!tooClose) kept.push(p);
+              }
+              const removed = pins.length - kept.length;
+              if (removed === 0) { showToast(`🧹 No pins within ${dist}${unitsImperial ? "mi" : "km"} of another — nothing to remove`); return; }
+              if (!window.confirm(`Remove ${removed} pin${removed === 1 ? "" : "s"} within ${dist}${unitsImperial ? "mi" : "km"} of another? Older pins kept.`)) return;
+              setPins(kept);
+              showToast(`🧹 Removed ${removed} duplicate-cluster pin${removed === 1 ? "" : "s"}, ${kept.length} remain`);
+            }},
+            // Drop pin at midpoint between selected pin and current view.
+            // Useful for placing waypoints between two known points.
+            ...(selectedPin ? [{
+              id: "pinDropAtMidpointToView" as const,
+              label: "📍 Drop a pin at midpoint between selected pin and current view",
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                const sp = pinsById.get(selectedPin);
+                if (!sp) { showToast("Selected pin no longer exists"); return; }
+                const c = cameraStateRef.current;
+                if (!c) return;
+                // Spherical midpoint via 3D unit vectors (handles antimeridian).
+                const aLatR = sp.lat * Math.PI/180, aLonR = sp.lon * Math.PI/180;
+                const bLatR = c.lat * Math.PI/180, bLonR = c.lon * Math.PI/180;
+                const ax = Math.cos(aLatR)*Math.cos(aLonR), ay = Math.cos(aLatR)*Math.sin(aLonR), az = Math.sin(aLatR);
+                const bx = Math.cos(bLatR)*Math.cos(bLonR), by = Math.cos(bLatR)*Math.sin(bLonR), bz = Math.sin(bLatR);
+                const mx = (ax+bx)/2, my = (ay+by)/2, mz = (az+bz)/2;
+                const mLen = Math.sqrt(mx*mx + my*my + mz*mz);
+                const mLat = Math.asin(mz/mLen) * 180 / Math.PI;
+                const mLon = Math.atan2(my/mLen, mx/mLen) * 180 / Math.PI;
+                const km = haversineKm(sp.lat, sp.lon, c.lat, c.lon);
+                const id = `pin-mid-${Date.now()}`;
+                const newPin: Pin = { id, lat: mLat, lon: mLon, label: `📍 Midpoint: ${sp.label} ↔ view`, color: "#a8a8ff", createdAt: Date.now() };
+                setPins(prev => [...prev, newPin]);
+                setSelectedPin(id);
+                setFlyTo((p) => ({ id: p.id + 1, lat: mLat, lon: mLon, altKm: Math.max(50, km * 0.4) }));
+                showToast(`📍 Dropped midpoint pin between "${sp.label}" and view (each side ${formatDistKm(km/2, unitsImperial)})`);
+              },
+            }] : []),
+            // Fly to the pin closest to the user's saved home location.
+            // Useful for "what pin is nearest to my home?" queries.
+            ...(homeLocation && pins.length > 0 ? [{
+              id: "pinFlyToHomeNearest" as const,
+              label: `🏠 Fly to pin closest to home (${homeLocation.name})`,
+              group: "Tools" as const,
+              icon: BookmarkPlus,
+              run: () => {
+                let best = pins[0];
+                let bestKm = haversineKm(homeLocation.lat, homeLocation.lon, best.lat, best.lon);
+                for (const p of pins) {
+                  const km = haversineKm(homeLocation.lat, homeLocation.lon, p.lat, p.lon);
+                  if (km < bestKm) { bestKm = km; best = p; }
+                }
+                setSelectedPin(best.id);
+                setFlyTo((p) => ({ id: p.id + 1, lat: best.lat, lon: best.lon, altKm: 50 }));
+                showToast(`🏠 Closest pin to home (${homeLocation.name}): ${best.label} (${formatDistKm(bestKm, unitsImperial)} away)`);
+              },
+            }] : []),
             // Find the extreme pin in each cardinal direction (N/S/E/W)
             // and fly to whichever the user picks. Useful for "where's
             // the southernmost pin in my collection?" type questions.
