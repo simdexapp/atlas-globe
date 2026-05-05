@@ -12902,6 +12902,118 @@ ${trkpts}
                 showToast(`🔁 Closed loop — added start vertex as #${measurePoints.length + 1} (closing leg ${formatDistKm(closingKm, unitsImperial)})`);
               },
             }] : []),
+            // Show total path length in 4 different units at once —
+            // km, miles, nautical miles, feet. Useful for comparing
+            // across measurement systems (sailors care about NM,
+            // surveyors about feet, walkers about miles, scientists km).
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureMultiUnits" as const,
+              label: "📏 Show total path length in km / mi / nautical miles / feet (all 4 units)",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                let totalKm = 0;
+                for (let i = 1; i < measurePoints.length; i++) {
+                  totalKm += haversineKm(measurePoints[i-1].lat, measurePoints[i-1].lon, measurePoints[i].lat, measurePoints[i].lon);
+                }
+                const mi = totalKm * 0.621371;
+                const nm = totalKm * 0.539957;
+                const ft = totalKm * 3280.84;
+                showToast(`📏 Path length: ${totalKm.toFixed(1)} km · ${mi.toFixed(1)} mi · ${nm.toFixed(1)} nm · ${Math.round(ft).toLocaleString()} ft`);
+              },
+            }] : []),
+            // Copy as Leaflet polyline literal — paste-ready JS code
+            // for embedding in a Leaflet map. Format:
+            // L.polyline([[lat, lon], [lat, lon], ...]).
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureCopyAsLeaflet" as const,
+              label: "🗺 Copy measure path as Leaflet L.polyline literal (JS code, paste-ready)",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                const coords = measurePoints.map(p => `[${p.lat.toFixed(6)}, ${p.lon.toFixed(6)}]`).join(", ");
+                const code = `L.polyline([${coords}], { color: '#5cb5ff', weight: 3 }).addTo(map);`;
+                navigator.clipboard?.writeText(code).then(
+                  () => showToast(`🗺 Copied Leaflet polyline literal (${measurePoints.length} vertices, ${code.length} chars)`),
+                  () => showToast(`🗺 ${code.slice(0, 100)}…`)
+                );
+              },
+            }] : []),
+            // Generate a flight-planner-style route brief — waypoints
+            // labeled W1, W2, ..., with cumulative distance + bearing.
+            // Mimics the format used by EasyVFR / Foreflight / SkyVector.
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureFlightPlanFormat" as const,
+              label: "✈ Copy as flight-plan brief (W1 → W2 → ... with bearings + cumulative distance)",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                let cumKm = 0;
+                const lines: string[] = [];
+                lines.push(`Flight plan brief — ${measurePoints.length} waypoints`);
+                lines.push(`Generated ${new Date().toISOString().slice(0, 19)}Z`);
+                lines.push("");
+                for (let i = 0; i < measurePoints.length; i++) {
+                  const p = measurePoints[i];
+                  if (i === 0) {
+                    lines.push(`W1 (start): ${formatLat(p.lat)} ${formatLon(p.lon)}`);
+                  } else {
+                    const legKm = haversineKm(measurePoints[i-1].lat, measurePoints[i-1].lon, p.lat, p.lon);
+                    cumKm += legKm;
+                    const bearing = Math.round(bearingDeg(measurePoints[i-1].lat, measurePoints[i-1].lon, p.lat, p.lon));
+                    const legNm = legKm * 0.539957;
+                    const cumNm = cumKm * 0.539957;
+                    lines.push(`W${i+1}: ${formatLat(p.lat)} ${formatLon(p.lon)} · BRG ${String(bearing).padStart(3, "0")}° · LEG ${legNm.toFixed(1)}nm · CUM ${cumNm.toFixed(1)}nm`);
+                  }
+                }
+                const text = lines.join("\n");
+                navigator.clipboard?.writeText(text).then(
+                  () => showToast(`✈ Copied flight-plan brief (${measurePoints.length} waypoints, ${text.length} chars)`),
+                  () => showToast(text.slice(0, 100) + "…")
+                );
+              },
+            }] : []),
+            // Densify path so no leg exceeds N km. Inserts intermediate
+            // points along each over-long leg via linear lat/lon
+            // interpolation. Useful for animating long-leg paths
+            // smoothly or for sampling-density requirements.
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureSplitByMaxLeg" as const,
+              label: "✂ Split long legs so no segment exceeds N km (insert interpolated waypoints)",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                const maxRaw = window.prompt(`Maximum leg length in ${unitsImperial ? "miles" : "km"} (legs longer than this will be split):`, "100");
+                if (!maxRaw) return;
+                const max = parseFloat(maxRaw);
+                if (!Number.isFinite(max) || max <= 0) { showToast("Max leg length must be > 0"); return; }
+                const maxKm = unitsImperial ? max * 1.609344 : max;
+                const result: typeof measurePoints = [measurePoints[0]];
+                for (let i = 1; i < measurePoints.length; i++) {
+                  const a = measurePoints[i - 1];
+                  const b = measurePoints[i];
+                  const km = haversineKm(a.lat, a.lon, b.lat, b.lon);
+                  if (km <= maxKm) {
+                    result.push(b);
+                  } else {
+                    // Split into ceil(km / maxKm) equal sub-segments
+                    const n = Math.ceil(km / maxKm);
+                    for (let j = 1; j <= n; j++) {
+                      const t = j / n;
+                      const lat = a.lat + (b.lat - a.lat) * t;
+                      let lon = a.lon + (b.lon - a.lon) * t;
+                      while (lon > 180) lon -= 360;
+                      while (lon < -180) lon += 360;
+                      result.push({ lat, lon });
+                    }
+                  }
+                }
+                const added = result.length - measurePoints.length;
+                if (added === 0) { showToast(`✂ No legs exceeded ${max}${unitsImperial ? "mi" : "km"} — path unchanged`); return; }
+                setMeasurePoints(result);
+                showToast(`✂ Inserted ${added} waypoint${added === 1 ? "" : "s"} so all legs ≤ ${max}${unitsImperial ? "mi" : "km"} (${measurePoints.length} → ${result.length} vertices)`);
+              },
+            }] : []),
             // Global metric/imperial unit toggle. Affects the measure pill,
             // distance commands, area calculations, elevation lookups.
             { id: "toggleUnits", label: unitsImperial ? "Units → metric (km, m, km²)" : "Units → imperial (mi, ft, mi²)", group: "View", icon: Compass, hint: "U", run: () => setUnitsImperial((v) => { showToast(v ? "Units: metric" : "Units: imperial"); return !v; }) },
