@@ -7706,6 +7706,94 @@ function App() {
               setPins((prev) => [...prev, ...newPins]);
               showToast(`🎬 Dropped pins for 6 film-production hubs — Bollywood produces 3× as many films per year as Hollywood`);
             }},
+            { id: "pinMostRemoteIslands", label: "🏝 Drop pins for 6 of the world's most remote inhabited islands", group: "Tools", icon: BookmarkPlus, run: () => {
+              // Tristan da Cunha is the most remote inhabited island —
+              // 2,810km from St Helena (the next nearest land). Pitcairn
+              // is famous for the Bounty mutineers' descendants. Easter
+              // Island is famous for its moai stone heads.
+              const islands = [
+                { name: "Tristan da Cunha (S Atlantic — most remote inhabited, 2,810km to St Helena)", lat: -37.1052, lon: -12.2777 },
+                { name: "Easter Island, Chile (Rapa Nui — moai heads, 3,512km to mainland)",            lat: -27.1127, lon: -109.3497 },
+                { name: "Pitcairn Island (descendants of Bounty mutineers, ~50 inhabitants)",            lat: -25.0658, lon: -130.1014 },
+                { name: "Saint Helena (Napoleon's exile site, 1,950km W of Africa)",                     lat: -15.9650, lon:  -5.7089 },
+                { name: "Bouvet Island (S Atlantic — uninhabited but Norwegian, 1,750km to Antarctica)", lat: -54.4333, lon:   3.4167 },
+                { name: "Kiritimati / Christmas Island, Kiribati (largest atoll on Earth)",              lat:   1.8722, lon: -157.4278 },
+              ];
+              const stamp = Date.now();
+              const newPins: Pin[] = islands.map((isl, i) => ({
+                id: `pin-remote-${i}-${stamp}`,
+                lat: isl.lat, lon: isl.lon, label: `🏝 ${isl.name}`,
+                color: "#5cb5ff", createdAt: stamp + i,
+              }));
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`🏝 Dropped pins for 6 remote islands — Tristan da Cunha residents see a doctor only when supply ships arrive`);
+            }},
+            { id: "pinAntarcticResearchStations", label: "❄ Drop pins for 6 major Antarctic research stations", group: "Tools", icon: BookmarkPlus, run: () => {
+              // McMurdo (US) is the largest Antarctic station — up to
+              // 1,200 staff in summer. Vostok (RU) recorded the lowest
+              // natural temperature on Earth: -89.2°C in 1983. Concordia
+              // (FR/IT) is at 3,233m elevation on the high plateau.
+              const stations = [
+                { name: "McMurdo Station, USA (largest in Antarctica — up to 1,200 staff in summer)",     lat: -77.8500, lon: 166.6667 },
+                { name: "Amundsen-Scott South Pole, USA (geographic South Pole)",                          lat: -90.0000, lon:    0.0000 },
+                { name: "Vostok Station, Russia (recorded -89.2°C in 1983 — coldest natural temp ever)", lat: -78.4641, lon: 106.8372 },
+                { name: "Concordia, France/Italy (3,233m elevation — extreme cold + high altitude)",       lat: -75.1003, lon: 123.3328 },
+                { name: "Halley VI, UK (sits on floating ice shelf, mobile platform)",                     lat: -75.5800, lon:  -26.6500 },
+                { name: "Casey Station, Australia (year-round, ozone hole research base)",                 lat: -66.2820, lon: 110.5285 },
+              ];
+              const stamp = Date.now();
+              const newPins: Pin[] = stations.map((s, i) => ({
+                id: `pin-antarctic-${i}-${stamp}`,
+                lat: s.lat, lon: s.lon, label: `❄ ${s.name}`,
+                color: "#a8a8ff", createdAt: stamp + i,
+              }));
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`❄ Dropped pins for 6 Antarctic research stations — Vostok set the all-time low temperature record at -89.2°C`);
+            }},
+            { id: "pinSilkRoadCities", label: "🐪 Drop pins for 7 of the historic Silk Road's major waypoints", group: "Tools", icon: BookmarkPlus, run: () => {
+              // The Silk Road was a 6,400 km network of trade routes
+              // operating from ~130 BCE to the late 1400s. Marco Polo's
+              // famous journey followed parts of this route.
+              const cities = [
+                { name: "Xi'an, China (Silk Road eastern terminus — Han dynasty capital)",          lat:  34.3416, lon: 108.9398 },
+                { name: "Dunhuang, China (oasis at the Gobi's edge — Mogao Caves Buddhist art)",     lat:  40.1421, lon:  94.6618 },
+                { name: "Kashgar, China (key oasis at the Tarim Basin's western edge)",              lat:  39.4704, lon:  75.9898 },
+                { name: "Samarkand, Uzbekistan (Tamerlane's capital — UNESCO crossroads of cultures)", lat:  39.6542, lon:  66.9597 },
+                { name: "Bukhara, Uzbekistan (Islamic Golden Age scholarship hub)",                   lat:  39.7747, lon:  64.4286 },
+                { name: "Baghdad, Iraq (Abbasid capital — translated Greek/Sanskrit texts)",          lat:  33.3152, lon:  44.3661 },
+                { name: "Constantinople / Istanbul (Silk Road western terminus to Europe)",            lat:  41.0082, lon:  28.9784 },
+              ];
+              const stamp = Date.now();
+              const newPins: Pin[] = cities.map((c, i) => ({
+                id: `pin-silkroad-${i}-${stamp}`,
+                lat: c.lat, lon: c.lon, label: `🐪 ${c.name}`,
+                color: "#ffd66b", createdAt: stamp + i,
+              }));
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`🐪 Dropped pins for 7 Silk Road waypoints — the network operated for ~1,500 years before sea routes replaced it in the late 1400s`);
+            }},
+            { id: "pinFamousCemeteries", label: "🪦 Drop pins for 6 of the world's most famous cemeteries", group: "Tools", icon: BookmarkPlus, run: () => {
+              // Père Lachaise (Paris) is the most-visited cemetery in
+              // the world, drawing 3.5M visitors/year (Jim Morrison,
+              // Oscar Wilde, Chopin, Edith Piaf). Highgate is famous
+              // for Karl Marx's tomb. Recoleta has Eva Perón.
+              const cemeteries = [
+                { name: "Père Lachaise, Paris (3.5M visitors/yr — Morrison, Wilde, Chopin, Piaf)", lat: 48.8617, lon:   2.3933 },
+                { name: "Highgate Cemetery, London (Karl Marx, George Eliot — Victorian gothic)",  lat: 51.5667, lon:  -0.1492 },
+                { name: "Arlington National Cemetery, USA (400,000+ military graves, JFK)",         lat: 38.8783, lon: -77.0687 },
+                { name: "Recoleta, Buenos Aires (Eva Perón — labyrinth of marble mausoleums)",      lat: -34.5878, lon: -58.3925 },
+                { name: "Forest Lawn Hollywood Hills (Bette Davis, Walt Disney — celebrities)",     lat:  34.1467, lon:-118.3206 },
+                { name: "Okunoin, Mt Kōya Japan (200,000+ tombs in old-growth cedar forest)",        lat:  34.2189, lon: 135.5897 },
+              ];
+              const stamp = Date.now();
+              const newPins: Pin[] = cemeteries.map((c, i) => ({
+                id: `pin-cemetery-${i}-${stamp}`,
+                lat: c.lat, lon: c.lon, label: `🪦 ${c.name}`,
+                color: "#a8a8ff", createdAt: stamp + i,
+              }));
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`🪦 Dropped pins for 6 famous cemeteries — Père Lachaise draws 3.5M visitors/yr, more than many countries' tourism numbers`);
+            }},
             { id: "pinOldestCities", label: "🏯 Drop pins for 7 of the world's oldest continuously-inhabited cities", group: "Tools", icon: BookmarkPlus, run: () => {
               const cities = [
                 { name: "Damascus, Syria (~9000 BCE)",         lat: 33.5138, lon:  36.2765 },
