@@ -13239,6 +13239,114 @@ ${trkpts}
                 showToast(`✂ Inserted ${added} waypoint${added === 1 ? "" : "s"} so all legs ≤ ${max}${unitsImperial ? "mi" : "km"} (${measurePoints.length} → ${result.length} vertices)`);
               },
             }] : []),
+            // Open path in Google Maps as a directions URL with waypoints.
+            // Google Maps' /dir/ URL accepts up to ~10 waypoints (some
+            // sources say 23). We cap at 10 to be safe and surface a
+            // hint if more vertices were truncated.
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureCopyAsGoogleMapsURL" as const,
+              label: "🗺 Open path in Google Maps (directions URL with waypoints — up to 10)",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                // Google Maps /dir/ URL format:
+                // https://www.google.com/maps/dir/lat,lon/lat,lon/...
+                // Up to ~10 waypoints reliably. We cap at 10.
+                const cap = 10;
+                const sample = measurePoints.length > cap
+                  ? [measurePoints[0], ...Array.from({length: cap - 2}, (_, i) => measurePoints[Math.round((i+1) * (measurePoints.length-1) / (cap-1))]), measurePoints[measurePoints.length - 1]]
+                  : measurePoints;
+                const segs = sample.map(p => `${p.lat.toFixed(5)},${p.lon.toFixed(5)}`).join("/");
+                const url = `https://www.google.com/maps/dir/${segs}`;
+                navigator.clipboard?.writeText(url).then(
+                  () => {
+                    const truncated = measurePoints.length > cap;
+                    showToast(`🗺 Copied Google Maps URL${truncated ? ` (${cap} of ${measurePoints.length} waypoints — sampled evenly)` : ""}`);
+                  },
+                  () => showToast(`🗺 ${url.slice(0, 100)}…`)
+                );
+              },
+            }] : []),
+            // Replace path with just the start + end vertices. Useful
+            // for collapsing a complex path into a simple A→B for
+            // export, distance computation, or visual simplification.
+            ...(measureMode && measurePoints.length >= 3 ? [{
+              id: "measurePreserveStartEnd" as const,
+              label: "📐 Simplify path to just start + end vertices (collapse to A → B)",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                const start = measurePoints[0];
+                const end = measurePoints[measurePoints.length - 1];
+                const removed = measurePoints.length - 2;
+                const beforeKm = (() => {
+                  let s = 0;
+                  for (let i = 1; i < measurePoints.length; i++) s += haversineKm(measurePoints[i-1].lat, measurePoints[i-1].lon, measurePoints[i].lat, measurePoints[i].lon);
+                  return s;
+                })();
+                const afterKm = haversineKm(start.lat, start.lon, end.lat, end.lon);
+                setMeasurePoints([start, end]);
+                showToast(`📐 Collapsed ${measurePoints.length} vertices to 2 (A→B). Removed ${removed} intermediate. Distance: ${formatDistKm(beforeKm, unitsImperial)} → ${formatDistKm(afterKm, unitsImperial)} (${(afterKm/beforeKm*100).toFixed(0)}% of original)`);
+              },
+            }] : []),
+            // Extend the last leg by N% along its current bearing. Good
+            // for sketching "if the trajectory continues in this direction
+            // for X% longer, where does it land?" type questions.
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureExtendByPercent" as const,
+              label: "➡ Extend last leg by N% along its current bearing (project trajectory)",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                const pctRaw = window.prompt("Extend last leg by what percentage of its current length?", "50");
+                if (!pctRaw) return;
+                const pct = parseFloat(pctRaw);
+                if (!Number.isFinite(pct) || pct <= 0) { showToast("Percentage must be > 0"); return; }
+                const a = measurePoints[measurePoints.length - 2];
+                const b = measurePoints[measurePoints.length - 1];
+                const legKm = haversineKm(a.lat, a.lon, b.lat, b.lon);
+                const extKm = legKm * (pct / 100);
+                const bearing = bearingDeg(a.lat, a.lon, b.lat, b.lon);
+                // Spherical destination point from b along bearing for extKm
+                const R = EARTH_RADIUS_KM;
+                const phi1 = b.lat * Math.PI / 180;
+                const lam1 = b.lon * Math.PI / 180;
+                const bearingR = bearing * Math.PI / 180;
+                const phi2 = Math.asin(Math.sin(phi1) * Math.cos(extKm/R) + Math.cos(phi1) * Math.sin(extKm/R) * Math.cos(bearingR));
+                const lam2 = lam1 + Math.atan2(Math.sin(bearingR) * Math.sin(extKm/R) * Math.cos(phi1), Math.cos(extKm/R) - Math.sin(phi1) * Math.sin(phi2));
+                let lon = lam2 * 180 / Math.PI;
+                while (lon > 180) lon -= 360;
+                while (lon < -180) lon += 360;
+                const newPt = { lat: phi2 * 180 / Math.PI, lon };
+                setMeasurePoints([...measurePoints, newPt]);
+                showToast(`➡ Extended +${pct}% (${formatDistKm(extKm, unitsImperial)}) on bearing ${Math.round(bearing)}° → ${formatLat(newPt.lat)} ${formatLon(newPt.lon)}`);
+              },
+            }] : []),
+            // Copy bounding-box extents as a single line. Useful for
+            // pasting into other GIS tools, scripts, or as a quick
+            // human-readable region summary.
+            ...(measureMode && measurePoints.length >= 2 ? [{
+              id: "measureCopyBBoxCoords" as const,
+              label: "📦 Copy bounding-box extents as text (minLat,minLon,maxLat,maxLon)",
+              group: "View" as const,
+              icon: Compass,
+              run: () => {
+                let minLat = measurePoints[0].lat, maxLat = minLat;
+                let minLon = measurePoints[0].lon, maxLon = minLon;
+                for (const p of measurePoints) {
+                  if (p.lat < minLat) minLat = p.lat;
+                  if (p.lat > maxLat) maxLat = p.lat;
+                  if (p.lon < minLon) minLon = p.lon;
+                  if (p.lon > maxLon) maxLon = p.lon;
+                }
+                // Format: minLat,minLon,maxLat,maxLon (south,west,north,east — common GIS convention)
+                const text = `${minLat.toFixed(6)},${minLon.toFixed(6)},${maxLat.toFixed(6)},${maxLon.toFixed(6)}`;
+                navigator.clipboard?.writeText(text).then(
+                  () => showToast(`📦 Copied bounding box: ${text} (south,west,north,east)`),
+                  () => showToast(`📦 ${text}`)
+                );
+              },
+            }] : []),
             // Global metric/imperial unit toggle. Affects the measure pill,
             // distance commands, area calculations, elevation lookups.
             { id: "toggleUnits", label: unitsImperial ? "Units → metric (km, m, km²)" : "Units → imperial (mi, ft, mi²)", group: "View", icon: Compass, hint: "U", run: () => setUnitsImperial((v) => { showToast(v ? "Units: metric" : "Units: imperial"); return !v; }) },
