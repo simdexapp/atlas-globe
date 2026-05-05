@@ -7836,6 +7836,94 @@ function App() {
               setPins((prev) => [...prev, ...newPins]);
               showToast(`🪦 Dropped pins for 6 famous cemeteries — Père Lachaise draws 3.5M visitors/yr, more than many countries' tourism numbers`);
             }},
+            { id: "pinMajorAirports", label: "✈ Drop pins for the 8 busiest passenger airports worldwide", group: "Tools", icon: BookmarkPlus, run: () => {
+              // Hartsfield-Jackson Atlanta has been the world's busiest
+              // for most of the past 25 years (~104M passengers/year).
+              // Beijing Capital briefly took #1 during 2020. Dubai is
+              // the #1 for international passengers.
+              const airports = [
+                { name: "Hartsfield–Jackson, Atlanta USA (busiest worldwide for ~25 years, 104M/yr)", lat: 33.6407, lon: -84.4277 },
+                { name: "Dallas/Fort Worth, USA (4 runways, 73M/yr)",                                   lat: 32.8998, lon: -97.0403 },
+                { name: "Denver Intl, USA (largest airport by area in the Americas)",                    lat: 39.8561, lon: -104.6737 },
+                { name: "Dubai Intl, UAE (busiest for international passengers)",                         lat: 25.2532, lon:  55.3657 },
+                { name: "Beijing Capital, China (briefly the world's busiest in 2020)",                   lat: 40.0801, lon: 116.5846 },
+                { name: "London Heathrow, UK (Europe's busiest, 2 runways)",                              lat: 51.4700, lon:  -0.4543 },
+                { name: "Tokyo Haneda, Japan (Asia's most punctual mega-hub)",                            lat: 35.5494, lon: 139.7798 },
+                { name: "Istanbul Airport (largest airport in the world by area)",                         lat: 41.2755, lon:  28.7519 },
+              ];
+              const stamp = Date.now();
+              const newPins: Pin[] = airports.map((a, i) => ({
+                id: `pin-airport-${i}-${stamp}`,
+                lat: a.lat, lon: a.lon, label: `✈ ${a.name}`,
+                color: "#5cb5ff", createdAt: stamp + i,
+              }));
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`✈ Dropped pins for 8 mega-airports — Atlanta has held world's-busiest title for ~25 years, peaking at 110M passengers/yr`);
+            }},
+            { id: "pinMajorCanals", label: "🚢 Drop pins for 5 major shipping canals", group: "Tools", icon: BookmarkPlus, run: () => {
+              // Suez handles ~12% of global trade. Panama saves ships
+              // 12,800 km vs going around Cape Horn. Kiel is the world's
+              // busiest artificial waterway (~32k transits/yr). Corinth
+              // is too narrow for modern ships but historic.
+              const canals = [
+                { name: "Suez Canal, Egypt (193km, handles ~12% of global trade — 1869)",      lat: 30.5852, lon:  32.2654 },
+                { name: "Panama Canal (82km, saves ships 12,800km vs Cape Horn — 1914)",        lat:  9.0820, lon: -79.6800 },
+                { name: "Kiel Canal, Germany (98km, world's busiest by transits — 1895)",        lat: 54.3700, lon:   9.7800 },
+                { name: "Corinth Canal, Greece (6.4km, only 24m wide — too narrow for modern ships)", lat: 37.9300, lon: 22.9800 },
+                { name: "Erie Canal, NY USA (584km, opened the American Midwest — 1825)",        lat: 43.0500, lon: -76.5000 },
+              ];
+              const stamp = Date.now();
+              const newPins: Pin[] = canals.map((c, i) => ({
+                id: `pin-canal-${i}-${stamp}`,
+                lat: c.lat, lon: c.lon, label: `🚢 ${c.name}`,
+                color: "#5cb5ff", createdAt: stamp + i,
+              }));
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`🚢 Dropped pins for 5 major canals — Suez handles ~12% of global trade, Panama saves ships 12,800km vs going around Cape Horn`);
+            }},
+            { id: "pinFamousWalls", label: "🧱 Drop pins for 6 of the world's most famous walls (defensive / historical)", group: "Tools", icon: BookmarkPlus, run: () => {
+              // The Great Wall of China is 21,196 km of segments.
+              // Hadrian's Wall (118km) marked the Roman Empire's
+              // northern frontier. The Berlin Wall stood 1961-1989.
+              const walls = [
+                { name: "Great Wall of China (21,196km of segments — visible from low Earth orbit, NOT from Moon)", lat: 40.4319, lon: 116.5704 },
+                { name: "Hadrian's Wall, England (118km, Roman Empire's NW frontier — 122 CE)",                       lat: 55.0260, lon:  -2.2700 },
+                { name: "Western Wall, Jerusalem (last remnant of Second Temple — 19 BCE)",                            lat: 31.7767, lon:  35.2345 },
+                { name: "Berlin Wall remnant, East Side Gallery (1.3km of original wall — open-air gallery)",          lat: 52.5050, lon:  13.4396 },
+                { name: "Walls of Constantinople, Istanbul (5th-century Theodosian Walls)",                            lat: 41.0150, lon:  28.9350 },
+                { name: "Sacsayhuamán, Cusco Peru (Inca cyclopean megalithic walls — 15th century)",                    lat: -13.5089, lon: -71.9819 },
+              ];
+              const stamp = Date.now();
+              const newPins: Pin[] = walls.map((w, i) => ({
+                id: `pin-wall-${i}-${stamp}`,
+                lat: w.lat, lon: w.lon, label: `🧱 ${w.name}`,
+                color: "#a8a8ff", createdAt: stamp + i,
+              }));
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`🧱 Dropped pins for 6 famous walls — the Great Wall is visible from low Earth orbit but NOT from the Moon (despite the famous myth)`);
+            }},
+            { id: "pinFilmFestivalCities", label: "🎞 Drop pins for 6 of the world's premier film-festival cities", group: "Tools", icon: BookmarkPlus, run: () => {
+              // Cannes (1946) is the most prestigious. Venice (1932) is
+              // the oldest film festival in the world. Sundance (1978)
+              // is the largest indie-film festival. Berlinale, TIFF,
+              // and Locarno round out the "Big 6".
+              const festivals = [
+                { name: "Cannes Film Festival, France (Palme d'Or — most prestigious, since 1946)",  lat:  43.5528, lon:   7.0174 },
+                { name: "Venice Film Festival, Italy (oldest film festival in the world — since 1932)", lat: 45.4054, lon:  12.3667 },
+                { name: "Sundance, Park City Utah USA (largest indie festival, since 1978)",          lat:  40.6461, lon: -111.4980 },
+                { name: "Berlinale, Berlin Germany (Golden Bear — major February festival)",          lat:  52.5085, lon:  13.3736 },
+                { name: "Toronto Intl (TIFF), Canada (audience-driven Oscar predictor since 1976)",   lat:  43.6539, lon: -79.3859 },
+                { name: "Locarno, Switzerland (oldest in DE-language area, screens films on Piazza Grande)", lat: 46.1671, lon:   8.7950 },
+              ];
+              const stamp = Date.now();
+              const newPins: Pin[] = festivals.map((f, i) => ({
+                id: `pin-festival-${i}-${stamp}`,
+                lat: f.lat, lon: f.lon, label: `🎞 ${f.name}`,
+                color: "#ff7be0", createdAt: stamp + i,
+              }));
+              setPins((prev) => [...prev, ...newPins]);
+              showToast(`🎞 Dropped pins for 6 premier film festivals — Cannes' Palme d'Or is the most prestigious; Venice (1932) is the oldest`);
+            }},
             { id: "pinOldestCities", label: "🏯 Drop pins for 7 of the world's oldest continuously-inhabited cities", group: "Tools", icon: BookmarkPlus, run: () => {
               const cities = [
                 { name: "Damascus, Syria (~9000 BCE)",         lat: 33.5138, lon:  36.2765 },
