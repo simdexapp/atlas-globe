@@ -4557,6 +4557,86 @@ input[type="date"].atlasSelect::-webkit-calendar-picker-indicator {
   .atlasHorizonDistanceWidget { display: none; }
 }
 
+/* ============= Antipodal-city + Footprint-area widgets ============= */
+.atlasAntipodalCityWidget,
+.atlasFootprintAreaWidget {
+  position: fixed;
+  left: 64px;
+  z-index: 5;
+  width: 240px;
+  padding: var(--s-3);
+  border-radius: var(--r-3);
+  border: 1px solid var(--border);
+  background: var(--surface-elevated);
+  backdrop-filter: blur(14px);
+  box-shadow: var(--shadow-2);
+  color: var(--gray-12);
+  font-size: var(--text-xs);
+  display: grid;
+  gap: var(--s-2);
+}
+.atlasAntipodalCityWidget { top: 2680px; }
+.atlasFootprintAreaWidget { top: 2810px; }
+
+.atlasAntipodalCityHead,
+.atlasFootprintAreaHead {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  font-family: ui-monospace, monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--gray-9);
+}
+.atlasAntipodalCityHead strong,
+.atlasFootprintAreaHead strong { color: var(--gray-9); font-weight: 600; flex: 1; }
+
+.atlasAntipodalCityCoords {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  color: var(--gray-12);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.atlasAntipodalCityName {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--gray-12);
+}
+.atlasAntipodalCityMeta {
+  font-size: 11px;
+  color: var(--gray-9);
+  font-family: ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.atlasFootprintAreaBig {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--gray-12);
+  font-family: ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+.atlasFootprintAreaMeta {
+  font-size: 11px;
+  color: var(--gray-10);
+  font-family: ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+.atlasFootprintAreaFooter {
+  font-size: 10.5px;
+  color: var(--gray-9);
+  font-family: ui-monospace, monospace;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 4px;
+}
+
+@media (max-width: 980px) {
+  .atlasAntipodalCityWidget,
+  .atlasFootprintAreaWidget { display: none; }
+}
+
 .atlasAntipodeFlyBtn:hover { background: var(--accent); color: var(--bg); }
 
 .atlasLocalTimeClock {

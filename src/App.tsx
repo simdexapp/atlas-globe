@@ -263,6 +263,15 @@ type LayerVisibility = {
   // away (km) is the visible horizon? Uses the standard sqrt(2Rh)
   // formula. Surfaces "how much of Earth can I see from here?"
   horizonDistance: boolean;
+  // Antipodal-city widget — closest MAJOR/REGIONAL city to the view's
+  // antipode. Most antipodes are ocean (~71% of Earth is water and the
+  // land/water antipode probability biases toward water-on-water) so
+  // distances are often huge — that's part of the surprise.
+  antipodalCity: boolean;
+  // Footprint-area widget — visible Earth-surface area at current
+  // camera altitude (spherical-cap formula) plus % of Earth's total.
+  // Educational — surfaces how much of the planet you can see at once.
+  footprintArea: boolean;
 };
 
 type GlobeSettings = {
@@ -619,6 +628,8 @@ const defaultLayers: LayerVisibility = {
   dateAtView: false,
   biomeAtView: false,
   horizonDistance: false,
+  antipodalCity: false,
+  footprintArea: false,
   // 3D OSM Buildings tileset is heavy and renders with edge outlines
   // that disable imagery draping underneath, painting the screen with
   // dark olive boxes at low altitudes (the user's tear repro). Off by
@@ -13312,6 +13323,8 @@ ${trkpts}
             { id: "widgetDateAtView", label: layers.dateAtView ? "Hide date-at-view widget" : "📅 Show date-at-view widget (wall-clock date + day-of-week at view longitude)", group: "Widgets", icon: SunIcon, run: () => toggleLayer("dateAtView") },
             { id: "widgetBiomeAtView", label: layers.biomeAtView ? "Hide biome-at-view widget" : "🌳 Show biome-at-view widget (climate zone from latitude — Tropical / Temperate / Polar / etc.)", group: "Widgets", icon: Mountain, run: () => toggleLayer("biomeAtView") },
             { id: "widgetHorizonDistance", label: layers.horizonDistance ? "Hide horizon-distance widget" : "👁 Show horizon-distance widget (how far the visible horizon is from current altitude)", group: "Widgets", icon: Compass, run: () => toggleLayer("horizonDistance") },
+            { id: "widgetAntipodalCity", label: layers.antipodalCity ? "Hide antipodal-city widget" : "🌐 Show antipodal-city widget (closest city to the view's antipode)", group: "Widgets", icon: Globe2, run: () => toggleLayer("antipodalCity") },
+            { id: "widgetFootprintArea", label: layers.footprintArea ? "Hide footprint-area widget" : "🌍 Show footprint-area widget (visible Earth surface from current altitude)", group: "Widgets", icon: Globe2, run: () => toggleLayer("footprintArea") },
             // Ambient Earth — kiosk/big-screen mode. Hides UI chrome,
             // starts auto-orbit, shows comprehensive live-data overlay.
             // Made for office TVs, conference displays, screensavers.
@@ -21610,6 +21623,83 @@ ${wpts}
                 </div>
                 <div className="atlasHorizonDistanceFooter">
                   Camera at {h.toFixed(0)}km altitude · sqrt(2·R·h) approx
+                </div>
+              </div>
+            );
+          })()}
+        </Draggable>
+      )}
+
+      {/* Antipodal-city widget — closest MAJOR/REGIONAL city to the
+          view's antipode point. Most antipodes are ocean (Earth is
+          ~71% water + land/water antipode probability biases toward
+          water-on-water) so distances are typically huge — that's
+          part of the surprise. Updates as camera pans. */}
+      {layers.antipodalCity && (
+        <Draggable id="antipodalCity" customizeMode={customizeUiMode} position={widgetPositions.antipodalCity} onMove={setWidgetPosition}>
+          {(() => {
+            const aLat = -cameraState.lat;
+            const aLon = cameraState.lon > 0 ? cameraState.lon - 180 : cameraState.lon + 180;
+            let nearest: { name: string; country: string; lat: number; lon: number } | null = null;
+            let nearestKm = Infinity;
+            for (const c of [...MAJOR_CITIES, ...REGIONAL_CITIES]) {
+              const km = haversineKm(aLat, aLon, c.lat, c.lon);
+              if (km < nearestKm) { nearestKm = km; nearest = c; }
+            }
+            const isOcean = nearestKm > 800;  // closest city >800km away → likely ocean
+            return (
+              <div className="atlasAntipodalCityWidget" role="status" aria-label="Antipodal city">
+                <div className="atlasAntipodalCityHead">
+                  <Globe2 size={12} />
+                  <strong>Antipode &amp; nearest city</strong>
+                </div>
+                <div className="atlasAntipodalCityCoords">
+                  {formatLat(aLat)} {formatLon(aLon)}
+                </div>
+                {nearest && (
+                  <div className="atlasAntipodalCityName">
+                    {isOcean && <span>🌊 </span>}
+                    {nearest.name}, {nearest.country}
+                  </div>
+                )}
+                {nearest && (
+                  <div className="atlasAntipodalCityMeta">
+                    {unitsImperial ? `${Math.round(nearestKm * 0.621371).toLocaleString()} mi` : `${Math.round(nearestKm).toLocaleString()} km`} from antipode
+                    {isOcean && " · likely ocean"}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </Draggable>
+      )}
+
+      {/* Footprint-area widget — visible Earth-surface area at current
+          camera altitude. Spherical-cap formula:
+          A = 2πR² · (1 − R/(R+h)). Total surface = 4πR². */}
+      {layers.footprintArea && (
+        <Draggable id="footprintArea" customizeMode={customizeUiMode} position={widgetPositions.footprintArea} onMove={setWidgetPosition}>
+          {(() => {
+            const h = cameraState.altKm;
+            const R = 6371;
+            const visibleArea = 2 * Math.PI * R * R * (1 - R / (R + h));
+            const totalArea = 4 * Math.PI * R * R;
+            const pct = visibleArea / totalArea * 100;
+            const fmtArea = (km2: number) => unitsImperial
+              ? `${Math.round(km2 * 0.386102).toLocaleString()} mi²`
+              : `${Math.round(km2).toLocaleString()} km²`;
+            return (
+              <div className="atlasFootprintAreaWidget" role="status" aria-label="Footprint area">
+                <div className="atlasFootprintAreaHead">
+                  <Globe2 size={12} />
+                  <strong>Visible footprint</strong>
+                </div>
+                <div className="atlasFootprintAreaBig">{fmtArea(visibleArea)}</div>
+                <div className="atlasFootprintAreaMeta">
+                  <span>{pct.toFixed(2)}% of Earth's surface</span>
+                </div>
+                <div className="atlasFootprintAreaFooter">
+                  Camera at {h.toFixed(0)}km · spherical cap = 2πR²(1−R/(R+h))
                 </div>
               </div>
             );
