@@ -794,7 +794,10 @@ const KEYBOARD_HINTS = [
   { keys: "PageUp", desc: "Zoom in 4× (faster than +)" },
   { keys: "PageDown", desc: "Zoom out 4× (faster than −)" },
   { keys: "Home", desc: "🌍 Fly to (0°, 0°) — equator + prime meridian (Gulf of Guinea)" },
+  { keys: "Shift+Home", desc: "🧭 Fly to North Pole" },
+  { keys: "Alt+Home", desc: "📍 Fly to your GPS location (browser geolocation API)" },
   { keys: "End", desc: "🏠 Fly to saved home location (set via palette)" },
+  { keys: "Shift+End", desc: "🧭 Fly to South Pole (Amundsen–Scott Station)" },
   { keys: "F1", desc: "Show shortcuts (universal Help convention)" },
   { keys: "F2", desc: "✏ Rename selected pin (Windows convention)" },
   { keys: "Delete", desc: "🗑 Delete selected pin with confirm (alternative to Shift+X)" },
@@ -4840,19 +4843,47 @@ function App() {
           setShowShortcuts(true);
           break;
         case "home":
-          // Home — fly to (0, 0): equator + prime meridian. The
-          // canonical "centre of the world" reset, distinct from R
-          // which restores the user's last manual reset point.
           event.preventDefault();
-          setFlyTo((p) => ({ id: p.id + 1, lat: 0, lon: 0, altKm: 12000 }));
-          showToast("🌍 Centre of world (0°, 0°) — Gulf of Guinea");
+          if (event.altKey) {
+            // Alt+Home — fly to user's actual GPS location (browser
+            // geolocation API). Useful for "where am I right now?"
+            if (typeof navigator !== "undefined" && navigator.geolocation) {
+              showToast("📍 Requesting location…");
+              navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                  setFlyTo((p) => ({ id: p.id + 1, lat: pos.coords.latitude, lon: pos.coords.longitude, altKm: 30 }));
+                  showToast(`📍 Flew to your location: ${formatLat(pos.coords.latitude)} ${formatLon(pos.coords.longitude)}`);
+                },
+                (err) => showToast(`📍 Geolocation denied or failed: ${err.message}`),
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+              );
+            } else {
+              showToast("📍 Geolocation API not available in this browser");
+            }
+          } else if (event.shiftKey) {
+            // Shift+Home — fly to North Pole. Symmetric companion to
+            // Shift+End (South Pole) for quick polar navigation.
+            setFlyTo((p) => ({ id: p.id + 1, lat: 90, lon: 0, altKm: 8000 }));
+            showToast("🧭 North Pole (Arctic Ocean — sea ice, no land)");
+          } else {
+            // Home — fly to (0, 0): equator + prime meridian. The
+            // canonical "centre of the world" reset, distinct from R
+            // which restores the user's last manual reset point.
+            setFlyTo((p) => ({ id: p.id + 1, lat: 0, lon: 0, altKm: 12000 }));
+            showToast("🌍 Centre of world (0°, 0°) — Gulf of Guinea");
+          }
           break;
         case "end":
-          // End — fly to user's saved home location, if set. Quick
-          // way back to "my place" from anywhere on Earth. Errors
-          // gracefully if no home is saved.
           event.preventDefault();
-          if (homeLocation) {
+          if (event.shiftKey) {
+            // Shift+End — fly to South Pole. Symmetric companion to
+            // Shift+Home (North Pole). Antarctica's Amundsen-Scott
+            // station sits exactly here.
+            setFlyTo((p) => ({ id: p.id + 1, lat: -90, lon: 0, altKm: 8000 }));
+            showToast("🧭 South Pole (Amundsen–Scott Station, 2,835m elevation on ice cap)");
+          } else if (homeLocation) {
+            // End — fly to user's saved home location, if set. Quick
+            // way back to "my place" from anywhere on Earth.
             setFlyTo((p) => ({ id: p.id + 1, lat: homeLocation.lat, lon: homeLocation.lon, altKm: homeLocation.altKm }));
             showToast(`🏠 Flying to ${homeLocation.name}`);
           } else {
