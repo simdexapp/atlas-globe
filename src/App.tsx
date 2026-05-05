@@ -814,6 +814,8 @@ const KEYBOARD_HINTS = [
   { keys: "Delete", desc: "🗑 Delete selected pin with confirm (alternative to Shift+X)" },
   { keys: "\\", desc: "🎨 Toggle UI customization mode (alternative to Cmd+E)" },
   { keys: "Alt+1 … Alt+9", desc: "📚 Fly to user bookmark #N (newest-first, 1-indexed — power-user instant fly-to)" },
+  { keys: "Alt+0", desc: "🏠 Fly to saved home location (alternative to End)" },
+  { keys: "Alt+Arrow", desc: "🎯 Fine 1° pan (vs altitude-relative arrow pan — for precise positioning)" },
   // ===== Time (Surface mode) =====
   { keys: "[", desc: "Step Surface clock back 1 hour" },
   { keys: "]", desc: "Step Surface clock forward 1 hour" },
@@ -4135,6 +4137,37 @@ function App() {
         const bm = userBmks[n - 1];
         setFlyTo((p) => ({ id: p.id + 1, lat: bm.lat, lon: bm.lon, altKm: bm.altKm }));
         showToast(`📚 Alt+${n}: ${bm.name}`);
+        return;
+      }
+
+      // Alt+0 — fly to home location (alternative to End). Convenient
+      // for users who already use Alt+1..9 for bookmark navigation.
+      if (event.altKey && event.key === "0") {
+        event.preventDefault();
+        if (homeLocation) {
+          setFlyTo((p) => ({ id: p.id + 1, lat: homeLocation.lat, lon: homeLocation.lon, altKm: homeLocation.altKm }));
+          showToast(`🏠 Alt+0: Flying to ${homeLocation.name}`);
+        } else {
+          showToast("Alt+0: No home location set");
+        }
+        return;
+      }
+
+      // Alt+Arrow keys — fine 1° pan (always 1° regardless of altitude).
+      // Plain arrow keys pan a fraction of altitude (~5%) so the step
+      // grows with zoom-out. Alt+arrow gives a fixed 1° step for precise
+      // navigation when adjusting view to known coordinates.
+      if (event.altKey && (event.key === "ArrowUp" || event.key === "ArrowDown" || event.key === "ArrowLeft" || event.key === "ArrowRight")) {
+        event.preventDefault();
+        if (cameraStateRef.current) {
+          const c = cameraStateRef.current;
+          let lat = c.lat, lon = c.lon;
+          if (event.key === "ArrowUp")    lat = Math.min(89, c.lat + 1);
+          if (event.key === "ArrowDown")  lat = Math.max(-89, c.lat - 1);
+          if (event.key === "ArrowLeft")  { lon = c.lon - 1; if (lon < -180) lon += 360; }
+          if (event.key === "ArrowRight") { lon = c.lon + 1; if (lon > 180) lon -= 360; }
+          setFlyTo((p) => ({ id: p.id + 1, lat, lon, altKm: c.altKm }));
+        }
         return;
       }
 
