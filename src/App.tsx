@@ -15531,6 +15531,65 @@ ${trkpts}
               window.speechSynthesis.speak(u);
               showToast(`🔊 ${text}`);
             }},
+            // Speak details of selected earthquake — magnitude, place,
+            // depth, time-since-event. Companion to announceSelectedPin
+            // / announceSelectedAircraft. Gates on selectedEarthquakeId.
+            { id: "announceSelectedQuake", label: selectedEarthquakeId ? "🔊 Speak selected earthquake info (magnitude, place, depth, time)" : "🔊 Speak selected earthquake (none selected)", group: "Tools", icon: Sparkles, run: () => {
+              if (typeof window === "undefined" || !window.speechSynthesis) { showToast("🔊 SpeechSynthesis not available in this browser"); return; }
+              if (!selectedEarthquakeId) { showToast("No earthquake selected — click one from the layer first"); return; }
+              const q = earthquakeById.get(selectedEarthquakeId);
+              if (!q) { showToast("Selected earthquake no longer in snapshot"); return; }
+              const ageHrs = (Date.now() - q.time) / 3_600_000;
+              const ageText = ageHrs < 1 ? `${Math.round(ageHrs * 60)} minutes ago`
+                            : ageHrs < 48 ? `${Math.round(ageHrs)} hours ago`
+                            : `${Math.round(ageHrs / 24)} days ago`;
+              const text = `Earthquake magnitude ${q.mag.toFixed(1)} ${q.place}. Depth ${q.depth.toFixed(0)} kilometres. ${ageText}.`;
+              window.speechSynthesis.cancel();
+              const u = new SpeechSynthesisUtterance(text);
+              u.rate = voiceRate;
+              u.pitch = voicePitch;
+              window.speechSynthesis.speak(u);
+              showToast(`🔊 ${text}`);
+            }},
+            // Speak details of selected volcano — name + USGS alert level
+            // if available. Companion to announceSelectedQuake.
+            { id: "announceSelectedVolcano", label: selectedVolcanoId ? "🔊 Speak selected volcano info (name + alert level if any)" : "🔊 Speak selected volcano (none selected)", group: "Tools", icon: Sparkles, run: () => {
+              if (typeof window === "undefined" || !window.speechSynthesis) { showToast("🔊 SpeechSynthesis not available in this browser"); return; }
+              if (!selectedVolcanoId) { showToast("No volcano selected — click one from the layer first"); return; }
+              const v = FAMOUS_VOLCANOES_BY_ID.get(selectedVolcanoId);
+              if (!v) { showToast("Selected volcano not found"); return; }
+              const alertCode = volcanoAlerts.get(v.name.toLowerCase());
+              const alertText = alertCode === "red" ? "Red alert: warning, eruption imminent or in progress."
+                              : alertCode === "orange" ? "Orange alert: watch, increased activity."
+                              : alertCode === "yellow" ? "Yellow alert: advisory, elevated unrest."
+                              : alertCode === "green" ? "Green alert: normal background activity."
+                              : "No active alert.";
+              const text = `Volcano ${v.name}, located at latitude ${v.lat.toFixed(2)} longitude ${v.lon.toFixed(2)}. ${alertText}`;
+              window.speechSynthesis.cancel();
+              const u = new SpeechSynthesisUtterance(text);
+              u.rate = voiceRate;
+              u.pitch = voicePitch;
+              window.speechSynthesis.speak(u);
+              showToast(`🔊 ${text}`);
+            }},
+            // Speak details of current imagery configuration — source,
+            // layer ID, date, zoom level. Useful for confirming what
+            // imagery is being displayed without needing to see the panel.
+            { id: "announceCurrentImagery", label: "🔊 Speak current imagery info (source, layer, date, zoom)", group: "Tools", icon: Sparkles, run: () => {
+              if (typeof window === "undefined" || !window.speechSynthesis) { showToast("🔊 SpeechSynthesis not available in this browser"); return; }
+              const imagery = imageryRef.current;
+              const sourceDesc = imagery.source === "live" ? "live NASA GIBS streaming"
+                              : imagery.source === "bundled" ? "bundled local textures"
+                              : "custom user URL";
+              const zoomDesc = imagery.zoom === 2 ? "standard definition" : imagery.zoom === 3 ? "high definition" : "ultra high definition";
+              const text = `Current imagery: ${sourceDesc}, layer ${imagery.layerId}, date ${imagery.date}, ${zoomDesc} zoom level ${imagery.zoom}.`;
+              window.speechSynthesis.cancel();
+              const u = new SpeechSynthesisUtterance(text);
+              u.rate = voiceRate;
+              u.pitch = voicePitch;
+              window.speechSynthesis.speak(u);
+              showToast(`🔊 ${text}`);
+            }},
             { id: "wikiNearby", label: "🗺 Wikipedia articles near this view (top 8 within 50km)", group: "Tools", icon: Sparkles, run: async () => {
               const c = cameraStateRef.current;
               if (!c) return;
