@@ -19853,6 +19853,99 @@ ${trkpts}
               const more = sorted.length > 8 ? ` +${sorted.length - 8} more categories` : "";
               showToast(`🛩 Categories: ${list}${more}`);
             }},
+            // Fly to the airborne aircraft farthest from user's GPS
+            // location (browser geolocation). Useful for "what's the
+            // most distant flight in the air right now from where I am?"
+            { id: "aircraftFlyToFurthestFromMe", label: "🌐 Fly to airborne aircraft farthest from my GPS location", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              if (typeof navigator === "undefined" || !navigator.geolocation) { showToast("📍 Geolocation API not available"); return; }
+              showToast("📍 Requesting location to find furthest aircraft…");
+              navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                  const myLat = pos.coords.latitude, myLon = pos.coords.longitude;
+                  const ac = aircraftSnapshot!.aircraft.filter(a => !a.onGround);
+                  if (ac.length === 0) { showToast("No airborne aircraft loaded"); return; }
+                  let best = ac[0];
+                  let bestKm = haversineKm(myLat, myLon, best.lat, best.lon);
+                  for (const a of ac) {
+                    const km = haversineKm(myLat, myLon, a.lat, a.lon);
+                    if (km > bestKm) { bestKm = km; best = a; }
+                  }
+                  setSelectedAircraftId(best.icao24);
+                  const altKm = Math.max(2, best.altitudeM / 1000 + 5);
+                  setFlyTo((p) => ({ id: p.id + 1, lat: best.lat, lon: best.lon, altKm }));
+                  const cs = (best.callsign || best.icao24).trim();
+                  showToast(`🌐 Furthest from you: ${cs} — ${formatDistKm(bestKm, unitsImperial)} away (${(bestKm/40075*100).toFixed(0)}% of Earth's circumference)`);
+                },
+                (err) => showToast(`📍 Geolocation denied or failed: ${err.message}`),
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+              );
+            }},
+            // Count aircraft within a prompted altitude band. Useful
+            // for "how many flights are at FL360 ±2,000ft right now?"
+            { id: "aircraftCountAtAltitudeBand", label: "📊 Count aircraft within prompted altitude band (e.g. FL340-FL380)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const minRaw = window.prompt(`Minimum altitude (${unitsImperial ? "feet" : "metres"}):`, unitsImperial ? "30000" : "9000");
+              if (!minRaw) return;
+              const min = parseFloat(minRaw);
+              if (!Number.isFinite(min)) { showToast("Min altitude must be a number"); return; }
+              const maxRaw = window.prompt(`Maximum altitude (${unitsImperial ? "feet" : "metres"}):`, unitsImperial ? "40000" : "12000");
+              if (!maxRaw) return;
+              const max = parseFloat(maxRaw);
+              if (!Number.isFinite(max) || max <= min) { showToast("Max altitude must be > min"); return; }
+              const minM = unitsImperial ? min * 0.3048 : min;
+              const maxM = unitsImperial ? max * 0.3048 : max;
+              const matches = aircraftSnapshot.aircraft.filter(a => !a.onGround && a.altitudeM >= minM && a.altitudeM <= maxM);
+              if (matches.length === 0) { showToast(`📊 No aircraft between ${min} and ${max} ${unitsImperial ? "ft" : "m"}`); return; }
+              const sample = matches.slice(0, 5).map(a => `${(a.callsign || a.icao24).trim()} @${Math.round(a.altitudeM / 0.3048).toLocaleString()}ft`).join(" · ");
+              const more = matches.length > 5 ? ` +${matches.length - 5}` : "";
+              showToast(`📊 ${matches.length} aircraft between ${min}-${max} ${unitsImperial ? "ft" : "m"}: ${sample}${more}`);
+            }},
+            // Aggregate fleet snapshot — mean altitude, mean speed,
+            // mean heading, count by phase. Useful "snapshot vital
+            // signs" of global air traffic right now.
+            { id: "aircraftFleetSummary", label: "📊 Aggregate fleet vital signs (mean altitude / speed / heading + phase counts)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const ac = aircraftSnapshot.aircraft.filter(a => !a.onGround && a.altitudeM > 0);
+              if (ac.length === 0) { showToast("No airborne aircraft loaded"); return; }
+              const meanAltM = ac.reduce((s, a) => s + a.altitudeM, 0) / ac.length;
+              const meanKt = (ac.reduce((s, a) => s + (a.velocityMs || 0), 0) / ac.length) * 1.944;
+              // Mean heading via vector mean (avoids 359° / 1° averaging issue)
+              let sx = 0, sy = 0;
+              for (const a of ac) {
+                const r = (a.headingDeg || 0) * Math.PI / 180;
+                sx += Math.sin(r);
+                sy += Math.cos(r);
+              }
+              const meanHeadingDeg = ((Math.atan2(sx, sy) * 180 / Math.PI) + 360) % 360;
+              // Phase counts by vertical rate
+              let climbing = 0, cruising = 0, descending = 0;
+              for (const a of ac) {
+                const vr = a.verticalRateMs || 0;
+                if (vr > 1.5) climbing++;
+                else if (vr < -1.5) descending++;
+                else cruising++;
+              }
+              const meanFL = Math.round(meanAltM / 0.3048 / 100);
+              showToast(`📊 ${ac.length} airborne · mean alt FL${meanFL} (${Math.round(meanAltM).toLocaleString()}m) · mean speed ${Math.round(meanKt)} kt · mean heading ${Math.round(meanHeadingDeg)}° · climbing ${climbing}, cruising ${cruising}, descending ${descending}`);
+            }},
+            // List aircraft by registration prefix — quick way to find
+            // all of a country's aircraft in one shot. Useful for
+            // "show me all British (G-) aircraft airborne right now".
+            { id: "aircraftListByRegistrationPrefix", label: "🌍 List aircraft by registration prefix (N=US, G=UK, D=DE, JA=JP, etc.)", group: "Tools", icon: Plane, run: () => {
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("No aircraft loaded yet"); return; }
+              const prefix = window.prompt("Registration prefix (e.g. N for US, G for UK, D for Germany, F for France, JA for Japan, B for China, VH for Australia):");
+              if (!prefix) return;
+              const p = prefix.trim().toUpperCase();
+              if (!p) return;
+              const matches = aircraftSnapshot.aircraft.filter(a => (a.registration || "").toUpperCase().startsWith(p));
+              if (matches.length === 0) { showToast(`🌍 No aircraft with registration starting with "${p}"`); return; }
+              // Sort by alphabetical registration
+              matches.sort((a, b) => (a.registration || "").localeCompare(b.registration || ""));
+              const sample = matches.slice(0, 8).map(a => `${a.registration} (${(a.callsign || a.icao24).trim()})`).join(" · ");
+              const more = matches.length > 8 ? ` +${matches.length - 8} more` : "";
+              showToast(`🌍 ${matches.length} aircraft with reg prefix "${p}": ${sample}${more}`);
+            }},
             { id: "earthquakesExportCsv", label: earthquakes.length > 0 ? `📊 Export ${earthquakes.length} earthquakes as CSV (24h USGS)` : "Export earthquakes as CSV (none loaded — toggle layer)", group: "Tools", icon: Sparkles, run: () => {
               if (earthquakes.length === 0) { showToast("Earthquakes layer not loaded"); return; }
               const escape = (s: string) => `"${(s || "").replace(/"/g, '""')}"`;
