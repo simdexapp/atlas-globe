@@ -15133,6 +15133,65 @@ ${trkpts}
               window.speechSynthesis.speak(u);
               showToast(`🔊 ${text}`);
             }},
+            // Speak pin count + per-color breakdown for blind organization
+            // confirmation. Useful for users who organize pins by color.
+            { id: "announcePinSummary", label: "🔊 Speak pin count + per-color breakdown", group: "Tools", icon: Sparkles, run: () => {
+              if (typeof window === "undefined" || !window.speechSynthesis) { showToast("🔊 SpeechSynthesis not available in this browser"); return; }
+              if (pins.length === 0) { showToast("🔊 No pins to summarize"); return; }
+              const colorMap: Record<string, string> = {
+                "#5cb5ff": "blue", "#ffd66b": "yellow", "#ff7be0": "pink",
+                "#7cffb1": "green", "#ff8a4d": "orange", "#a8a8ff": "purple",
+                "#ff5a5a": "red", "#ffffff": "white",
+              };
+              const counts = new Map<string, number>();
+              for (const p of pins) {
+                const name = colorMap[p.color] || "other";
+                counts.set(name, (counts.get(name) ?? 0) + 1);
+              }
+              const breakdown = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).map(([c, n]) => `${n} ${c}`).join(", ");
+              const text = `${pins.length} ${pins.length === 1 ? "pin" : "pins"} total: ${breakdown}.`;
+              window.speechSynthesis.cancel();
+              const u = new SpeechSynthesisUtterance(text);
+              u.rate = voiceRate;
+              u.pitch = voicePitch;
+              window.speechSynthesis.speak(u);
+              showToast(`🔊 ${text}`);
+            }},
+            // Speak earthquake summary — count + biggest in last 24h.
+            // Useful for staying informed about seismic activity audibly.
+            { id: "announceQuakeStats", label: "🔊 Speak earthquake stats (count + biggest in last 24h)", group: "Tools", icon: Sparkles, run: () => {
+              if (typeof window === "undefined" || !window.speechSynthesis) { showToast("🔊 SpeechSynthesis not available in this browser"); return; }
+              if (earthquakes.length === 0) { showToast("🔊 No earthquakes loaded — toggle the layer first (key 4)"); return; }
+              const biggest = earthquakes.reduce((max, q) => q.mag > max.mag ? q : max);
+              const significant = earthquakes.filter(q => q.mag >= 5.0).length;
+              const text = `${earthquakes.length} earthquakes in the last 24 hours. Biggest: magnitude ${biggest.mag.toFixed(1)} ${biggest.place}. ${significant} were magnitude 5 or above.`;
+              window.speechSynthesis.cancel();
+              const u = new SpeechSynthesisUtterance(text);
+              u.rate = voiceRate;
+              u.pitch = voicePitch;
+              window.speechSynthesis.speak(u);
+              showToast(`🔊 ${text}`);
+            }},
+            // Speak aircraft snapshot summary — count + commercial/
+            // private/military/heli breakdown using the cached aircraftStats.
+            { id: "announceAircraftCount", label: "🔊 Speak aircraft snapshot summary (total + commercial/private/military/heli breakdown)", group: "Tools", icon: Sparkles, run: () => {
+              if (typeof window === "undefined" || !window.speechSynthesis) { showToast("🔊 SpeechSynthesis not available in this browser"); return; }
+              if (!aircraftSnapshot || aircraftSnapshot.aircraft.length === 0) { showToast("🔊 No aircraft loaded — toggle the layer first (key 1)"); return; }
+              const total = aircraftSnapshot.aircraft.length;
+              const ageS = Math.round((Date.now() - aircraftSnapshot.fetchedAt) / 1000);
+              let text: string;
+              if (aircraftStats) {
+                text = `${total.toLocaleString()} aircraft loaded, ${ageS} seconds old. ${aircraftStats.commercial} commercial, ${aircraftStats.private} private, ${aircraftStats.military} military, ${aircraftStats.heli} helicopters.`;
+              } else {
+                text = `${total.toLocaleString()} aircraft loaded, ${ageS} seconds old.`;
+              }
+              window.speechSynthesis.cancel();
+              const u = new SpeechSynthesisUtterance(text);
+              u.rate = voiceRate;
+              u.pitch = voicePitch;
+              window.speechSynthesis.speak(u);
+              showToast(`🔊 ${text}`);
+            }},
             { id: "wikiNearby", label: "🗺 Wikipedia articles near this view (top 8 within 50km)", group: "Tools", icon: Sparkles, run: async () => {
               const c = cameraStateRef.current;
               if (!c) return;
