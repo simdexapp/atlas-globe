@@ -21202,52 +21202,13 @@ ${wpts}
         </Draggable>
       )}
 
-      {/* Moon-phase widget — current illumination, age in days, label,
-          next full moon countdown. Pure-client-side computation using
-          Conway's modified algorithm — anchor 2000-01-06 18:14 UTC
-          (a known new moon) plus modular synodic-month arithmetic. */}
+      {/* Moon-phase widget — extracted as a memoized component with
+          internal minute-tick interval. Re-renders ≤ 1×/min instead
+          of 5×/sec from cameraState. The MoonPhaseWidget definition
+          lives near the bottom of this file. */}
       {layers.moonPhase && (
         <Draggable id="moonPhase" customizeMode={customizeUiMode} position={widgetPositions.moonPhase} onMove={setWidgetPosition}>
-          {(() => {
-            const synodic = 29.530588853;
-            const newMoonRef = Date.UTC(2000, 0, 6, 18, 14) / 86400000;
-            const today = Date.now() / 86400000;
-            const phase = ((today - newMoonRef) % synodic + synodic) % synodic;
-            const pct = phase / synodic;
-            const ageDays = phase;
-            let label = "New moon", emoji = "🌑";
-            if (pct < 0.03 || pct > 0.97) { label = "New moon"; emoji = "🌑"; }
-            else if (pct < 0.22) { label = "Waxing crescent"; emoji = "🌒"; }
-            else if (pct < 0.28) { label = "First quarter"; emoji = "🌓"; }
-            else if (pct < 0.47) { label = "Waxing gibbous"; emoji = "🌔"; }
-            else if (pct < 0.53) { label = "Full moon"; emoji = "🌕"; }
-            else if (pct < 0.72) { label = "Waning gibbous"; emoji = "🌖"; }
-            else if (pct < 0.78) { label = "Last quarter"; emoji = "🌗"; }
-            else { label = "Waning crescent"; emoji = "🌘"; }
-            const illum = Math.round(50 * (1 - Math.cos(2 * Math.PI * pct)));
-            const daysToFull = Math.ceil(((0.5 - pct) * synodic + synodic) % synodic);
-            const daysToNew = Math.ceil(((1.0 - pct) * synodic + synodic) % synodic);
-            return (
-              <div className="atlasMoonPhaseWidget" role="status" aria-label="Moon phase">
-                <div className="atlasMoonPhaseHead">
-                  <SunIcon size={12} />
-                  <strong>Moon phase</strong>
-                </div>
-                <div className="atlasMoonPhaseBig">
-                  <span className="atlasMoonPhaseEmoji" aria-hidden="true">{emoji}</span>
-                  <div className="atlasMoonPhaseLabels">
-                    <div className="atlasMoonPhaseName">{label}</div>
-                    <div className="atlasMoonPhaseIllum">{illum}% illuminated</div>
-                  </div>
-                </div>
-                <div className="atlasMoonPhaseMeta">
-                  <span>{ageDays.toFixed(1)}d old</span>
-                  <span>· next 🌕 in {daysToFull}d</span>
-                  <span>· next 🌑 in {daysToNew}d</span>
-                </div>
-              </div>
-            );
-          })()}
+          <MoonPhaseWidget />
         </Draggable>
       )}
 
@@ -25245,6 +25206,56 @@ const DistanceAnchorsWidget = memo(function DistanceAnchorsWidget({ cameraLat, c
 // Memoized via custom comparator — only the longitude affects the
 // rotation of the compass rose, so re-renders on lat/altKm changes
 // were pure waste. Avoids re-rendering ~5×/sec while user pans.
+// Moon-phase widget extracted as a memoized component with internal
+// minute-tick. Re-renders ≤ 1×/min instead of 5×/sec from cameraState.
+// (Moon phase advances ~0.034% per minute — well below visual change
+// threshold, so 60s tick is plenty smooth.)
+const MoonPhaseWidget = memo(function MoonPhaseWidget() {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => setTick(t => t + 1), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
+  const synodic = 29.530588853;
+  const newMoonRef = Date.UTC(2000, 0, 6, 18, 14) / 86400000;
+  const today = Date.now() / 86400000;
+  const phase = ((today - newMoonRef) % synodic + synodic) % synodic;
+  const pct = phase / synodic;
+  const ageDays = phase;
+  let label = "New moon", emoji = "🌑";
+  if (pct < 0.03 || pct > 0.97) { label = "New moon"; emoji = "🌑"; }
+  else if (pct < 0.22) { label = "Waxing crescent"; emoji = "🌒"; }
+  else if (pct < 0.28) { label = "First quarter"; emoji = "🌓"; }
+  else if (pct < 0.47) { label = "Waxing gibbous"; emoji = "🌔"; }
+  else if (pct < 0.53) { label = "Full moon"; emoji = "🌕"; }
+  else if (pct < 0.72) { label = "Waning gibbous"; emoji = "🌖"; }
+  else if (pct < 0.78) { label = "Last quarter"; emoji = "🌗"; }
+  else { label = "Waning crescent"; emoji = "🌘"; }
+  const illum = Math.round(50 * (1 - Math.cos(2 * Math.PI * pct)));
+  const daysToFull = Math.ceil(((0.5 - pct) * synodic + synodic) % synodic);
+  const daysToNew = Math.ceil(((1.0 - pct) * synodic + synodic) % synodic);
+  return (
+    <div className="atlasMoonPhaseWidget" role="status" aria-label="Moon phase">
+      <div className="atlasMoonPhaseHead">
+        <SunIcon size={12} />
+        <strong>Moon phase</strong>
+      </div>
+      <div className="atlasMoonPhaseBig">
+        <span className="atlasMoonPhaseEmoji" aria-hidden="true">{emoji}</span>
+        <div className="atlasMoonPhaseLabels">
+          <div className="atlasMoonPhaseName">{label}</div>
+          <div className="atlasMoonPhaseIllum">{illum}% illuminated</div>
+        </div>
+      </div>
+      <div className="atlasMoonPhaseMeta">
+        <span>{ageDays.toFixed(1)}d old</span>
+        <span>· next 🌕 in {daysToFull}d</span>
+        <span>· next 🌑 in {daysToNew}d</span>
+      </div>
+    </div>
+  );
+});
+
 const CompassWidget = memo(function CompassWidget({ cameraState }: { cameraState: CameraState }) {
   // Compass shows where camera "north" points relative to the globe.
   // For our orbit camera looking at origin, "up" in world is also screen-up,
